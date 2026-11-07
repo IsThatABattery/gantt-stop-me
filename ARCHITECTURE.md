@@ -28,13 +28,15 @@ The frontend never calls GitHub directly. Every GitHub call goes through the API
 /
 ├── docker-compose.yml
 ├── .env.example
-├── web/                 React + TypeScript (Vite)
-│   └── Dockerfile       build with Node, serve with nginx
-└── api/                 Go module
-    ├── Dockerfile       multi-stage build to a small runtime image
-    ├── cmd/api/         main
-    ├── internal/        accounts, github, board, projects, settings, store
-    └── migrations/      SQL, embedded in the binary
+└── src/
+    ├── front/           React + TypeScript (Vite)
+    │   └── Dockerfile   build with Node, serve with nginx
+    └── back/
+        └── api/         Go module
+            ├── Dockerfile   multi-stage build to a small runtime image
+            ├── cmd/api/     main
+            ├── internal/    accounts, github, board, projects, settings, store
+            └── migrations/  SQL, embedded in the binary
 ```
 
 ## Docker Compose
@@ -42,8 +44,8 @@ The frontend never calls GitHub directly. Every GitHub call goes through the API
 One `docker compose up --build` builds and starts every layer.
 
 - **db** runs `postgres:17` with a named volume and a health check.
-- **api** builds from `api/Dockerfile`, waits for a healthy `db`, and runs migrations on startup before serving.
-- **web** builds from `web/Dockerfile` and publishes the only exposed port.
+- **api** builds from `src/back/api/Dockerfile`, waits for a healthy `db`, and runs migrations on startup before serving.
+- **web** builds from `src/front/Dockerfile` and publishes the only exposed port.
 
 Configuration comes from `.env`, documented in `.env.example`:
 
