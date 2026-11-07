@@ -85,6 +85,27 @@ func TestCallbackFailuresStoreNothing(t *testing.T) {
 	}
 }
 
+func TestCallbackRejectsStateNotFromThisSession(t *testing.T) {
+	env := apptest.New(t)
+	attacker := env.SignUp("mallory@example.com", "correct horse")
+	victim := env.SignUp("ada@example.com", "correct horse")
+	env.GitHub.AddUser("gho_attacker", 666, "mallory-gh")
+	for name, state := range map[string]*http.Cookie{
+		"another session's state": startLink(t, env, attacker),
+		"planted state":           {Name: "github_state", Value: "X"},
+	} {
+		env.GitHub.AddCode("attacker-code", "gho_attacker")
+		// Outside t.Run, because env.Do fails the parent test.
+		res := env.Do("GET", "/api/github/callback?code=attacker-code&state="+state.Value, nil, victim, state)
+		t.Run(name, func(t *testing.T) {
+			expectSettings(t, res, "error")
+			if links := stored(t, env); len(links) != 0 {
+				t.Fatalf("github_links = %+v, want none", links)
+			}
+		})
+	}
+}
+
 func TestCallbackNeedsSession(t *testing.T) {
 	apptest.New(t).Do("GET", "/api/github/callback?code=good-code&state=x", nil).Expect(http.StatusUnauthorized, "unauthorized")
 }

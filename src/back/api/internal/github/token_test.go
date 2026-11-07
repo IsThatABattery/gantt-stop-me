@@ -62,6 +62,10 @@ func TestLinkTokenRejectsBadTokens(t *testing.T) {
 	}
 	env.Do("POST", "/api/github/token", map[string]string{"token": "ghp_unknown"}, session).
 		Expect(http.StatusBadRequest, "invalid_token")
+	for _, tok := range []string{"ghp_abc\ndef", "ghp_abc\x00def", "ghp_abc\x7fdef"} {
+		env.Do("POST", "/api/github/token", map[string]string{"token": tok}, session).
+			Expect(http.StatusBadRequest, "invalid_token")
+	}
 
 	if links := stored(t, env); len(links) != 1 || links[0].Login != "octocat" || links[0].Token != token {
 		t.Fatalf("github_links = %+v, want the earlier link untouched", links)
