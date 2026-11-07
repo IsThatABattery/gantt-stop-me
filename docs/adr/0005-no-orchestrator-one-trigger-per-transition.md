@@ -13,5 +13,6 @@ Agents must never be coordinated by another agent, and the Board must never be m
 | pull request merged | head is `task/<id>` | none | in review → closed |
 | review requesting changes | head is `task/<id>` | append a Rejection with the review body as reason | in review → in progress |
 | pull request closed unmerged | head is `task/<id>` | none | in review → in progress |
+| push to `main` | always | run `test` commands; update the branch of every approved auto-merge PR | none |
 
-Scanning for "Feature without Tasks" and "Task without branch" on every Board change, rather than diffing before and after, makes a failed agent run retry on the next change for free. Because agents commit with the workflow token, their own pushes fire none of these rows.
+A transition is applied only when the Task is in the row's source state; otherwise the job does nothing (ADR 0007). Scanning for "Feature without Tasks" and "Task without branch" on every Board change, rather than diffing before and after, makes a failed agent run retry on the next change for free. Because agents commit with the workflow token, their own pushes fire none of these rows.
