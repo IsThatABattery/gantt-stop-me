@@ -1,32 +1,32 @@
-# React + TypeScript + Vite
+# GanttStopMe frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript (Vite), React Router, TanStack Query and Tailwind CSS v4. The design it follows is in `ganttstopme-plan/` at the repo root (not committed).
 
-Currently, two official plugins are available:
+This is Phase 1 of `ganttstopme-plan/IMPLEMENTATION_PLAN.md`: sign in, pick a mission, see the board with static sample cards. All data is mock data.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Run
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev      # hot reload at http://localhost:5173
+npm run build    # typecheck and production build
+npm run lint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+In Docker, `docker compose up --build web` from the repo root serves the build at http://localhost:8080.
+
+Sign-in accepts anything and signs you in as the sample flight director.
+
+## Layout
+
+| Path | What |
+| --- | --- |
+| `src/styles/index.css` | Tailwind theme tokens from `design/tokens.json`, starfield, reduced motion |
+| `src/labels/labels.ts` | Every space display label. Code uses plain names (Project, Task, Agent…) |
+| `src/data/types.ts` | Data model, plain names |
+| `src/data/api.ts` | Mock data access. The one module to replace with real API calls |
+| `src/data/mock/fixtures.ts` | Placeholder data from the mockups |
+| `src/data/queries.ts` | TanStack Query hooks |
+| `src/data/session.ts` | Mock session in localStorage |
+| `src/components/` | Shared pieces: nav rail, chips, avatars, progress bar, counters, form controls |
+| `src/pages/` | Login, mission select, board, placeholders |

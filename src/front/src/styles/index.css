@@ -1,0 +1,106 @@
+@import 'tailwindcss';
+
+/* Tokens from ganttstopme-plan/design/tokens.json. Dark mode only for now. */
+@theme {
+  --color-background: #070b16;
+  --color-surface: #0f1626;
+  --color-surface-sunken: #0b1120;
+  --color-rail: rgba(10, 15, 28, 0.85);
+  --color-header: rgba(10, 15, 28, 0.7);
+  --color-line: #24304a;
+  --color-line-soft: #1c2640;
+  --color-line-strong: #36456a;
+  --color-nav-active: #13203a;
+  --color-text: #e6ecf7;
+  --color-text-soft: #c2ccdd;
+  --color-text-muted: #9aa7bf;
+  --color-text-muted-strong: #aab6cc;
+  --color-ion: #3fd5e8;
+  --color-ion-hover: #8be9f4;
+  --color-on-ion: #062029;
+  --color-astronaut: #a78bfa;
+  --color-astronaut-text: #c4b5fd;
+  --color-good: #4ade80;
+  --color-warning: #fbbf24;
+  --color-critical: #f87171;
+
+  /* Mission phase bands */
+  --color-phase-core: #3fd5e8;
+  --color-phase-telemetry: #a78bfa;
+  --color-phase-comms: #fbbf24;
+
+  --font-ui: Inter, system-ui, sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-dialog: 16px;
+
+  --animate-orbit-pulse: orbit-pulse 2.4s ease-in-out infinite;
+
+  @keyframes orbit-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.45);
+    }
+    50% {
+      box-shadow: 0 0 0 4px rgba(167, 139, 250, 0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--color-ion);
+  }
+
+  a:hover {
+    color: var(--color-ion-hover);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ion);
+    outline-offset: 2px;
+  }
+}
+
+/* Static starfield: three tiny dots tiled at 300x120. No animation. */
+@utility stars {
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, rgba(230, 236, 247, 0.2) 50%, transparent 51%),
+    radial-gradient(1px 1px at 140px 90px, rgba(230, 236, 247, 0.14) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 260px 20px, rgba(230, 236, 247, 0.18) 50%, transparent 51%);
+  background-size: 300px 120px;
+}
+
+@utility eyebrow {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
