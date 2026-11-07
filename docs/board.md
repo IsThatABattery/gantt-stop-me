@@ -104,7 +104,7 @@ Opens an issue labeled `board:backlog` on GitHub and adds its task at the end of
 | `session` | cookie | string | required |
 | `id` | path | integer | a project's `id` |
 | `title` | body | string | trimmed, 1 to 256 characters |
-| `body` | body | string | optional |
+| `body` | body | string | optional; at most 65536 characters |
 
 ```json
 { "title": "Draw the timeline", "body": "One bar per task, by week." }
@@ -115,7 +115,7 @@ Opens an issue labeled `board:backlog` on GitHub and adds its task at the end of
 | Status | Body |
 | --- | --- |
 | `201` | task |
-| `400` | `invalid_title`, `bad_request` |
+| `400` | `invalid_title`, `invalid_body`, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
@@ -190,7 +190,7 @@ Changes the title or body of a task's issue on GitHub.
 | `id` | path | integer | a project's `id` |
 | `taskID` | path | integer | a task's `id` in the project |
 | `title` | body | string | trimmed, 1 to 256 characters; optional when `body` is sent |
-| `body` | body | string | optional when `title` is sent |
+| `body` | body | string | at most 65536 characters; optional when `title` is sent |
 
 ```json
 { "title": "Draw the timeline by week", "body": "One bar per task." }
@@ -201,7 +201,7 @@ Changes the title or body of a task's issue on GitHub.
 | Status | Body |
 | --- | --- |
 | `200` | task |
-| `400` | `invalid_title`, `bad_request` |
+| `400` | `invalid_title`, `invalid_body`, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |

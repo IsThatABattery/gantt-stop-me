@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -113,6 +115,42 @@ func TestInitializeImportsOpenIssues(t *testing.T) {
 	}
 	if pages != 3 {
 		t.Fatalf("import read %d pages, want 3 (6 open issues and pull requests, 2 a page)", pages)
+	}
+}
+
+// slowIssues delays each issue list request to GitHub and records when the last one was answered.
+type slowIssues struct {
+	http.RoundTripper
+	answered *atomic.Int64 // unix nanoseconds
+}
+
+func (s slowIssues) RoundTrip(r *http.Request) (*http.Response, error) {
+	if !strings.HasSuffix(r.URL.Path, "/issues") {
+		return s.RoundTripper.RoundTrip(r)
+	}
+	time.Sleep(300 * time.Millisecond)
+	res, err := s.RoundTripper.RoundTrip(r)
+	s.answered.Store(time.Now().UnixNano())
+	return res, err
+}
+
+func TestInitializeRecordsTheSyncFromBeforeTheFetch(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	repo := env.GitHub.AddRepo("octo", "hello")
+	repo.Grant(env.LinkGitHub(ada, "ada-gh"), "push")
+	repo.AddIssue("One")
+	var answered atomic.Int64
+	env.Config.GitHub.HTTP = &http.Client{Transport: slowIssues{env.Config.GitHub.HTTP.Transport, &answered}}
+
+	env.AddProject(ada, "octo", "hello")
+	var synced time.Time
+	if err := env.DB.QueryRow(context.Background(), `select synced_at from projects`).Scan(&synced); err != nil {
+		t.Fatal(err)
+	}
+	// The first sync re-reads from synced_at on, so an issue changed while the fetch ran must fall after it.
+	if fetched := time.Unix(0, answered.Load()); !synced.Before(fetched) {
+		t.Fatalf("synced_at = %v, want it before the issue list was answered at %v", synced, fetched)
 	}
 }
 

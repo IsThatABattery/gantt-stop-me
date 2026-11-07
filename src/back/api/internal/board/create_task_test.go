@@ -38,6 +38,17 @@ func TestCreateTaskValidatesTitle(t *testing.T) {
 	}
 }
 
+func TestCreateTaskValidatesBody(t *testing.T) {
+	f := setup(t)
+	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Long", "body": strings.Repeat("é", 65537)}, f.ada).
+		Expect(http.StatusBadRequest, "invalid_body")
+	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Fits", "body": strings.Repeat("é", 65536)}, f.ada).
+		Expect(http.StatusCreated, "")
+	if n := len(f.board().Tasks); n != 1 {
+		t.Fatalf("%d tasks, want only the one that fits", n)
+	}
+}
+
 func TestCreateTaskNeedsWrite(t *testing.T) {
 	f := setup(t)
 	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Nope"}, f.reader()).Expect(http.StatusForbidden, "forbidden")

@@ -48,6 +48,9 @@ func dialGuard(allowPrivate bool) func(network, address string, c syscall.RawCon
 	}
 }
 
+// maxModels is the most models one provider can have chosen.
+const maxModels = 100
+
 var (
 	errKeyRejected = errors.New("provider rejected the key")
 	errUnreachable = errors.New("provider unreachable")
@@ -87,6 +90,10 @@ func (s *Settings) listModels(ctx context.Context, baseURL, key string) ([]strin
 // checkModels fetches the listing at baseURL with key and checks every wanted model is in it.
 // On failure it answers 400 and returns false; the upstream's status and body never reach the client.
 func (s *Settings) checkModels(w http.ResponseWriter, r *http.Request, baseURL, key string, wanted []string) ([]string, bool) {
+	if len(wanted) > maxModels { // also keeps the quadratic checks below cheap
+		httpx.Error(w, http.StatusBadRequest, "too_many_models", fmt.Sprintf("Choose at most %d models.", maxModels))
+		return nil, false
+	}
 	available, err := s.listModels(r.Context(), baseURL, key)
 	if errors.Is(err, errKeyRejected) {
 		httpx.Error(w, http.StatusBadRequest, "invalid_api_key", "The provider rejected this API key.")

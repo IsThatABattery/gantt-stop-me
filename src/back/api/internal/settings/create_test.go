@@ -304,6 +304,24 @@ func TestCreateRejectsDuplicateModel(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsTooManyModels(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	var models []string
+	for i := range 101 {
+		models = append(models, fmt.Sprint("model-", i))
+	}
+	up := newUpstream(t, key, models...)
+
+	env.Do("POST", "/api/providers", map[string]any{"name": "Many", "baseUrl": up.URL, "apiKey": key, "models": models}, session).
+		Expect(http.StatusBadRequest, "too_many_models")
+	if n := countProviders(t, env); n != 0 {
+		t.Fatalf("%d providers stored", n)
+	}
+	env.Do("POST", "/api/providers", map[string]any{"name": "Many", "baseUrl": up.URL, "apiKey": key, "models": models[:100]}, session).
+		Expect(http.StatusCreated, "")
+}
+
 func TestCreateRefusesInternalAddresses(t *testing.T) {
 	env := apptest.New(t, func(c *app.Config) { c.AllowPrivateProviderURLs = false })
 	session := env.SignUp("ada@example.com", "correct horse")

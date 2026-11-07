@@ -2,6 +2,7 @@ package board_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -37,6 +38,7 @@ func TestEditTaskValidates(t *testing.T) {
 	id, _ := f.task(1)
 	f.Do("PATCH", f.path("/tasks/%d", id), map[string]any{}, f.ada).Expect(http.StatusBadRequest, "bad_request")
 	f.Do("PATCH", f.path("/tasks/%d", id), map[string]any{"title": " ", "body": "ok"}, f.ada).Expect(http.StatusBadRequest, "invalid_title")
+	f.Do("PATCH", f.path("/tasks/%d", id), map[string]any{"body": strings.Repeat("é", 65537)}, f.ada).Expect(http.StatusBadRequest, "invalid_body")
 	f.Do("PATCH", f.path("/tasks/%d", id), "{", f.ada).Expect(http.StatusBadRequest, "bad_request")
 	f.Do("PATCH", f.path("/tasks/999"), map[string]string{"title": "Lost"}, f.ada).Expect(http.StatusNotFound, "not_found")
 	if is := f.repo.Issue(1); is.Title != "One" || is.Body != "" {
