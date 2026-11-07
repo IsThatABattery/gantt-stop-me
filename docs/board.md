@@ -11,7 +11,7 @@ Adds a GitHub repository as a project, setting up its board labels and a task pe
 | Name | In | Type | Rules |
 | --- | --- | --- | --- |
 | `session` | cookie | string | required |
-| `url` | body | string | `https://github.com/{owner}/{name}`, optionally ending in `.git` and one `/`; owner 1 to 39 letters, digits or `-`; name 1 to 100 letters, digits, `.`, `_` or `-`, not `.` or `..` |
+| `url` | body | string | `https://github.com/{owner}/{name}`, then optionally `.git`, then optionally one `/`; owner 1 to 39 letters, digits or `-`; name 1 to 100 letters, digits, `.`, `_` or `-`, not `.` or `..` |
 
 ```json
 { "url": "https://github.com/ada/gantt" }
@@ -21,8 +21,8 @@ Adds a GitHub repository as a project, setting up its board labels and a task pe
 
 | Status | Body |
 | --- | --- |
-| `201` | project, newly added |
 | `200` | project, added before |
+| `201` | project, newly added |
 | `400` | `invalid_repo_url`, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
