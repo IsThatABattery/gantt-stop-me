@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "db: start",
+      "type": "shell",
+      "command": "docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml up -d --wait db",
+      "presentation": { "reveal": "silent" },
+      "problemMatcher": []
+    },
+    {
+      "label": "db: stop",
+      "type": "shell",
+      "command": "docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml stop db",
+      "presentation": { "reveal": "silent" },
+      "problemMatcher": []
+    }
+  ]
+}
