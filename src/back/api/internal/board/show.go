@@ -1,13 +1,10 @@
 package board
 
 import (
-	"errors"
-	"log"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
 
-	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -15,18 +12,10 @@ import (
 // show returns the project's columns and tasks, after a sync with GitHub if one is due.
 func (b *Board) show(w http.ResponseWriter, r *http.Request) {
 	p, token, ok := b.Projects.Check(w, r, projects.Read)
-	if !ok {
+	if !ok || !b.syncIfDue(w, r, p, token) {
 		return
 	}
 	ctx := r.Context()
-	if err := b.sync(ctx, p, token); err != nil {
-		if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
-			github.Fail(w, r, err) // a dead credential sends the user to Settings, as on every other project route
-			return
-		}
-		// The cached board is still worth showing, and the next load retries.
-		log.Printf("sync project %d: %v", p.ID, err)
-	}
 	cols, err := columns(ctx, b.DB, p.ID)
 	if err != nil {
 		httpx.Internal(w, r, err)

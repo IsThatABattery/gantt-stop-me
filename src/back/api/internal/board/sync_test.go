@@ -2,6 +2,7 @@ package board_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"gantt-stop-me/api/internal/github/githubtest"
+	"gantt-stop-me/api/internal/store"
+	"gantt-stop-me/api/migrations"
 )
 
 // listings counts the issue list requests among reqs, for octo/hello, which as the fake's first repository has id 1.
@@ -50,6 +53,58 @@ func TestSyncAddsNewIssues(t *testing.T) {
 	}
 	if n := len(f.board().Tasks); n != 3 {
 		t.Fatalf("%d tasks, want no task for the pull request or the closed issue", n)
+	}
+}
+
+func TestSyncStoresBodyAndLabels(t *testing.T) {
+	f := setup(t, "One")
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "Changed."; is.Labels = []string{"bug"} })
+	f.repo.AddIssue("Two", "board:testing")
+	f.repo.EditIssue(2, func(is *githubtest.Issue) { is.Body = "New." })
+	f.dueSync()
+	f.board()
+	if body, labels := f.details(1); body != "Changed." || !slices.Equal(labels, []label{{"bug", "ededed"}}) {
+		t.Fatalf("changed issue: body %q, labels %v", body, labels)
+	}
+	if body, labels := f.details(2); body != "New." || !slices.Equal(labels, []label{{"board:testing", "d4c5f9"}}) {
+		t.Fatalf("new issue: body %q, labels %v", body, labels)
+	}
+
+	// GitHub sends a cleared body as null.
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = ""; is.Labels = nil })
+	f.dueSync()
+	f.board()
+	if body, labels := f.details(1); body != "" || len(labels) != 0 {
+		t.Fatalf("cleared issue: body %q, labels %v", body, labels)
+	}
+}
+
+// A project synced before migration 005 has tasks with no body or labels, and an ETag and a cutoff its next sync
+// would stop at. 005 makes that sync read every issue.
+func TestSyncBackfillsTasksFromBeforeTaskDetails(t *testing.T) {
+	f := setup(t, "A", "B", "C")
+	f.GitHub.PageSize = 1
+	old := time.Now().Add(-time.Hour)
+	for number := 1; number <= 3; number++ {
+		f.repo.EditIssue(number, func(is *githubtest.Issue) {
+			is.Body, is.Labels, is.UpdatedAt = fmt.Sprint("Body ", number), []string{"bug"}, old
+		})
+	}
+	f.dueSync()
+	f.board() // the last sync before the upgrade, which stores the ETag
+
+	// Undo 005, then apply it again as the upgraded API does at startup, a minute after that sync.
+	f.exec(`alter table tasks drop column body, drop column labels`)
+	f.exec(`delete from schema_migrations where version = '005_task_details.sql'`)
+	f.exec(`update projects set synced_at = now() - interval '1 minute'`)
+	if err := store.Migrate(context.Background(), f.DB, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	f.board()
+	for number := 1; number <= 3; number++ {
+		if body, labels := f.details(number); body != fmt.Sprint("Body ", number) || !slices.Equal(labels, []label{{"bug", "ededed"}}) {
+			t.Errorf("issue %d: body %q, labels %v; want them backfilled", number, body, labels)
+		}
 	}
 }
 

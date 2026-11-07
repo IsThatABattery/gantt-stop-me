@@ -172,7 +172,7 @@ Positions are floating-point numbers. A card dropped between two others gets the
 
 ### Syncing with GitHub
 
-Issues change on GitHub too, so the API refreshes a project's issues whenever its board loads, at most once every 30 seconds per project. It uses conditional requests (`ETag`), so an unchanged repository costs nothing against the rate limit. The sync uses the credential of the user loading the board.
+Issues change on GitHub too, so the API refreshes a project's issues whenever its board or a task's detail view loads, at most once every 30 seconds per project. It uses conditional requests (`ETag`), so an unchanged repository costs nothing against the rate limit. The sync uses the credential of the user loading the page.
 
 - A new issue on GitHub becomes a task in Backlog.
 - An issue closed on GitHub moves to Closed.
@@ -180,7 +180,7 @@ Issues change on GitHub too, so the API refreshes a project's issues whenever it
 - A `board:*` label added on GitHub moves the task to that column. A label the issue already had does not, so one left on an issue closed on GitHub cannot pull the task back later.
 - An open issue never moves into Closed by label. `board:closed` on an open issue is ignored, and closing the issue is what moves it there.
 
-The cached title, state and board labels in `tasks` are overwritten on every sync. A task's detail view shows its title and state live from GitHub.
+The cached title, state, body, labels and board labels in `tasks` are overwritten on every sync, and by the API's own writes to the issue. A task's detail view reads the cached title, state, body and labels, refreshed by the sync when its throttle allows.
 
 ### Provider settings
 
@@ -209,7 +209,7 @@ The model listing is fetched from inside the API's network, so the API never dia
 | `POST /api/projects` | Add a repository by URL. Returns the existing project if already added. |
 | `GET /api/projects/{id}/board` | Columns and tasks, after a sync if one is due. |
 | `POST /api/projects/{id}/tasks` | Create an issue and its task. |
-| `GET /api/projects/{id}/tasks/{taskID}` | A task with its issue's title, state, body and labels, loaded live from GitHub. |
+| `GET /api/projects/{id}/tasks/{taskID}` | A task with its issue's cached title, state, body and labels, refreshed by the sync when its throttle allows. |
 | `PATCH /api/projects/{id}/tasks/{taskID}` | Edit title or body, written through to the issue. |
 | `POST /api/projects/{id}/tasks/{taskID}/move` | Move a task. |
 | `GET /api/providers` | List the user's providers, keys masked. |
@@ -286,6 +286,8 @@ tasks (
   title           text not null,      -- cache, overwritten by sync
   state           text not null,      -- 'open' or 'closed', cache
   board_labels    text[] not null default '{}', -- the issue's board:* labels as last seen, so sync spots added ones
+  body            text not null default '',     -- cache, overwritten by sync
+  labels          jsonb not null default '[]',  -- the issue's labels as [{"name", "color"}], cache
   updated_at      timestamptz not null default now(),
   unique (project_id, issue_number)
 )

@@ -74,3 +74,11 @@ func BoardLabels(is github.Issue) []string {
 	}
 	return labels
 }
+
+// Labels returns the issue's labels, empty rather than nil, which would store NULL.
+func Labels(is github.Issue) []github.Label {
+	if is.Labels == nil {
+		return []github.Label{}
+	}
+	return is.Labels
+}

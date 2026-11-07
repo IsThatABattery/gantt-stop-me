@@ -121,13 +121,6 @@ func nextPage(link string) string {
 	return ""
 }
 
-// Issue loads one issue.
-func (c *Client) Issue(ctx context.Context, token string, repoID int64, number int) (Issue, error) {
-	var is Issue
-	_, err := c.do(ctx, http.MethodGet, c.issue(repoID, number), token, nil, nil, &is)
-	return is, err
-}
-
 // CreateIssue opens an issue with these labels.
 func (c *Client) CreateIssue(ctx context.Context, token string, repoID int64, title, body string, labels []string) (Issue, error) {
 	var is Issue

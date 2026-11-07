@@ -41,6 +41,9 @@ func TestMoveAcrossColumns(t *testing.T) {
 	if _, s := f.task(1); s.Column != "testing" || s.Version != 2 {
 		t.Fatalf("stored task = %+v", s)
 	}
+	if _, labels := f.details(1); !slices.Equal(labels, []label{{"bug", "ededed"}, {"board:testing", "d4c5f9"}}) {
+		t.Fatalf("stored labels = %v, want the issue's after the relabel", labels)
+	}
 
 	// An issue missing its old label, like Two, still moves.
 	f.move(f.ada, 2, "testing", 1).Expect(http.StatusOK, "")
@@ -58,6 +61,9 @@ func TestMoveIntoAndOutOfClosed(t *testing.T) {
 	if _, s := f.task(1); s.State != "closed" {
 		t.Fatalf("stored task = %+v", s)
 	}
+	if _, labels := f.details(1); !slices.Equal(labels, []label{{"board:closed", "0e8a16"}}) {
+		t.Fatalf("stored labels after moving into Closed = %v", labels)
+	}
 
 	f.move(f.ada, 1, "user-check", 0).Expect(http.StatusOK, "")
 	if is := f.repo.Issue(1); is.State != "open" || !slices.Equal(is.Labels, []string{"board:user-check"}) {
@@ -66,15 +72,22 @@ func TestMoveIntoAndOutOfClosed(t *testing.T) {
 	if _, s := f.task(1); s.State != "open" || s.Column != "user-check" || s.Version != 3 {
 		t.Fatalf("stored task = %+v", s)
 	}
+	if _, labels := f.details(1); !slices.Equal(labels, []label{{"board:user-check", "f9d0c4"}}) {
+		t.Fatalf("stored labels after moving out of Closed = %v", labels)
+	}
 }
 
 func TestMoveWithinColumn(t *testing.T) {
 	f := setup(t, "One", "Two", "Three")
+	f.exec(`update tasks set labels = '[{"name": "bug", "color": "ededed"}]' where issue_number = 3`)
 
 	n := len(f.GitHub.Requests())
 	f.move(f.ada, 3, "backlog", 1).Expect(http.StatusOK, "")
 	if got := f.since(n); len(got) != 0 {
 		t.Fatalf("a reorder called GitHub: %v", got)
+	}
+	if _, labels := f.details(3); !slices.Equal(labels, []label{{"bug", "ededed"}}) {
+		t.Fatalf("stored labels after a reorder = %v, want them kept", labels)
 	}
 	if got := f.order("backlog"); !slices.Equal(got, []int{3, 1, 2}) {
 		t.Fatalf("after moving 3 before 1: %v", got)
@@ -150,6 +163,9 @@ func TestMoveWhenGitHubFails(t *testing.T) {
 		f.move(f.ada, 1, "closed", 0).Expect(c.want, c.code)
 		if _, after := f.task(1); after != before {
 			t.Errorf("%s failing: task = %+v, want it unchanged from %+v", c.route, after, before)
+		}
+		if _, labels := f.details(1); len(labels) != 0 {
+			t.Errorf("%s failing: stored labels = %v, want them unchanged from none", c.route, labels)
 		}
 	}
 }

@@ -24,6 +24,9 @@ func TestCreateTask(t *testing.T) {
 	if order := f.order("backlog"); !slices.Equal(order, []int{1, 2}) {
 		t.Fatalf("backlog = %v, want the new task last", order)
 	}
+	if body, labels := f.details(2); body != "All of them." || !slices.Equal(labels, []label{{"board:backlog", "c5def5"}}) {
+		t.Fatalf("stored body %q, labels %v; want the created issue's", body, labels)
+	}
 }
 
 func TestCreateTaskValidatesTitle(t *testing.T) {

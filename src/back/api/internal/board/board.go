@@ -71,10 +71,10 @@ const taskColumns = `t.id, t.issue_number, t.column_id, t.position, t.version, t
 // taskByID selects the task $1 of the project $2.
 const taskByID = `select ` + taskColumns + ` from tasks t where t.id = $1 and t.project_id = $2`
 
-// scanTask reads a task of project p from a row of taskColumns.
-func (b *Board) scanTask(row pgx.Row, p projects.Project) (task, error) {
+// scanTask reads a task of project p from a row of taskColumns, then any further columns into extra.
+func (b *Board) scanTask(row pgx.Row, p projects.Project, extra ...any) (task, error) {
 	var t task
-	if err := row.Scan(&t.ID, &t.IssueNumber, &t.ColumnID, &t.Position, &t.Version, &t.Title, &t.State); err != nil {
+	if err := row.Scan(append([]any{&t.ID, &t.IssueNumber, &t.ColumnID, &t.Position, &t.Version, &t.Title, &t.State}, extra...)...); err != nil {
 		return task{}, err
 	}
 	t.URL = fmt.Sprintf("%s/%s/%s/issues/%d", b.GitHub.Web, p.Owner, p.Name, t.IssueNumber)

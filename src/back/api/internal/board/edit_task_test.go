@@ -2,6 +2,7 @@ package board_test
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -9,7 +10,7 @@ import (
 
 func TestEditTask(t *testing.T) {
 	f := setup(t, "One")
-	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "Old body." })
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "Old body."; is.Labels = []string{"bug"} }) // not synced yet
 	id, _ := f.task(1)
 
 	res := f.Do("PATCH", f.path("/tasks/%d", id), map[string]string{"title": " Renamed "}, f.ada)
@@ -25,10 +26,16 @@ func TestEditTask(t *testing.T) {
 	if _, s := f.task(1); s.Title != "Renamed" {
 		t.Fatalf("cached title = %q", s.Title)
 	}
+	if body, labels := f.details(1); body != "Old body." || !slices.Equal(labels, []label{{"bug", "ededed"}}) {
+		t.Fatalf("stored body %q, labels %v; want the edited issue's as GitHub answered", body, labels)
+	}
 
 	f.Do("PATCH", f.path("/tasks/%d", id), map[string]string{"body": ""}, f.ada).Expect(http.StatusOK, "")
 	if is := f.repo.Issue(1); is.Title != "Renamed" || is.Body != "" {
 		t.Fatalf("issue = %+v, want the body cleared and the title kept", is)
+	}
+	if body, _ := f.details(1); body != "" {
+		t.Fatalf("stored body %q, want it cleared", body)
 	}
 }
 

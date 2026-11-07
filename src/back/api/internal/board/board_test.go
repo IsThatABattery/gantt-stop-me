@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 
 	"gantt-stop-me/api/internal/apptest"
@@ -118,6 +119,31 @@ func (f *fixture) task(number int) (int64, storedTask) {
 		f.t.Fatalf("task of issue %d: %v", number, err)
 	}
 	return id, s
+}
+
+type label struct{ Name, Color string }
+
+// details returns the body and labels of issue number's task as GET task answers them to ada, failing the test
+// unless the row stores the same.
+func (f *fixture) details(number int) (string, []label) {
+	f.t.Helper()
+	id, _ := f.task(number)
+	res := f.Do("GET", f.path("/tasks/%d", id), nil, f.ada)
+	res.Expect(http.StatusOK, "")
+	var got struct {
+		Body   string
+		Labels []label
+	}
+	res.JSON(&got)
+	var body string
+	var labels []label
+	if err := f.DB.QueryRow(context.Background(), `select body, labels from tasks where id = $1`, id).Scan(&body, &labels); err != nil {
+		f.t.Fatal(err)
+	}
+	if got.Labels == nil || got.Body != body || !slices.Equal(got.Labels, labels) {
+		f.t.Fatalf("GET task answers %q %v, the row stores %q %v", got.Body, got.Labels, body, labels)
+	}
+	return body, labels
 }
 
 // order returns the issue numbers of the column's tasks, top to bottom.

@@ -136,7 +136,7 @@ Opens an issue labeled `board:backlog` on GitHub and adds its task at the end of
 
 ## Get task
 
-Returns a task with its issue's title, state, body and labels as GitHub has them now.
+Returns a task with its issue's title, state, body and labels as last read from GitHub, syncing the tasks from the repository's issues first when the last sync is over 30 seconds old.
 
 `GET /api/projects/{id}/tasks/{taskID}`
 
@@ -154,7 +154,7 @@ Returns a task with its issue's title, state, body and labels as GitHub has them
 | --- | --- |
 | `200` | task, with its issue's body and labels |
 | `401` | `unauthorized` |
-| `403` | `github_not_linked`, `forbidden` |
+| `403` | `github_not_linked` |
 | `404` | `not_found` |
 | `502` | `github_error` |
 

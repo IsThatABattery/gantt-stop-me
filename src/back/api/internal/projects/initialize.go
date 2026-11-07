@@ -87,8 +87,8 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 func AddTask(ctx context.Context, tx pgx.Tx, projectID int64, is github.Issue) error {
 	labels := BoardLabels(is)
 	_, err := tx.Exec(ctx, `
-		insert into tasks (project_id, issue_number, github_issue_id, column_id, position, title, state, board_labels)
-		select $1, $2, $3, c.id, coalesce((select max(position) from tasks where column_id = c.id), 0) + 1, $4, 'open', $5
+		insert into tasks (project_id, issue_number, github_issue_id, column_id, position, title, state, board_labels, body, labels)
+		select $1, $2, $3, c.id, coalesce((select max(position) from tasks where column_id = c.id), 0) + 1, $4, 'open', $5, $6, $7
 		from columns c
 		where c.project_id = $1 and c.key = coalesce(
 			(select key from columns
@@ -96,6 +96,6 @@ func AddTask(ctx context.Context, tx pgx.Tx, projectID int64, is github.Issue) e
 			 order by position limit 1),
 			'backlog')
 		on conflict do nothing`,
-		projectID, is.Number, is.ID, is.Title, labels)
+		projectID, is.Number, is.ID, is.Title, labels, is.Body, Labels(is))
 	return err
 }

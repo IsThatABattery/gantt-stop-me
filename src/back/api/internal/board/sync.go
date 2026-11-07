@@ -3,6 +3,7 @@ package board
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"slices"
@@ -17,6 +18,20 @@ import (
 // lookback re-reads issues updated a little before the last sync, since GitHub's clock is not ours
 // and its issue list can lag behind an update.
 const lookback = 2 * time.Minute
+
+// syncIfDue runs sync for a route that serves the project's cached tasks. Only when GitHub no longer accepts the
+// credential does it answer the request itself and return false.
+func (b *Board) syncIfDue(w http.ResponseWriter, r *http.Request, p projects.Project, token string) bool {
+	if err := b.sync(r.Context(), p, token); err != nil {
+		if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
+			github.Fail(w, r, err) // a dead credential sends the user to Settings, as on every other project route
+			return false
+		}
+		// The cached tasks are still worth showing, and the next load retries.
+		log.Printf("sync project %d: %v", p.ID, err)
+	}
+	return true
+}
 
 // sync refreshes the project's tasks from its issues on GitHub, at most once every 30 seconds per project,
 // with the token of the user loading the board.
@@ -142,8 +157,8 @@ func target(cols []column, cur column, is github.Issue, seen []string) column {
 	return cur
 }
 
-// refresh overwrites the task's cached title, state and board labels, and moves it to the end of column to
-// when that is not cur.
+// refresh overwrites the task's cached title, state, body, labels and board labels, and moves it to the end of
+// column to when that is not cur.
 func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github.Issue) error {
 	if to.ID != cur.ID {
 		_, err := tx.Exec(ctx, `
@@ -154,7 +169,7 @@ func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3, board_labels = $4 where id = $1`,
-		id, is.Title, is.State, projects.BoardLabels(is))
+	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3, board_labels = $4, body = $5, labels = $6 where id = $1`,
+		id, is.Title, is.State, projects.BoardLabels(is), is.Body, projects.Labels(is))
 	return err
 }
