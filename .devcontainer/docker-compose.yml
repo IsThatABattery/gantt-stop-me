@@ -1,0 +1,24 @@
+# Merged over ../docker-compose.yml, so relative paths resolve from the repo root.
+# Own project name, so the dev container never shares containers or the db-data volume with the host stack.
+name: gantt-stop-me-dev
+services:
+  dev:
+    image: mcr.microsoft.com/devcontainers/base:noble
+    command: sleep infinity
+    volumes:
+      - .:/workspace:cached
+      # Linux node_modules in a volume, so they never clash with a host install.
+      - front-node-modules:/workspace/src/front/node_modules
+    environment:
+      DATABASE_URL: postgres://gantt:gantt@db:5432/gantt?sslmode=disable
+    # Delve needs ptrace.
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  front-node-modules:

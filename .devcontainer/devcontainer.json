@@ -1,0 +1,19 @@
+{
+  "name": "gantt-stop-me",
+  // Layers a dev service on the root compose file; db comes from there, api and web stay off (debug them from Run and Debug).
+  "dockerComposeFile": ["../docker-compose.yml", "docker-compose.yml"],
+  "service": "dev",
+  "runServices": ["dev", "db"],
+  "workspaceFolder": "/workspace",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": { "version": "latest" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
+  },
+  "forwardPorts": [5173, 8080],
+  "postCreateCommand": "sudo chown vscode src/front/node_modules && npm --prefix src/front install",
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go"]
+    }
+  }
+}

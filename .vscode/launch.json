@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/src/back/api/cmd/api"
+    },
+    {
+      "name": "Web",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev -- --strictPort",
+      "cwd": "${workspaceFolder}/src/front",
+      "serverReadyAction": {
+        "pattern": "Local:",
+        "uriFormat": "http://localhost:5173",
+        "action": "debugWithChrome",
+        "webRoot": "${workspaceFolder}/src/front"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack",
+      "configurations": ["API", "Web"],
+      "stopAll": true
+    }
+  ]
+}
