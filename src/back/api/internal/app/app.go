@@ -9,6 +9,7 @@ import (
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/secret"
+	"gantt-stop-me/api/internal/settings"
 )
 
 // Config is everything the API reads from the environment, besides the database.
@@ -21,6 +22,8 @@ type Config struct {
 func New(db *pgxpool.Pool, cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", health)
-	accounts.New(db, cfg.PublicURL).Register(mux)
+	auth := accounts.New(db, cfg.PublicURL)
+	auth.Register(mux)
+	settings.New(db, cfg.Secrets, auth).Register(mux)
 	return httpx.CheckOrigin(cfg.PublicURL, mux)
 }
