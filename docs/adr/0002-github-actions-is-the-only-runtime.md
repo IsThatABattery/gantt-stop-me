@@ -1,3 +1,0 @@
-# GitHub Actions is the only runtime; there is no server
-
-Agents must start from repository events without an orchestrator, and the MVP must need no hosting and no access control of its own. Every Trigger is a GitHub Actions event (`push`, `pull_request`, `pull_request_review`), every agent and job runs inside a workflow, Recordings are job artifacts, and the only UI is a local tool in the developer's clone. Access control is the repository's own permissions. The costs: workflows are GitHub-specific (portability means swapping thin YAML, the Go binaries stay), every run pays a cold start, and commits made with the workflow token cannot start further workflows, so agents cannot chain through Board commits, which also means they cannot loop.
