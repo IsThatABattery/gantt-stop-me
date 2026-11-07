@@ -25,12 +25,16 @@ func (a *Accounts) login(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	if !checkPassword(hash, in.Password) || u.ID == 0 {
-		httpx.Error(w, http.StatusUnauthorized, "invalid_credentials", "Email or password is incorrect.")
-		return
+	ok := checkPassword(hash, in.Password) && u.ID != 0
+	if ok {
+		// ok turns false if the password changed while it was being checked.
+		if ok, err = a.startSession(r.Context(), w, u.ID, hash); err != nil {
+			httpx.Internal(w, r, err)
+			return
+		}
 	}
-	if err := a.startSession(r.Context(), w, u.ID); err != nil {
-		httpx.Internal(w, r, err)
+	if !ok {
+		httpx.Error(w, http.StatusUnauthorized, "invalid_credentials", "Email or password is incorrect.")
 		return
 	}
 	httpx.JSON(w, http.StatusOK, u)

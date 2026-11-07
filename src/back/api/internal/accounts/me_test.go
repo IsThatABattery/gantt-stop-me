@@ -2,6 +2,8 @@ package accounts_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -63,9 +65,15 @@ func TestMeNeedsValidSession(t *testing.T) {
 func TestSessionTokenIsStoredHashed(t *testing.T) {
 	env := apptest.New(t)
 	session := env.SignUp("ada@example.com", "correct horse")
-	var n int
-	env.DB.QueryRow(context.Background(), `select count(*) from sessions where id = $1`, session.Value).Scan(&n)
-	if n != 0 {
-		t.Fatal("sessions table holds the raw cookie value")
+	sum := sha256.Sum256([]byte(session.Value))
+	var raw, hashed int
+	err := env.DB.QueryRow(context.Background(),
+		`select count(*) filter (where id = $1), count(*) filter (where id = $2) from sessions`,
+		session.Value, hex.EncodeToString(sum[:])).Scan(&raw, &hashed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw != 0 || hashed != 1 {
+		t.Fatalf("rows with raw cookie = %d, with its sha256 = %d; want 0 and 1", raw, hashed)
 	}
 }
