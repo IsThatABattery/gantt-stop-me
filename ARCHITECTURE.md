@@ -35,7 +35,7 @@ The frontend never calls GitHub directly. Every GitHub call goes through the API
         └── api/         Go module
             ├── Dockerfile   multi-stage build to a small runtime image
             ├── cmd/api/     main
-            ├── internal/    accounts, github, board, projects, settings, store
+            ├── internal/    app, accounts, github, board, projects, settings, store, httpx, secret, apptest
             └── migrations/  SQL, embedded in the binary
 ```
 
@@ -43,7 +43,7 @@ The frontend never calls GitHub directly. Every GitHub call goes through the API
 
 One `docker compose up --build` builds and starts every layer.
 
-- **db** runs `postgres:17` with a named volume and a health check.
+- **db** runs `postgres:18` with a named volume and a health check.
 - **api** builds from `src/back/api/Dockerfile`, waits for a healthy `db`, and runs migrations on startup before serving.
 - **web** builds from `src/front/Dockerfile` and publishes the only exposed port.
 
@@ -85,7 +85,7 @@ The API is the only writer to the database and the only caller of GitHub. Every 
 
 ### Accounts and sessions
 
-Users sign up with an email and a password. Passwords are hashed with argon2id. Signing in creates a session and sets an `HttpOnly`, `Secure`, `SameSite=Lax` session cookie.
+Users sign up with an email and a password. Passwords are hashed with argon2id. Signing in creates a session and sets an `HttpOnly`, `SameSite=Lax` session cookie, also `Secure` when `PUBLIC_URL` is https.
 
 ### Linking GitHub
 
@@ -210,7 +210,7 @@ Errors use one shape: `{ "error": { "code": "conflict", "message": "..." } }`.
 
 ## Database
 
-Postgres 17. Migrations are plain SQL files run in order at API startup.
+Postgres 18. Migrations are plain SQL files run in order at API startup.
 
 ```sql
 users (

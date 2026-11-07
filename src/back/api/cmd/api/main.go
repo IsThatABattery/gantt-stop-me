@@ -1,15 +1,45 @@
 package main
 
 import (
+	"context"
+	"encoding/base64"
 	"log"
 	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"gantt-stop-me/api/internal/app"
+	"gantt-stop-me/api/internal/secret"
+	"gantt-stop-me/api/internal/store"
+	"gantt-stop-me/api/migrations"
 )
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
-	})
+	ctx := context.Background()
+
+	key, err := base64.StdEncoding.DecodeString(os.Getenv("ENCRYPTION_KEY"))
+	if err != nil {
+		log.Fatal("ENCRYPTION_KEY must be base64: ", err)
+	}
+	box, err := secret.New(key)
+	if err != nil {
+		log.Fatal("ENCRYPTION_KEY: ", err)
+	}
+
+	db, err := store.Open(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatal("database: ", err)
+	}
+	if err := store.Migrate(ctx, db, migrations.FS); err != nil {
+		log.Fatal(err)
+	}
+
+	srv := &http.Server{
+		Addr:              ":8080",
+		Handler:           app.New(db, app.Config{PublicURL: strings.TrimSuffix(os.Getenv("PUBLIC_URL"), "/"), Secrets: box}),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	log.Println("api listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(srv.ListenAndServe())
 }
