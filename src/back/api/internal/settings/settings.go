@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -18,11 +19,13 @@ type Settings struct {
 	db       *pgxpool.Pool
 	secrets  *secret.Box
 	accounts *accounts.Accounts
+	models   *http.Client
 }
 
 // New returns Settings that seal keys with secrets and guard every route with accounts.Require.
-func New(db *pgxpool.Pool, secrets *secret.Box, accounts *accounts.Accounts) *Settings {
-	return &Settings{db: db, secrets: secrets, accounts: accounts}
+// Model listings reach loopback and private addresses only when allowPrivateURLs is set.
+func New(db *pgxpool.Pool, secrets *secret.Box, accounts *accounts.Accounts, allowPrivateURLs bool) *Settings {
+	return &Settings{db: db, secrets: secrets, accounts: accounts, models: modelsClient(allowPrivateURLs)}
 }
 
 // Register adds the provider routes to mux.
@@ -64,6 +67,12 @@ func baseURL(raw string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimRight(raw, "/"), true
+}
+
+// apiKey trims a pasted key and rejects one an HTTP header cannot carry.
+func apiKey(raw string) (string, bool) {
+	k := strings.TrimSpace(raw)
+	return k, k != "" && !strings.ContainsFunc(k, unicode.IsControl)
 }
 
 // providerID is the {providerID} path value, or 0, which matches no provider, if it is not a number.

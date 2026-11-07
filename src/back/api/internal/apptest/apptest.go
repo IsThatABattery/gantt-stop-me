@@ -35,7 +35,8 @@ type Env struct {
 }
 
 // New starts the API on a new, migrated schema. Both are torn down when the test ends.
-func New(t testing.TB) *Env {
+// configure, if given, changes the config before the API starts.
+func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	t.Helper()
 	key := make([]byte, 32)
 	rand.Read(key)
@@ -44,7 +45,11 @@ func New(t testing.TB) *Env {
 		t.Fatal(err)
 	}
 	db := DB(t)
-	cfg := app.Config{PublicURL: PublicURL, Secrets: box}
+	// Fake provider endpoints listen on 127.0.0.1.
+	cfg := app.Config{PublicURL: PublicURL, Secrets: box, AllowPrivateProviderURLs: true}
+	for _, c := range configure {
+		c(&cfg)
+	}
 	srv := httptest.NewServer(app.New(db, cfg))
 	t.Cleanup(srv.Close)
 	return &Env{t: t, DB: db, Server: srv, Config: cfg}

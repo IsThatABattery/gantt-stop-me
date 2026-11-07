@@ -10,8 +10,11 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"gantt-stop-me/api/internal/app"
 	"gantt-stop-me/api/internal/apptest"
 )
 
@@ -185,6 +188,8 @@ func TestCreateValidatesInput(t *testing.T) {
 		{input("OpenAI", up.URL+"?api-version=1", key), "invalid_base_url"},
 		{input("OpenAI", up.URL+"#models", key), "invalid_base_url"},
 		{input("OpenAI", up.URL, ""), "invalid_api_key"},
+		{input("OpenAI", up.URL, " \n "), "invalid_api_key"},
+		{input("OpenAI", up.URL, "sk-te\x00st-abcd1234"), "invalid_api_key"},
 		{"{", "bad_request"},
 	}
 	for _, c := range cases {
@@ -200,6 +205,17 @@ func TestCreateValidatesInput(t *testing.T) {
 	p := create(t, env, session, strings.Repeat("é", 100), up.URL, key)
 	if p.Name != strings.Repeat("é", 100) {
 		t.Fatalf("100-character name stored as %q", p.Name)
+	}
+}
+
+func TestCreateTrimsKey(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	up := newUpstream(t, key, "gpt-4o")
+
+	p := create(t, env, session, "OpenAI", up.URL, key+"\n")
+	if _, k, _ := stored(t, env, p.ID); p.KeyLast4 != "1234" || k != key {
+		t.Fatalf("keyLast4 %q, stored key %q", p.KeyLast4, k)
 	}
 }
 
@@ -231,10 +247,18 @@ func TestCreateReportsUnreachableEndpoint(t *testing.T) {
 	cases := map[string]string{
 		"closed":    closed.URL,
 		"not found": strings.TrimSuffix(up.URL, "/v1"),
+		// A listing in the body, so only the status check rejects it.
 		"error": serve(t, func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "upstream secret detail", http.StatusTeapot)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTeapot)
+			w.Write([]byte(`{"data":[],"error":{"message":"upstream secret detail"}}`))
 		}),
 		"not json": serve(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("upstream secret detail")) }),
+		"no data": serve(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"error":{"message":"upstream secret detail"}}`))
+		}),
+		"null data": serve(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"data":null}`)) }),
+		"null":      serve(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`null`)) }),
 		// Following it would reach the working endpoint and succeed.
 		"redirect": serve(t, func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, up.URL+"/models", http.StatusFound)
@@ -265,6 +289,46 @@ func TestCreateRejectsUnknownModel(t *testing.T) {
 		Expect(http.StatusBadRequest, "unknown_model")
 	if n := countProviders(t, env); n != 0 {
 		t.Fatalf("%d providers stored", n)
+	}
+}
+
+func TestCreateRejectsDuplicateModel(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	up := newUpstream(t, key, "gpt-4o")
+
+	env.Do("POST", "/api/providers", map[string]any{"name": "OpenAI", "baseUrl": up.URL, "apiKey": key, "models": []string{"gpt-4o", "gpt-4o"}}, session).
+		Expect(http.StatusBadRequest, "duplicate_model")
+	if n := countProviders(t, env); n != 0 {
+		t.Fatalf("%d providers stored", n)
+	}
+}
+
+func TestCreateRefusesInternalAddresses(t *testing.T) {
+	env := apptest.New(t, func(c *app.Config) { c.AllowPrivateProviderURLs = false })
+	session := env.SignUp("ada@example.com", "correct horse")
+	var hit atomic.Bool
+	internal := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		hit.Store(true)
+		w.Write([]byte(`{"data":[{"id":"leak"}]}`))
+	})
+
+	env.Do("POST", "/api/providers", map[string]string{"name": "OpenAI", "baseUrl": internal, "apiKey": key}, session).
+		Expect(http.StatusBadRequest, "provider_unreachable")
+	if hit.Load() || countProviders(t, env) != 0 {
+		t.Fatal("a loopback base URL was called or stored")
+	}
+
+	// Link-local addresses, such as cloud metadata, stay refused when private ones are allowed, and before any dial.
+	env = apptest.New(t)
+	session = env.SignUp("ada@example.com", "correct horse")
+	for _, base := range []string{"http://169.254.169.254", "http://[::ffff:169.254.169.254]"} {
+		start := time.Now()
+		env.Do("POST", "/api/providers", map[string]string{"name": base, "baseUrl": base, "apiKey": key}, session).
+			Expect(http.StatusBadRequest, "provider_unreachable")
+		if d := time.Since(start); d > time.Second {
+			t.Errorf("%s answered after %v, want it refused at once", base, d)
+		}
 	}
 }
 

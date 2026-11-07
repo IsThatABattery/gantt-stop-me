@@ -33,22 +33,23 @@ func (s *Settings) create(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "invalid_base_url", "Base URL must be an absolute http or https URL.")
 		return
 	}
-	if in.APIKey == "" {
-		httpx.Error(w, http.StatusBadRequest, "invalid_api_key", "Enter an API key.")
+	key, ok := apiKey(in.APIKey)
+	if !ok {
+		httpx.Error(w, http.StatusBadRequest, "invalid_api_key", "API key must be non-empty and contain no control characters.")
 		return
 	}
 	if in.Models == nil {
 		in.Models = []string{}
 	}
-	available, ok := checkModels(w, r, base, in.APIKey, in.Models)
+	available, ok := s.checkModels(w, r, base, key, in.Models)
 	if !ok {
 		return
 	}
 
-	p := provider{Name: name, BaseURL: base, KeyLast4: last4(in.APIKey), Models: in.Models}
+	p := provider{Name: name, BaseURL: base, KeyLast4: last4(key), Models: in.Models}
 	err := s.db.QueryRow(r.Context(),
 		`insert into providers (user_id, name, base_url, key_enc, models) values ($1, $2, $3, $4, $5) returning id`,
-		accounts.UserID(r.Context()), name, base, s.secrets.Seal([]byte(in.APIKey)), in.Models).Scan(&p.ID)
+		accounts.UserID(r.Context()), name, base, s.secrets.Seal([]byte(key)), in.Models).Scan(&p.ID)
 	if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		httpx.Error(w, http.StatusConflict, "name_taken", "You already have a provider with this name.")
 		return

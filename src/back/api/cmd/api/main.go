@@ -35,9 +35,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	cfg := app.Config{
+		PublicURL:                strings.TrimSuffix(os.Getenv("PUBLIC_URL"), "/"),
+		Secrets:                  box,
+		AllowPrivateProviderURLs: os.Getenv("ALLOW_PRIVATE_PROVIDER_URLS") == "true",
+	}
 	srv := &http.Server{
 		Addr:              ":8080",
-		Handler:           app.New(db, app.Config{PublicURL: strings.TrimSuffix(os.Getenv("PUBLIC_URL"), "/"), Secrets: box}),
+		Handler:           app.New(db, cfg),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Println("api listening on :8080")

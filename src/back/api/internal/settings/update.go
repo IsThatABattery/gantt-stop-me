@@ -35,48 +35,65 @@ func (s *Settings) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only what this request changes is written (nil keeps the column), so an overlapping PATCH's changes survive.
+	var newBase *string
+	var newKeyEnc []byte
 	if in.BaseURL != nil {
 		base, ok := baseURL(*in.BaseURL)
 		if !ok {
 			httpx.Error(w, http.StatusBadRequest, "invalid_base_url", "Base URL must be an absolute http or https URL.")
 			return
 		}
-		p.BaseURL = base
+		if base != p.BaseURL {
+			// The stored key goes only to the URL it was entered for, or a session holder could send it to any host.
+			if in.APIKey == nil {
+				httpx.Error(w, http.StatusBadRequest, "invalid_api_key", "Enter the API key again to change the base URL.")
+				return
+			}
+			p.BaseURL, newBase = base, &base
+		}
 	}
 	var key string
-	switch {
-	case in.APIKey == nil:
+	if in.APIKey == nil {
 		plain, err := s.secrets.Open(keyEnc)
 		if err != nil {
 			httpx.Internal(w, r, err)
 			return
 		}
 		key = string(plain)
-	case *in.APIKey == "":
-		httpx.Error(w, http.StatusBadRequest, "invalid_api_key", "Enter an API key.")
-		return
-	default:
-		key, keyEnc = *in.APIKey, s.secrets.Seal([]byte(*in.APIKey))
+	} else {
+		k, ok := apiKey(*in.APIKey)
+		if !ok {
+			httpx.Error(w, http.StatusBadRequest, "invalid_api_key", "API key must be non-empty and contain no control characters.")
+			return
+		}
+		key, newKeyEnc = k, s.secrets.Seal([]byte(k))
 	}
 	// Only models sent in this request are checked, so a refresh still works after the endpoint drops a stored one.
-	available, ok := checkModels(w, r, p.BaseURL, key, in.Models)
+	available, ok := s.checkModels(w, r, p.BaseURL, key, in.Models)
 	if !ok {
 		return
 	}
-	if in.Models != nil {
-		p.Models = in.Models
-	}
 
-	tag, err := s.db.Exec(ctx, `update providers set base_url = $3, key_enc = $4, models = $5 where id = $1 and user_id = $2`,
-		p.ID, userID, p.BaseURL, keyEnc, p.Models)
+	if newBase != nil || newKeyEnc != nil || in.Models != nil {
+		err = s.db.QueryRow(ctx, `update providers set base_url = coalesce($3, base_url), key_enc = coalesce($4, key_enc),
+			models = coalesce($5, models) where id = $1 and user_id = $2 returning base_url, key_enc, models`,
+			p.ID, userID, newBase, newKeyEnc, in.Models).Scan(&p.BaseURL, &keyEnc, &p.Models)
+		if errors.Is(err, pgx.ErrNoRows) { // deleted while the listing was fetched
+			httpx.Error(w, http.StatusNotFound, "not_found", "Provider not found.")
+			return
+		}
+		if err != nil {
+			httpx.Internal(w, r, err)
+			return
+		}
+	}
+	// From the row as written, which may hold a key another PATCH rotated meanwhile.
+	plain, err := s.secrets.Open(keyEnc)
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return
 	}
-	if tag.RowsAffected() == 0 { // deleted while the listing was fetched
-		httpx.Error(w, http.StatusNotFound, "not_found", "Provider not found.")
-		return
-	}
-	p.KeyLast4 = last4(key)
+	p.KeyLast4 = last4(string(plain))
 	httpx.JSON(w, http.StatusOK, withListing{p, available})
 }

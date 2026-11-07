@@ -55,6 +55,7 @@ Configuration comes from `.env`, documented in `.env.example`:
 | `DATABASE_URL` | Postgres connection string for `api`. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | The GitHub OAuth App used to link accounts. |
 | `ENCRYPTION_KEY` | 32-byte key that encrypts stored GitHub credentials and provider keys. |
+| `ALLOW_PRIVATE_PROVIDER_URLS` | Set to `true` to let provider base URLs reach loopback and private addresses, such as a local Ollama. Off by default. |
 
 ## Frontend
 
@@ -181,7 +182,9 @@ Providers belong to a user. Each one is an OpenAI-compatible endpoint with a nam
 
 Nothing in this design uses providers yet. They are stored so later work can read them.
 
-Provider keys are encrypted like GitHub credentials and are never returned to the browser. The API returns only the last four characters.
+Provider keys are encrypted like GitHub credentials and are never returned to the browser. The API returns only the last four characters. A stored key is only ever sent to the base URL it was saved with, so changing the base URL needs the key again.
+
+The model listing is fetched from inside the API's network, so the API never dials link-local addresses, such as cloud metadata at `169.254.169.254`, and dials loopback and private addresses only when `ALLOW_PRIVATE_PROVIDER_URLS` is `true`. It never follows redirects.
 
 ### Endpoints
 

@@ -17,6 +17,8 @@ import (
 type Config struct {
 	PublicURL string      // base URL users open, without a trailing slash; the only Origin allowed to write
 	Secrets   *secret.Box // encrypts stored credentials
+	// AllowPrivateProviderURLs lets provider base URLs reach loopback and private networks, such as a local Ollama.
+	AllowPrivateProviderURLs bool
 }
 
 // New returns the API handler.
@@ -25,7 +27,7 @@ func New(db *pgxpool.Pool, cfg Config) http.Handler {
 	mux.HandleFunc("GET /api/health", health)
 	acc := accounts.New(db, cfg.PublicURL)
 	acc.Register(mux)
-	settings.New(db, cfg.Secrets, acc).Register(mux)
+	settings.New(db, cfg.Secrets, acc, cfg.AllowPrivateProviderURLs).Register(mux)
 	return httpx.CheckOrigin(cfg.PublicURL, jsonErrors(mux))
 }
 
