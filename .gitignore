@@ -1,1 +1,3 @@
 .env
+# Delve build output from the API debug entry.
+__debug_bin*
