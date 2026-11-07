@@ -16,7 +16,7 @@ Starts linking with OAuth by sending the browser to GitHub.
 
 | Status | Body |
 | --- | --- |
-| `302` | Location `https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={PUBLIC_URL}/api/github/callback&scope=repo&state={state}`, and sets the `github_state` cookie to `state` for 10 minutes |
+| `302` | Location `https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={PUBLIC_URL}/api/github/callback&scope=repo&state={state}` with each value URL-encoded, and sets the `github_state` cookie to `state` for 10 minutes |
 | `401` | `unauthorized` |
 | `503` | `oauth_not_configured` |
 
@@ -34,7 +34,7 @@ Finishes linking with OAuth, replacing any earlier link, and sends the browser b
 | `github_state` | cookie | string | set by Link with OAuth |
 | `code` | query | string | the authorization code GitHub sent |
 | `state` | query | string | must equal the `github_state` cookie |
-| `error` | query | string | optional; any value fails the link |
+| `error` | query | string | optional; any non-empty value fails the link |
 
 **Output**
 
