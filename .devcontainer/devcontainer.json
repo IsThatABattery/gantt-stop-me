@@ -1,0 +1,21 @@
+{
+  "name": "gantt-stop-me",
+  // Layers a dev service on the root compose file. Only dev starts here; db, API and web start from Run and Debug.
+  "dockerComposeFile": ["../docker-compose.yml", "docker-compose.yml"],
+  "service": "dev",
+  "runServices": ["dev"],
+  "workspaceFolder": "/workspaces/gantt-stop-me",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": { "version": "latest" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" },
+    // Host Docker socket, so the DB entry can start and stop the db container.
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "forwardPorts": [5173, 8080],
+  "postCreateCommand": "sudo chown vscode src/front/node_modules && npm --prefix src/front install",
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go"]
+    }
+  }
+}
