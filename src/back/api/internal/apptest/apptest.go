@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,8 @@ import (
 
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/app"
+	"gantt-stop-me/api/internal/github"
+	"gantt-stop-me/api/internal/github/githubtest"
 	"gantt-stop-me/api/internal/secret"
 	"gantt-stop-me/api/internal/store"
 	"gantt-stop-me/api/migrations"
@@ -26,16 +29,17 @@ import (
 // PublicURL is the app's URL in tests. Do sends it as the Origin header.
 const PublicURL = "http://app.test"
 
-// Env is a running API and its database.
+// Env is a running API, its database and the fake GitHub it talks to.
 type Env struct {
 	t      testing.TB
 	DB     *pgxpool.Pool
 	Server *httptest.Server
 	Config app.Config
+	GitHub *githubtest.Fake
 }
 
-// New starts the API on a new, migrated schema. Both are torn down when the test ends.
-// configure, if given, changes the config before the API starts.
+// New starts the API on a new, migrated schema, with OAuth linking enabled against a fake GitHub.
+// configure, if given, changes the config before the API starts. All are torn down when the test ends.
 func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	t.Helper()
 	key := make([]byte, 32)
@@ -45,14 +49,21 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 		t.Fatal(err)
 	}
 	db := DB(t)
-	// Fake provider endpoints listen on 127.0.0.1.
-	cfg := app.Config{PublicURL: PublicURL, Secrets: box, AllowPrivateProviderURLs: true}
+	gh := githubtest.New(t)
+	cfg := app.Config{
+		PublicURL:                PublicURL,
+		Secrets:                  box,
+		GitHub:                   &github.Client{API: gh.Server.URL, Web: gh.Server.URL, HTTP: gh.Server.Client()},
+		GitHubClientID:           gh.ClientID,
+		GitHubClientSecret:       gh.ClientSecret,
+		AllowPrivateProviderURLs: true, // fake provider endpoints listen on 127.0.0.1
+	}
 	for _, c := range configure {
 		c(&cfg)
 	}
 	srv := httptest.NewServer(app.New(db, cfg))
 	t.Cleanup(srv.Close)
-	return &Env{t: t, DB: db, Server: srv, Config: cfg}
+	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh}
 }
 
 // DB returns a pool on a new schema with every migration applied, dropped when the test ends.
@@ -191,4 +202,28 @@ func (e *Env) SignUp(email, password string) *http.Cookie {
 		e.t.Fatal("signup set no session cookie")
 	}
 	return c
+}
+
+// LinkGitHub adds a fake GitHub account with this login and links it to the session's user
+// with a personal access token, which it returns.
+func (e *Env) LinkGitHub(session *http.Cookie, login string) string {
+	e.t.Helper()
+	token := "ghp_" + rand.Text()
+	// Derived from login, so one login is one GitHub account across users.
+	e.GitHub.AddUser(token, int64(crc32.ChecksumIEEE([]byte(login))), login)
+	e.Do("POST", "/api/github/token", map[string]string{"token": token}, session).Expect(http.StatusOK, "")
+	return token
+}
+
+// AddProject adds the fake repository owner/name, which the session's GitHub account must be able to write to
+// or to see as an existing project, through POST /api/projects, and returns the project's id.
+func (e *Env) AddProject(session *http.Cookie, owner, name string) int64 {
+	e.t.Helper()
+	res := e.Do("POST", "/api/projects", map[string]string{"url": "https://github.com/" + owner + "/" + name}, session)
+	if res.Status != http.StatusCreated && res.Status != http.StatusOK {
+		e.t.Fatalf("add project %s/%s: got %d %s", owner, name, res.Status, res.Body)
+	}
+	var p struct{ ID int64 }
+	res.JSON(&p)
+	return p.ID
 }
