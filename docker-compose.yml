@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: gantt
+      POSTGRES_PASSWORD: gantt
+      POSTGRES_DB: gantt
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gantt -d gantt"]
+      interval: 2s
+      retries: 15
+
+  api:
+    build: src/back/api
+    environment:
+      DATABASE_URL: postgres://gantt:gantt@db:5432/gantt?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: src/front
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  db-data:
