@@ -2,7 +2,7 @@
 
 ## List providers
 
-Returns the user's providers ordered by name, keys masked to their last four characters.
+Returns the user's providers ordered by name, each key shown only as its last four characters, or empty when it has four or fewer.
 
 `GET /api/providers`
 
@@ -45,8 +45,8 @@ Adds a provider once `GET {baseUrl}/models` accepts the key and lists every chos
 | --- | --- | --- | --- |
 | `session` | cookie | string | required |
 | `name` | body | string | trimmed, 1 to 100 characters, unique among the user's providers |
-| `baseUrl` | body | string | absolute http or https URL with no query or fragment, trailing `/` dropped; never a link-local address, loopback or private only when `ALLOW_PRIVATE_PROVIDER_URLS=true` |
-| `apiKey` | body | string | trimmed, non-empty, no control characters, accepted by the provider |
+| `baseUrl` | body | string | absolute http or https URL with no query or fragment, trailing `/` dropped; `GET {baseUrl}/models` answers 2xx JSON with a `data` list within 10 seconds, redirects not followed; never reaches a link-local, multicast or unspecified address, nor a loopback, private or `100.64.0.0/10` one unless `ALLOW_PRIVATE_PROVIDER_URLS=true` |
+| `apiKey` | body | string | trimmed, non-empty, no control characters, not refused by the provider with 401 or 403 |
 | `models` | body | string[] | optional, omitted means none; each listed by the provider, no repeats |
 
 ```json
@@ -85,8 +85,8 @@ Changes a provider's base URL, key or models after fetching `GET {baseUrl}/model
 | --- | --- | --- | --- |
 | `session` | cookie | string | required |
 | `providerID` | path | integer | one of the user's providers |
-| `baseUrl` | body | string | optional; absolute http or https URL with no query or fragment, trailing `/` dropped; never a link-local address, loopback or private only when `ALLOW_PRIVATE_PROVIDER_URLS=true`; a new one needs `apiKey` |
-| `apiKey` | body | string | optional, omitted keeps the stored key; trimmed, non-empty, no control characters, accepted by the provider |
+| `baseUrl` | body | string | optional; absolute http or https URL with no query or fragment, trailing `/` dropped; `GET {baseUrl}/models` answers 2xx JSON with a `data` list within 10 seconds, redirects not followed; never reaches a link-local, multicast or unspecified address, nor a loopback, private or `100.64.0.0/10` one unless `ALLOW_PRIVATE_PROVIDER_URLS=true`; a new one needs `apiKey` |
+| `apiKey` | body | string | optional, omitted keeps the stored key; trimmed, non-empty, no control characters, not refused by the provider with 401 or 403 |
 | `models` | body | string[] | optional, omitted keeps the stored models; each listed by the provider, no repeats |
 
 ```json
