@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gantt-stop-me/api/internal/app"
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/secret"
 	"gantt-stop-me/api/internal/store"
 	"gantt-stop-me/api/migrations"
@@ -35,9 +36,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	cfg := app.Config{
+		PublicURL:          strings.TrimSuffix(os.Getenv("PUBLIC_URL"), "/"),
+		Secrets:            box,
+		GitHub:             &github.Client{API: "https://api.github.com", Web: "https://github.com", HTTP: http.DefaultClient},
+		GitHubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+	}
 	srv := &http.Server{
 		Addr:              ":8080",
-		Handler:           app.New(db, app.Config{PublicURL: strings.TrimSuffix(os.Getenv("PUBLIC_URL"), "/"), Secrets: box}),
+		Handler:           app.New(db, cfg),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Println("api listening on :8080")

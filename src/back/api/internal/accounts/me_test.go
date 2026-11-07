@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -23,6 +24,30 @@ func TestMe(t *testing.T) {
 	res.JSON(&u)
 	if u.ID == 0 || u.Email != "ada@example.com" {
 		t.Fatalf("me = %+v", u)
+	}
+}
+
+func TestMeShowsLinkedGitHub(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	github := func() string {
+		res := env.Do("GET", "/api/me", nil, session)
+		res.Expect(http.StatusOK, "")
+		var me struct{ GitHub json.RawMessage }
+		res.JSON(&me)
+		return string(me.GitHub)
+	}
+
+	if got := github(); got != "null" {
+		t.Fatalf("github before linking = %s, want null", got)
+	}
+	env.LinkGitHub(session, "octocat")
+	if got := github(); got != `{"login":"octocat","kind":"pat"}` {
+		t.Fatalf("github after linking = %s", got)
+	}
+	env.Do("DELETE", "/api/github", nil, session).Expect(http.StatusNoContent, "")
+	if got := github(); got != "null" {
+		t.Fatalf("github after unlinking = %s, want null", got)
 	}
 }
 

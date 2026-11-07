@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,8 @@ import (
 
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/app"
+	"gantt-stop-me/api/internal/github"
+	"gantt-stop-me/api/internal/github/githubtest"
 	"gantt-stop-me/api/internal/secret"
 	"gantt-stop-me/api/internal/store"
 	"gantt-stop-me/api/migrations"
@@ -26,15 +29,17 @@ import (
 // PublicURL is the app's URL in tests. Do sends it as the Origin header.
 const PublicURL = "http://app.test"
 
-// Env is a running API and its database.
+// Env is a running API, its database and the fake GitHub it talks to.
 type Env struct {
 	t      testing.TB
 	DB     *pgxpool.Pool
 	Server *httptest.Server
 	Config app.Config
+	GitHub *githubtest.Fake
 }
 
-// New starts the API on a new, migrated schema. Both are torn down when the test ends.
+// New starts the API on a new, migrated schema, with OAuth linking enabled against a fake GitHub.
+// All are torn down when the test ends.
 func New(t testing.TB) *Env {
 	t.Helper()
 	key := make([]byte, 32)
@@ -44,10 +49,17 @@ func New(t testing.TB) *Env {
 		t.Fatal(err)
 	}
 	db := DB(t)
-	cfg := app.Config{PublicURL: PublicURL, Secrets: box}
+	gh := githubtest.New(t)
+	cfg := app.Config{
+		PublicURL:          PublicURL,
+		Secrets:            box,
+		GitHub:             &github.Client{API: gh.Server.URL, Web: gh.Server.URL, HTTP: gh.Server.Client()},
+		GitHubClientID:     gh.ClientID,
+		GitHubClientSecret: gh.ClientSecret,
+	}
 	srv := httptest.NewServer(app.New(db, cfg))
 	t.Cleanup(srv.Close)
-	return &Env{t: t, DB: db, Server: srv, Config: cfg}
+	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh}
 }
 
 // DB returns a pool on a new schema with every migration applied, dropped when the test ends.
@@ -186,4 +198,15 @@ func (e *Env) SignUp(email, password string) *http.Cookie {
 		e.t.Fatal("signup set no session cookie")
 	}
 	return c
+}
+
+// LinkGitHub adds a fake GitHub account with this login and links it to the session's user
+// with a personal access token, which it returns.
+func (e *Env) LinkGitHub(session *http.Cookie, login string) string {
+	e.t.Helper()
+	token := "ghp_" + rand.Text()
+	// Derived from login, so one login is one GitHub account across users.
+	e.GitHub.AddUser(token, int64(crc32.ChecksumIEEE([]byte(login))), login)
+	e.Do("POST", "/api/github/token", map[string]string{"token": token}, session).Expect(http.StatusOK, "")
+	return token
 }

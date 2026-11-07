@@ -23,6 +23,8 @@ services:
       # Dev-only default. Set your own in .env for anything beyond local use.
       # "-", not ":-": a blank ENCRYPTION_KEY in .env stops the API instead of falling back to this public key.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY-rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     depends_on:
       db:
         condition: service_healthy

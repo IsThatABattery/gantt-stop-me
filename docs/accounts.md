@@ -78,7 +78,7 @@ Ends the current session.
 
 ## Current user
 
-Returns the signed-in user.
+Returns the signed-in user and their linked GitHub account.
 
 `GET /api/me`
 
@@ -92,11 +92,15 @@ Returns the signed-in user.
 
 | Status | Body |
 | --- | --- |
-| `200` | user |
+| `200` | user, with `github` the linked login and its `kind` (`oauth` or `pat`), or `null` when none is linked |
 | `401` | `unauthorized` |
 
 ```json
-{ "id": 1, "email": "ada@example.com" }
+{ "id": 1, "email": "ada@example.com", "github": { "login": "ada", "kind": "oauth" } }
+```
+
+```json
+{ "id": 1, "email": "ada@example.com", "github": null }
 ```
 
 ## Change password

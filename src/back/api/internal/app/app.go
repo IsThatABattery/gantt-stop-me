@@ -8,21 +8,36 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gantt-stop-me/api/internal/accounts"
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/secret"
 )
 
 // Config is everything the API reads from the environment, besides the database.
 type Config struct {
-	PublicURL string      // base URL users open, without a trailing slash; the only Origin allowed to write
-	Secrets   *secret.Box // encrypts stored credentials
+	PublicURL          string         // base URL users open, without a trailing slash; the only Origin allowed to write
+	Secrets            *secret.Box    // encrypts stored credentials
+	GitHub             *github.Client // GitHub's API and OAuth endpoints
+	GitHubClientID     string         // OAuth App used to link accounts; linking with OAuth is off while either is empty
+	GitHubClientSecret string
 }
 
 // New returns the API handler.
 func New(db *pgxpool.Pool, cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", health)
-	accounts.New(db, cfg.PublicURL).Register(mux)
+	acc := accounts.New(db, cfg.PublicURL)
+	acc.Register(mux)
+	links := &github.Links{
+		DB:           db,
+		Accounts:     acc,
+		Secrets:      cfg.Secrets,
+		Client:       cfg.GitHub,
+		ClientID:     cfg.GitHubClientID,
+		ClientSecret: cfg.GitHubClientSecret,
+		PublicURL:    cfg.PublicURL,
+	}
+	links.Register(mux)
 	return httpx.CheckOrigin(cfg.PublicURL, jsonErrors(mux))
 }
 
