@@ -46,6 +46,7 @@ One `docker compose up --build` builds and starts every layer.
 - **db** runs `postgres:18` with a named volume and a health check.
 - **api** builds from `src/back/api/Dockerfile`, waits for a healthy `db`, and runs migrations on startup before serving.
 - **web** builds from `src/front/Dockerfile` and publishes the only exposed port.
+- **api-test** and **test-db**, under the `test` profile, run the API tests in containers: `docker compose run --rm api-test`. `test-db` is a throwaway Postgres, apart from `db`.
 
 Configuration comes from `.env`, documented in `.env.example`:
 
@@ -54,7 +55,7 @@ Configuration comes from `.env`, documented in `.env.example`:
 | `PUBLIC_URL` | Base URL users open, used for the GitHub link callback. |
 | `DATABASE_URL` | Postgres connection string for `api`. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | The GitHub OAuth App used to link accounts. |
-| `ENCRYPTION_KEY` | 32-byte key that encrypts stored GitHub credentials and provider keys. |
+| `ENCRYPTION_KEY` | 32-byte key, base64, that encrypts stored GitHub credentials and provider keys. |
 
 ## Frontend
 
@@ -187,6 +188,7 @@ Provider keys are encrypted like GitHub credentials and are never returned to th
 
 | Method and path | Purpose |
 | --- | --- |
+| `GET /api/health` | Answers `ok` once the API is serving. |
 | `POST /api/auth/signup` | Create an account. |
 | `POST /api/auth/login` | Sign in. |
 | `POST /api/auth/logout` | End the session. |
