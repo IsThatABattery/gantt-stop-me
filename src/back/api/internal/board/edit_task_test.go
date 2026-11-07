@@ -3,6 +3,8 @@ package board_test
 import (
 	"net/http"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -36,6 +38,36 @@ func TestEditTask(t *testing.T) {
 	}
 	if body, _ := f.details(1); body != "" {
 		t.Fatalf("stored body %q, want it cleared", body)
+	}
+}
+
+// A sync that fetched the issue before an edit must not write the old title, body and labels back over it.
+func TestEditTaskSurvivesASyncThatFetchedBeforeIt(t *testing.T) {
+	f := setup(t, "One")
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "Old" })
+	f.dueSync()
+	f.board()
+	id, _ := f.task(1)
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Title = "One!" }) // so the listing misses the ETag
+
+	var once sync.Once
+	var status int
+	f.intercept(func(r *http.Request, next http.RoundTripper) (*http.Response, error) {
+		res, err := next.RoundTrip(r)
+		if err == nil && r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/issues") {
+			once.Do(func() {
+				status = f.Do("PATCH", f.path("/tasks/%d", id), map[string]string{"body": "New"}, f.ada).Status
+			})
+		}
+		return res, err
+	})
+	f.dueSync()
+	f.board()
+	if status != http.StatusOK {
+		t.Fatalf("edit during the sync answered %d", status)
+	}
+	if body, _ := f.details(1); body != "New" {
+		t.Fatalf("GET task body = %q after the edit, GitHub has New", body)
 	}
 }
 

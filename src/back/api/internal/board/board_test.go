@@ -174,3 +174,13 @@ func (f *fixture) dueSync() {
 
 // since returns the GitHub requests made after the first n.
 func (f *fixture) since(n int) []string { return f.GitHub.Requests()[n:] }
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (rt roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return rt(r) }
+
+// intercept sends the API's later requests to GitHub through fn, which may pass them on to next.
+func (f *fixture) intercept(fn func(r *http.Request, next http.RoundTripper) (*http.Response, error)) {
+	next := f.Config.GitHub.HTTP.Transport
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) { return fn(r, next) })}
+}

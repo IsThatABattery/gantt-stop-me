@@ -172,7 +172,7 @@ Positions are floating-point numbers. A card dropped between two others gets the
 
 ### Syncing with GitHub
 
-Issues change on GitHub too, so the API refreshes a project's issues whenever its board or a task's detail view loads, at most once every 30 seconds per project. It uses conditional requests (`ETag`), so an unchanged repository costs nothing against the rate limit. The sync uses the credential of the user loading the page.
+Issues change on GitHub too, so the API refreshes a project's issues whenever its board or a task's detail view loads, at most once every 30 seconds per project. It uses conditional requests (`ETag`), so an unchanged repository costs nothing against the rate limit. The sync uses the credential of the user loading the page, and finishes even when that page's request is abandoned.
 
 - A new issue on GitHub becomes a task in Backlog.
 - An issue closed on GitHub moves to Closed.
@@ -180,7 +180,7 @@ Issues change on GitHub too, so the API refreshes a project's issues whenever it
 - A `board:*` label added on GitHub moves the task to that column. A label the issue already had does not, so one left on an issue closed on GitHub cannot pull the task back later.
 - An open issue never moves into Closed by label. `board:closed` on an open issue is ignored, and closing the issue is what moves it there.
 
-The cached title, state, body, labels and board labels in `tasks` are overwritten on every sync, and by the API's own writes to the issue. A task's detail view reads the cached title, state, body and labels, refreshed by the sync when its throttle allows.
+The cached title, state, body, labels and board labels in `tasks` are overwritten on every sync, and by the API's own writes to the issue. A task's detail view reads the cached title, state, body and labels, refreshed by the sync when its throttle allows. A label renamed, recolored or deleted in the repository's settings changes no issue, so it reaches a task's cached labels only when its issue next changes.
 
 ### Provider settings
 
@@ -254,6 +254,7 @@ projects (
   added_by        bigint references users on delete set null,
   issues_etag     text,
   synced_at       timestamptz,
+  backfill_pending boolean not null default false, -- syncs read every issue until one gets through; set when tasks gained body and labels
   created_at      timestamptz not null default now()
 )
 

@@ -2,13 +2,16 @@ package board_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/github/githubtest"
 	"gantt-stop-me/api/internal/store"
 	"gantt-stop-me/api/migrations"
@@ -79,33 +82,138 @@ func TestSyncStoresBodyAndLabels(t *testing.T) {
 	}
 }
 
+// detailedIssues gives issues 1 to n the body "Body <number>" and the label bug, oldest first, all changed an hour
+// ago, before any recent sync's cutoff.
+func (f *fixture) detailedIssues(n int) {
+	old := time.Now().Add(-time.Hour)
+	for number := 1; number <= n; number++ {
+		f.repo.EditIssue(number, func(is *githubtest.Issue) {
+			is.Body, is.Labels, is.UpdatedAt = fmt.Sprint("Body ", number), []string{"bug"}, old.Add(time.Duration(number)*time.Minute)
+		})
+	}
+}
+
+// backfilled fails the test unless GET task answers issues 1 to n with what detailedIssues gave them.
+func (f *fixture) backfilled(n int) {
+	f.t.Helper()
+	for number := 1; number <= n; number++ {
+		if body, labels := f.details(number); body != fmt.Sprint("Body ", number) || !slices.Equal(labels, []label{{"bug", "ededed"}}) {
+			f.t.Errorf("issue %d: body %q, labels %v; want them backfilled", number, body, labels)
+		}
+	}
+}
+
+// upgrade undoes migration 005, then applies it again as the upgraded API does at startup, a minute after the last sync.
+func (f *fixture) upgrade() {
+	f.t.Helper()
+	f.exec(`alter table tasks drop column body, drop column labels`)
+	f.exec(`alter table projects drop column backfill_pending`)
+	f.exec(`delete from schema_migrations where version = '005_task_details.sql'`)
+	f.exec(`update projects set synced_at = now() - interval '1 minute'`)
+	if err := store.Migrate(context.Background(), f.DB, migrations.FS); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
 // A project synced before migration 005 has tasks with no body or labels, and an ETag and a cutoff its next sync
 // would stop at. 005 makes that sync read every issue.
 func TestSyncBackfillsTasksFromBeforeTaskDetails(t *testing.T) {
 	f := setup(t, "A", "B", "C")
 	f.GitHub.PageSize = 1
-	old := time.Now().Add(-time.Hour)
-	for number := 1; number <= 3; number++ {
-		f.repo.EditIssue(number, func(is *githubtest.Issue) {
-			is.Body, is.Labels, is.UpdatedAt = fmt.Sprint("Body ", number), []string{"bug"}, old
-		})
-	}
+	f.detailedIssues(3)
 	f.dueSync()
 	f.board() // the last sync before the upgrade, which stores the ETag
+	f.upgrade()
+	f.board()
+	f.backfilled(3)
+}
 
-	// Undo 005, then apply it again as the upgraded API does at startup, a minute after that sync.
-	f.exec(`alter table tasks drop column body, drop column labels`)
-	f.exec(`delete from schema_migrations where version = '005_task_details.sql'`)
-	f.exec(`update projects set synced_at = now() - interval '1 minute'`)
-	if err := store.Migrate(context.Background(), f.DB, migrations.FS); err != nil {
+// A sync that claims while the backfill's first read is still paging reads every issue too, so the backfill
+// is not lost when that first read then fails.
+func TestSyncBackfillSurvivesAnOverlappingSync(t *testing.T) {
+	f := setup(t, "A", "B", "C", "D", "E")
+	f.GitHub.PageSize = 1
+	f.detailedIssues(5)
+	f.dueSync()
+	f.board()
+	f.upgrade()
+
+	stalled, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	f.intercept(func(r *http.Request, next http.RoundTripper) (*http.Response, error) {
+		first := false
+		if r.URL.Query().Get("page") == "2" {
+			once.Do(func() { first = true })
+		}
+		if first { // the first read stalls on its second page, then fails
+			close(stalled)
+			<-release
+			return nil, errors.New("connection reset")
+		}
+		return next.RoundTrip(r)
+	})
+	done := make(chan int)
+	go func() { done <- f.Do("GET", f.path("/board"), nil, f.ada).Status }()
+	<-stalled
+	f.dueSync()  // 30 seconds later,
+	f.details(5) // a task's detail view syncs again
+	close(release)
+	if status := <-done; status != http.StatusOK {
+		t.Fatalf("board during the failed read answered %d", status)
+	}
+
+	f.dueSync()
+	f.board()
+	f.backfilled(5)
+}
+
+// The backfill's read finishes and is saved even when the client, or a proxy, gives up on the request it runs in.
+func TestSyncBackfillOutlivesItsRequest(t *testing.T) {
+	f := setup(t, "A", "B", "C", "D", "E")
+	f.GitHub.PageSize = 1
+	f.detailedIssues(5)
+	f.dueSync()
+	f.board()
+	f.upgrade()
+	f.intercept(func(r *http.Request, next http.RoundTripper) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/issues") {
+			select {
+			case <-time.After(200 * time.Millisecond): // so the 5 pages take a second
+			case <-r.Context().Done():
+				return nil, r.Context().Err()
+			}
+		}
+		return next.RoundTrip(r)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", f.Server.URL+f.path("/board"), nil)
+	if err != nil {
 		t.Fatal(err)
 	}
-	f.board()
-	for number := 1; number <= 3; number++ {
-		if body, labels := f.details(number); body != fmt.Sprint("Body ", number) || !slices.Equal(labels, []label{{"bug", "ededed"}}) {
-			t.Errorf("issue %d: body %q, labels %v; want them backfilled", number, body, labels)
+	req.Header.Set("Origin", apptest.PublicURL)
+	req.AddCookie(f.ada)
+	if res, err := http.DefaultClient.Do(req); err == nil {
+		res.Body.Close()
+		t.Fatalf("board answered %d within 500ms, before the read could finish", res.StatusCode)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		var filled int
+		var pending bool
+		err := f.DB.QueryRow(context.Background(), `
+			select (select count(*) from tasks where body <> ''), backfill_pending from projects where id = $1`, f.project).Scan(&filled, &pending)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if filled == 5 && !pending {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d of 5 tasks backfilled, backfill pending: %v", filled, pending)
 		}
 	}
+	f.backfilled(5)
 }
 
 func TestSyncMovesClosedAndReopenedIssues(t *testing.T) {

@@ -22,7 +22,10 @@ const lookback = 2 * time.Minute
 // syncIfDue runs sync for a route that serves the project's cached tasks. Only when GitHub no longer accepts the
 // credential does it answer the request itself and return false.
 func (b *Board) syncIfDue(w http.ResponseWriter, r *http.Request, p projects.Project, token string) bool {
-	if err := b.sync(r.Context(), p, token); err != nil {
+	// Not cancelled with the request: a long read, such as a backfill a proxy times out, still finishes and saves its work.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Minute)
+	defer cancel()
+	if err := b.sync(ctx, p, token); err != nil {
 		if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
 			github.Fail(w, r, err) // a dead credential sends the user to Settings, as on every other project route
 			return false
@@ -34,15 +37,19 @@ func (b *Board) syncIfDue(w http.ResponseWriter, r *http.Request, p projects.Pro
 }
 
 // sync refreshes the project's tasks from its issues on GitHub, at most once every 30 seconds per project,
-// with the token of the user loading the board.
+// with the token of the user loading the board. While the project's backfill is pending, every sync reads every
+// issue, and only one that applies them all clears it.
+// shortcut: syncs that claim during a long backfill each read every issue, costing rate limit on big repos;
+// hold the claim for the whole read if that bites.
 func (b *Board) sync(ctx context.Context, p projects.Project, token string) error {
 	var prev *time.Time
 	var etag string
 	var claimed time.Time
+	var full bool
 	err := b.DB.QueryRow(ctx, `
 		update projects set synced_at = now()
 		where id = $1 and (synced_at is null or synced_at < now() - interval '30 seconds')
-		returning old.synced_at, coalesce(issues_etag, ''), new.synced_at`, p.ID).Scan(&prev, &etag, &claimed)
+		returning old.synced_at, coalesce(issues_etag, ''), new.synced_at, backfill_pending`, p.ID).Scan(&prev, &etag, &claimed, &full)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // synced in the last 30 seconds, or another load is syncing now
 	}
@@ -51,7 +58,9 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 	}
 
 	var cutoff time.Time
-	if prev != nil {
+	if full {
+		etag = "" // an ETag another sync stored meanwhile must not stop the full read
+	} else if prev != nil {
 		cutoff = prev.Add(-lookback)
 	}
 	var issues []github.Issue
@@ -78,7 +87,8 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 		_, err = b.DB.Exec(ctx, `update projects set synced_at = $2, issues_etag = null where id = $1 and synced_at = $3`, p.ID, prev, claimed)
 		return err
 	}
-	_, err = b.DB.Exec(ctx, `update projects set issues_etag = nullif($2, '') where id = $1`, p.ID, newETag)
+	_, err = b.DB.Exec(ctx, `update projects set issues_etag = nullif($2, ''), backfill_pending = backfill_pending and not $3 where id = $1`,
+		p.ID, newETag, full)
 	return err
 }
 
@@ -108,10 +118,11 @@ func (b *Board) apply(ctx context.Context, projectID int64, issues []github.Issu
 			var movedSince bool
 			var seen []string
 			var cur column
+			// for update: an edit that lands after this select waits for the refresh, so the refresh cannot undo it.
 			err := tx.QueryRow(ctx, `
 				select t.id, t.updated_at > $3, t.board_labels, c.id, c.key, c.name, c.position, c.closes_issue
 				from tasks t join columns c on c.id = t.column_id
-				where t.project_id = $1 and t.github_issue_id = $2`, projectID, is.ID, claimed).
+				where t.project_id = $1 and t.github_issue_id = $2 for update of t`, projectID, is.ID, claimed).
 				Scan(&id, &movedSince, &seen, &cur.ID, &cur.Key, &cur.Name, &cur.Position, &cur.ClosesIssue)
 			if errors.Is(err, pgx.ErrNoRows) {
 				if is.State == "open" {
@@ -120,7 +131,7 @@ func (b *Board) apply(ctx context.Context, projectID int64, issues []github.Issu
 					err = nil // a closed issue the board never had stays off it
 				}
 			} else if err == nil && movedSince {
-				skipped = true // a move landed after the fetch began; its issue may be stale here
+				skipped = true // a move or edit landed after the fetch began; its issue may be stale here
 			} else if err == nil {
 				err = refresh(ctx, tx, id, cur, target(cols, cur, is, seen), is)
 			}
@@ -159,6 +170,8 @@ func target(cols []column, cur column, is github.Issue, seen []string) column {
 
 // refresh overwrites the task's cached title, state, body, labels and board labels, and moves it to the end of
 // column to when that is not cur.
+// shortcut: a label renamed, recolored or deleted in the repository's settings changes no issue, so it reaches the
+// cached labels only when an issue carrying it next changes; cache labels per project by id if that matters.
 func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github.Issue) error {
 	if to.ID != cur.ID {
 		_, err := tx.Exec(ctx, `
