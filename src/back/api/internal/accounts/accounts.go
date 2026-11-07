@@ -80,18 +80,22 @@ func (a *Accounts) Require(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// startSession stores a new session for userID and sets its cookie on w.
-func (a *Accounts) startSession(ctx context.Context, w http.ResponseWriter, userID int64) error {
+// startSession stores a new session for userID and sets its cookie on w. It reports false, and
+// starts none, if the user's password hash is no longer hash: the password changed after it was checked.
+func (a *Accounts) startSession(ctx context.Context, w http.ResponseWriter, userID int64, hash string) (bool, error) {
 	token := rand.Text()
-	_, err := a.db.Exec(ctx, `
+	// for share waits out a password change in progress, then rechecks against the hash it set;
+	// a change that starts after this waits instead, and deletes this session.
+	tag, err := a.db.Exec(ctx, `
 		with expired as (delete from sessions where user_id = $2 and expires_at <= now())
-		insert into sessions (id, user_id, expires_at) values ($1, $2, $3)`,
-		hashToken(token), userID, time.Now().Add(sessionTTL))
-	if err != nil {
-		return err
+		insert into sessions (id, user_id, expires_at)
+		select $1, id, $3 from users where id = $2 and password_hash = $4 for share`,
+		hashToken(token), userID, time.Now().Add(sessionTTL), hash)
+	if err != nil || tag.RowsAffected() == 0 {
+		return false, err
 	}
 	http.SetCookie(w, a.cookie(token, int(sessionTTL.Seconds())))
-	return nil
+	return true, nil
 }
 
 // cookie builds the session cookie; maxAge < 0 deletes it.
