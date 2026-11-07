@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -43,6 +44,12 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 			return false
 		}
 	}
+	// The first sync re-reads changes from synced_at on, so it is the time the fetch began, as sync records it.
+	var started time.Time
+	if err := p.DB.QueryRow(ctx, `select now()`).Scan(&started); err != nil {
+		httpx.Internal(w, r, err)
+		return false
+	}
 	var issues []github.Issue
 	query := url.Values{"state": {"open"}, "sort": {"created"}, "direction": {"asc"}, "per_page": {"100"}}
 	if _, err := p.GitHub.Issues(ctx, token, pr.RepoID, query, "", func(page []github.Issue) bool {
@@ -70,7 +77,7 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 				return err
 			}
 		}
-		_, err := tx.Exec(ctx, `update projects set synced_at = now() where id = $1`, pr.ID)
+		_, err := tx.Exec(ctx, `update projects set synced_at = $2 where id = $1`, pr.ID, started)
 		return err
 	})
 	if err != nil {

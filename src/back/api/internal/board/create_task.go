@@ -24,7 +24,7 @@ func (b *Board) createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title, ok := validTitle(w, in.Title)
-	if !ok {
+	if !ok || !validBody(w, in.Body) {
 		return
 	}
 	ctx := r.Context()

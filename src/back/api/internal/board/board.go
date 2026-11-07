@@ -100,3 +100,12 @@ func validTitle(w http.ResponseWriter, title string) (string, bool) {
 	}
 	return title, true
 }
+
+// validBody checks a task body fits GitHub's 65536 characters, answering 400 when not.
+func validBody(w http.ResponseWriter, body string) bool {
+	if utf8.RuneCountInString(body) > 65536 {
+		httpx.Error(w, http.StatusBadRequest, "invalid_body", "A body can have at most 65536 characters.")
+		return false
+	}
+	return true
+}
