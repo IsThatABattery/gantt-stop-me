@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -21,11 +22,20 @@ const (
 
 var b64 = base64.RawStdEncoding
 
+// hashSlots caps concurrent argon2 runs, each holding argonMemory KiB, so a burst of logins cannot exhaust RAM.
+var hashSlots = make(chan struct{}, runtime.NumCPU())
+
+func idKey(password, salt []byte, time, memory uint32, threads uint8, keyLen uint32) []byte {
+	hashSlots <- struct{}{}
+	defer func() { <-hashSlots }()
+	return argon2.IDKey(password, salt, time, memory, threads, keyLen)
+}
+
 // hashPassword returns an argon2id hash in PHC string format.
 func hashPassword(password string) string {
 	salt := make([]byte, 16)
 	rand.Read(salt)
-	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	key := idKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argonMemory, argonTime, argonThreads, b64.EncodeToString(salt), b64.EncodeToString(key))
 }
@@ -49,7 +59,7 @@ func checkPassword(hash, password string) bool {
 	if err != nil || len(key) == 0 {
 		return false
 	}
-	got := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(key)))
+	got := idKey([]byte(password), salt, time, memory, threads, uint32(len(key)))
 	return subtle.ConstantTimeCompare(got, key) == 1
 }
 

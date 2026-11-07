@@ -21,7 +21,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://gantt:gantt@db:5432/gantt?sslmode=disable}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       # Dev-only default. Set your own in .env for anything beyond local use.
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=}
+      # "-", not ":-": a blank ENCRYPTION_KEY in .env stops the API instead of falling back to this public key.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY-rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=}
     depends_on:
       db:
         condition: service_healthy

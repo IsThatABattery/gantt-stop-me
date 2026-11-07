@@ -31,9 +31,10 @@ func (a *Accounts) signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var u user
+	hash := hashPassword(in.Password)
 	err := a.db.QueryRow(r.Context(),
 		`insert into users (email, password_hash) values ($1, $2) returning id, email`,
-		in.Email, hashPassword(in.Password)).Scan(&u.ID, &u.Email)
+		in.Email, hash).Scan(&u.ID, &u.Email)
 	if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		httpx.Error(w, http.StatusConflict, "email_taken", "An account with this email already exists.")
 		return
@@ -42,7 +43,8 @@ func (a *Accounts) signup(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	if err := a.startSession(r.Context(), w, u.ID); err != nil {
+	// Nothing can change a password the account was created with a moment ago, so the session always starts.
+	if _, err := a.startSession(r.Context(), w, u.ID, hash); err != nil {
 		httpx.Internal(w, r, err)
 		return
 	}

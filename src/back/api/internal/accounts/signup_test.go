@@ -3,9 +3,11 @@ package accounts_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/apptest"
 )
 
@@ -32,6 +34,30 @@ func TestSignup(t *testing.T) {
 	env.DB.QueryRow(context.Background(), `select password_hash from users where id = $1`, u.ID).Scan(&hash)
 	if !strings.HasPrefix(hash, "$argon2id$") {
 		t.Fatalf("stored password %q is not an argon2id hash", hash)
+	}
+}
+
+// apptest serves plain http, so this drives Accounts directly to reach the https case.
+func TestSessionCookieSecureOnlyOnHTTPS(t *testing.T) {
+	for _, tc := range []struct {
+		url    string
+		secure bool
+	}{{"https://app.test", true}, {"http://app.test", false}} {
+		mux := http.NewServeMux()
+		accounts.New(apptest.DB(t), tc.url).Register(mux)
+		req := httptest.NewRequest("POST", "/api/auth/signup", strings.NewReader(`{"email":"ada@example.com","password":"correct horse"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		var c *http.Cookie
+		for _, k := range rec.Result().Cookies() {
+			if k.Name == accounts.SessionCookie {
+				c = k
+			}
+		}
+		if rec.Code != http.StatusCreated || c == nil || c.Secure != tc.secure {
+			t.Fatalf("PUBLIC_URL %s: status %d, cookie %+v, want Secure=%v", tc.url, rec.Code, c, tc.secure)
+		}
 	}
 }
 
