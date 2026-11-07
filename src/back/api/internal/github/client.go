@@ -4,10 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
+
+	"gantt-stop-me/api/internal/httpx"
 )
 
 // Client calls GitHub's REST API and its OAuth endpoints.
@@ -21,6 +26,24 @@ type Client struct {
 type Error struct{ Status int }
 
 func (e *Error) Error() string { return fmt.Sprintf("github: HTTP %d", e.Status) }
+
+// Fail answers a request whose GitHub call failed: 403 github_not_linked when GitHub no longer accepts the
+// credential (401), 403 forbidden when GitHub refused it with 403 or 404, else 502 github_error.
+func Fail(w http.ResponseWriter, r *http.Request, err error) {
+	log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+	status := 0
+	if ghErr := (*Error)(nil); errors.As(err, &ghErr) {
+		status = ghErr.Status
+	}
+	switch status {
+	case http.StatusUnauthorized:
+		httpx.Error(w, http.StatusForbidden, "github_not_linked", "GitHub no longer accepts your linked credential. Link your GitHub account again in Settings.")
+	case http.StatusForbidden, http.StatusNotFound:
+		httpx.Error(w, http.StatusForbidden, "forbidden", "GitHub refused this. Your GitHub account may have lost access to the repository.")
+	default:
+		httpx.Error(w, http.StatusBadGateway, "github_error", "GitHub could not be reached or did not accept the change. Try again.")
+	}
+}
 
 // User is a GitHub account.
 type User struct {
@@ -89,7 +112,19 @@ func (c *Client) do(ctx context.Context, method, url, token string, header http.
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return res.Header, &Error{Status: res.StatusCode}
+		status := res.StatusCode
+		if status == http.StatusForbidden {
+			var e struct {
+				Message string `json:"message"`
+			}
+			json.NewDecoder(io.LimitReader(res.Body, 64<<10)).Decode(&e)
+			// GitHub answers some rate limits with 403; report them as the 429 it uses for others, not as lost access.
+			if res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "" ||
+				strings.Contains(strings.ToLower(e.Message), "rate limit") {
+				status = http.StatusTooManyRequests
+			}
+		}
+		return res.Header, &Error{Status: status}
 	}
 	if out != nil {
 		if err := json.NewDecoder(res.Body).Decode(out); err != nil {

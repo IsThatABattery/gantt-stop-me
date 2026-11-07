@@ -108,7 +108,7 @@ A user can open a project only if their linked GitHub account can access its rep
 - **Read** permission or above can view the board.
 - **Write** permission or above can move cards, create tasks and edit them.
 
-The cache means a user who loses access on GitHub loses it here within minutes. Unlinking GitHub removes the user's access to every project at once.
+The cache means a user who loses access on GitHub loses it here within minutes. Unlinking GitHub removes the user's access to every project at once. When GitHub stops accepting a linked credential, for example an expired token, project routes answer `403 github_not_linked` so the user knows to link again. A rate-limited GitHub answer is a temporary error, never lost access.
 
 ### Adding a project
 
@@ -126,7 +126,9 @@ Initialization runs once per repository:
 3. Create one label per column in the repository, unless it already exists. This needs write permission, so a user with read access alone cannot add a new project.
 4. Import the repository's open issues as tasks in Backlog. Issues that already carry a `board:*` label go to that column.
 
-Initialization is idempotent. Running it again on a half-initialized project finishes what is missing and duplicates nothing.
+Initialization is idempotent. Running it again on a half-initialized project finishes what is missing and duplicates nothing. Until it finishes, the project's routes answer `404`, and adding the repository again finishes it.
+
+A project follows its repository by GitHub's repository id, and every GitHub call goes by that id. A rename or transfer therefore keeps the project on the same repository, even when another repository later takes the old name. The access check stores the new owner and name when it next asks GitHub.
 
 ### Board columns
 
@@ -150,7 +152,7 @@ Moving a task is a single call:
 
 ```
 POST /api/projects/{projectID}/tasks/{taskID}/move
-{ "columnId": "...", "beforeTaskId": "...", "version": 7 }
+{ "columnId": 3, "beforeTaskId": 12, "version": 7 }
 ```
 
 The API then:
@@ -158,10 +160,12 @@ The API then:
 1. Checks the user has write permission.
 2. Checks `version` matches the task's current version. If not, it returns `409 Conflict` with the current task, so two people moving the same card cannot silently overwrite each other.
 3. Computes the new position between its neighbours.
-4. Updates GitHub. It swaps the `board:*` label, closes the issue when moving into Closed, and reopens it when moving out of Closed.
+4. Updates GitHub. It replaces the issue's `board:*` labels with the new column's, closes the issue when moving into Closed, and reopens it when moving out of Closed.
 5. Saves the new column, position and version.
 
-GitHub is updated before the database. If GitHub fails, nothing is saved and the move is rejected, so the two never disagree about a move.
+GitHub is updated before the database. If GitHub fails, nothing is saved and the move is rejected, so the two never disagree about a move. A move GitHub only partly applied is undone as far as GitHub allows; retrying the move also repairs it.
+
+Moves, syncs and new tasks on one project run one at a time. Waiting writes queue in the API process before they take a database connection, so a slow GitHub cannot use up the pool for everyone else.
 
 Positions are floating-point numbers. A card dropped between two others gets the midpoint. When the gap gets too small, the API renumbers that column in one transaction.
 
@@ -172,9 +176,10 @@ Issues change on GitHub too, so the API refreshes a project's issues whenever it
 - A new issue on GitHub becomes a task in Backlog.
 - An issue closed on GitHub moves to Closed.
 - An issue reopened on GitHub moves from Closed back to Backlog.
-- A changed `board:*` label moves the task to that column.
+- A `board:*` label added on GitHub moves the task to that column. A label the issue already had does not, so one left on an issue closed on GitHub cannot pull the task back later.
+- An open issue never moves into Closed by label. `board:closed` on an open issue is ignored, and closing the issue is what moves it there.
 
-The cached title and state in `tasks` are for rendering only and are overwritten on every sync.
+The cached title, state and board labels in `tasks` are overwritten on every sync. A task's detail view shows its title and state live from GitHub.
 
 ### Provider settings
 
@@ -201,6 +206,7 @@ Provider keys are encrypted like GitHub credentials and are never returned to th
 | `POST /api/projects` | Add a repository by URL. Returns the existing project if already added. |
 | `GET /api/projects/{id}/board` | Columns and tasks, after a sync if one is due. |
 | `POST /api/projects/{id}/tasks` | Create an issue and its task. |
+| `GET /api/projects/{id}/tasks/{taskID}` | A task with its issue's title, state, body and labels, loaded live from GitHub. |
 | `PATCH /api/projects/{id}/tasks/{taskID}` | Edit title or body, written through to the issue. |
 | `POST /api/projects/{id}/tasks/{taskID}/move` | Move a task. |
 | `GET /api/providers` | List the user's providers, keys masked. |
@@ -276,6 +282,7 @@ tasks (
   version         integer not null default 1,
   title           text not null,      -- cache, overwritten by sync
   state           text not null,      -- 'open' or 'closed', cache
+  board_labels    text[] not null default '{}', -- the issue's board:* labels as last seen, so sync spots added ones
   updated_at      timestamptz not null default now(),
   unique (project_id, issue_number)
 )

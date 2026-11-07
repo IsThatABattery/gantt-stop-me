@@ -32,8 +32,10 @@ func Token(ctx context.Context, db *pgxpool.Pool, box *secret.Box, userID int64)
 }
 
 // save links userID to the GitHub account u, replacing any earlier link.
+// Project access checked with the old credential is forgotten with it.
 func (l *Links) save(ctx context.Context, userID int64, u User, token, kind string) error {
 	_, err := l.DB.Exec(ctx, `
+		with forget as (delete from project_members where user_id = $1)
 		insert into github_links (user_id, github_id, login, credential_enc, kind) values ($1, $2, $3, $4, $5)
 		on conflict (user_id) do update set github_id = excluded.github_id, login = excluded.login,
 			credential_enc = excluded.credential_enc, kind = excluded.kind, linked_at = now()`,

@@ -32,12 +32,23 @@ func TestLinkToken(t *testing.T) {
 func TestLinkTokenReplacesOldLink(t *testing.T) {
 	env := apptest.New(t)
 	session := env.SignUp("ada@example.com", "correct horse")
+	bob := env.SignUp("bob@example.com", "correct horse")
 	env.LinkGitHub(session, "old-gh")
+	env.LinkGitHub(bob, "bob-gh")
+	addMembership(t, env, session)
+	addMembership(t, env, bob)
 	token := env.LinkGitHub(session, "new-gh")
 
 	links := stored(t, env)
-	if len(links) != 1 || links[0].Login != "new-gh" || links[0].Token != token {
-		t.Fatalf("github_links = %+v, want only the new link", links)
+	if len(links) != 2 || links[0].Login != "new-gh" || links[0].Token != token {
+		t.Fatalf("github_links = %+v, want the new link and bob's", links)
+	}
+	// Access was checked with the old credential, so it must not outlive it.
+	if n := memberships(t, env, session); n != 0 {
+		t.Fatalf("relinking kept %d project memberships", n)
+	}
+	if n := memberships(t, env, bob); n != 1 {
+		t.Fatalf("bob has %d project memberships, want his 1 untouched", n)
 	}
 }
 

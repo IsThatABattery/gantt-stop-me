@@ -55,6 +55,30 @@ func userID(t *testing.T, env *apptest.Env, session *http.Cookie) int64 {
 	return me.ID
 }
 
+// addMembership caches access for the session's user to a new project, as opening a board does.
+func addMembership(t *testing.T, env *apptest.Env, session *http.Cookie) {
+	t.Helper()
+	_, err := env.DB.Exec(context.Background(), `
+		with p as (
+			insert into projects (github_repo_id, owner, name)
+			values ((select coalesce(max(github_repo_id), 0) + 1 from projects), 'octo', 'hello') returning id)
+		insert into project_members (project_id, user_id, permission, checked_at) select id, $1, 'write', now() from p`,
+		userID(t, env, session))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// memberships counts the session user's cached project access.
+func memberships(t *testing.T, env *apptest.Env, session *http.Cookie) int {
+	t.Helper()
+	var n int
+	if err := env.DB.QueryRow(context.Background(), `select count(*) from project_members where user_id = $1`, userID(t, env, session)).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
 func TestToken(t *testing.T) {
 	env := apptest.New(t)
 	ada := env.SignUp("ada@example.com", "correct horse")
