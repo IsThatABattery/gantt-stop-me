@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New objective or payload</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#070B16}
+a{color:#3FD5E8}a:hover{color:#8BE9F4}
+</style>
+</helmet>
+<div style="width: 560px; min-height: 700px; box-sizing: border-box; padding: 28px; background: #0B1120; color: #E6ECF7; font-family: Inter, system-ui, sans-serif; font-size: 14px; border: 1px solid #24304A; border-radius: 16px; display: flex; flex-direction: column; gap: 18px">
+<div>
+<div style="font-family: Inter, system-ui, sans-serif; font-size: 12px; font-weight: 500; letter-spacing: .04em; color: #9AA7BF">{{t.eyebrow}}</div>
+<h1 style="margin: 6px 0 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 24px">{{t.h1}}</h1>
+<p style="margin: 8px 0 0; color: #AAB6CC; line-height: 1.5">{{t.intro}}</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-name" style="font-size: 13px; color: #C2CCDD">{{t.nameLabel}}</label>
+<input id="n-name" type="text" placeholder="{{t.namePlaceholder}}" style="min-height: 46px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-desc" style="font-size: 13px; color: #C2CCDD">Description <span style="color: #9AA7BF">(optional)</span></label>
+<textarea id="n-desc" rows="3" placeholder="{{t.descPlaceholder}}" style="box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit; line-height: 1.5; resize: vertical"></textarea>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-a" style="font-size: 13px; color: #C2CCDD">{{t.aLabel}}</label>
+<select id="n-a" style="min-height: 46px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit"><sc-for list="{{t.aOptions}}" as="o" hint-placeholder-count="3"><option>{{o}}</option></sc-for></select>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-b" style="font-size: 13px; color: #C2CCDD">{{t.bLabel}}</label>
+<select id="n-b" style="min-height: 46px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit"><sc-for list="{{t.bOptions}}" as="o" hint-placeholder-count="3"><option>{{o}}</option></sc-for></select>
+</div>
+</div>
+<sc-if value="{{isPayload}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-est" style="font-size: 13px; color: #C2CCDD">Estimate (points)</label>
+<input id="n-est" type="number" min="0" placeholder="3" style="min-height: 46px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-pri" style="font-size: 13px; color: #C2CCDD">Priority</label>
+<select id="n-pri" style="min-height: 46px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit"><option>Low</option><option selected>Medium</option><option>High</option><option>Critical</option></select>
+</div>
+</div>
+</sc-if>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-window" style="font-size: 13px; color: #C2CCDD">Target launch window</label>
+<select id="n-window" style="min-height: 46px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit"><option>Launch window 14</option><option>Launch window 15</option><option>Not scheduled</option></select>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n-tag" style="font-size: 13px; color: #C2CCDD">Tags <span style="color: #9AA7BF">(optional)</span></label>
+<input id="n-tag" type="text" placeholder="Add a tag and press Enter" style="min-height: 46px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit">
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid #1C2640">
+<sc-if value="{{t.canPlan}}" hint-placeholder-val="{{ true }}"><a href="PlanBriefing.dc.html" style="margin-right: auto; display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 16px; border-radius: 10px; border: 1px solid #A78BFA; background: rgba(167,139,250,.1); color: #E6ECF7; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="11" r="7"></circle><rect x="7.5" y="8.5" width="9" height="5.5" rx="2.75"></rect><path d="M9 20h6"></path></svg>Plan with an astronaut</a></sc-if>
+<a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 46px; padding: 0 18px; border-radius: 10px; border: 1px solid #24304A; color: #E6ECF7; text-decoration: none">Cancel</a>
+<a href="{{t.createHref}}" style="display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border-radius: 10px; background: #3FD5E8; color: #062029; font-weight: 600; text-decoration: none">{{t.createLabel}}</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"kind":{"editor":"enum","options":["objective","payload"],"default":"objective","section":"Item"},"$preview":{"width":560,"height":700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const isPayload = this.props.kind === 'payload';
+    const objective = {
+      eyebrow: 'ORBITAL-NAV · NEW OBJECTIVE', h1: 'New objective',
+      intro: 'An objective groups the payloads that deliver one outcome. You can add payloads and success criteria after creating it.',
+      nameLabel: 'Name', namePlaceholder: 'e.g. Realtime sync', descPlaceholder: 'What does landing this objective achieve?',
+      aLabel: 'Mission phase', aOptions: ['Core', 'Telemetry', 'Comms'],
+      bLabel: 'Owner', bOptions: ['TV · Flight director', 'MK · Operator', 'JL · Operator'],
+      createLabel: 'Create objective', createHref: 'ObjectiveEditor.dc.html', canPlan: true
+    };
+    const payload = {
+      eyebrow: 'ORBITAL-NAV · NEW PAYLOAD', h1: 'New payload',
+      intro: 'A payload is one piece of work. It waits in the Hangar until it is scheduled into a launch window.',
+      nameLabel: 'Title', namePlaceholder: 'e.g. Retry cap for reconnects', descPlaceholder: 'What needs to be done, and how will we know it is done?',
+      aLabel: 'Objective', aOptions: ['Auth service', 'Backlog and priorities', 'Board interactions', 'Build tooling', 'Realtime sync', 'Sprint telemetry', 'Theming'],
+      bLabel: 'Assignee', bOptions: ['Unassigned', 'Astronaut-1 · Astronaut', 'Astronaut-2 · Astronaut', 'TV · Operator', 'MK · Operator', 'JL · Operator'],
+      createLabel: 'Create payload', createHref: 'PayloadEditor.dc.html', canPlan: false
+    };
+    return { isPayload, t: isPayload ? payload : objective };
+  }
+}
+</script>
+</body>
+</html>
