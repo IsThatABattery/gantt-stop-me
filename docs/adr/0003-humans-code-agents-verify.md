@@ -1,0 +1,3 @@
+# Humans write feature code; agents scope, test and verify, and never merge on their own
+
+The tool removes everything around coding, not coding itself. Agents scope Features into Tasks, write the initial failing tests, run the Project's deterministic tests, drive a browser against the acceptance criteria and record it, and report a Verdict. A human implements every Task, and a human Review is required to merge even when every test passes and every Verdict is pass. The Verdict is advisory so that a wrong agent costs a wasted Recording, never a bad merge. A coding agent, or an agent that fixes a Rejection, is a separate decision for later, not a gap.

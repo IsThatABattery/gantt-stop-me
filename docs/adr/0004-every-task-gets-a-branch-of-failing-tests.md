@@ -1,0 +1,3 @@
+# Every Task gets a branch holding only its failing tests
+
+Tests written at Scoping must live somewhere without turning `main` red, and a Task a human adds by hand should start the same way as one the scoping agent wrote. Whenever `BOARD.yaml` changes on `main`, any Task without a `branch` gets `task/<task-id>` created off `main`, an agent writes only failing tests there, and the branch is recorded on the Task. If a human already pushed that branch, the tool records it and writes nothing. The human then makes the branch pass, so the pull request shows red turning green. Alternatives were tests on `main` marked skip (a skip convention per language, and un-skipping inside the PR) and test code stored as text on the Task (nothing runnable until someone pastes it in).
