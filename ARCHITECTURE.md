@@ -177,6 +177,7 @@ Issues change on GitHub too, so the API refreshes a project's issues whenever it
 - An issue closed on GitHub moves to Closed.
 - An issue reopened on GitHub moves from Closed back to Backlog.
 - A `board:*` label added on GitHub moves the task to that column. A label the issue already had does not, so one left on an issue closed on GitHub cannot pull the task back later.
+- An open issue never moves into Closed by label. `board:closed` on an open issue is ignored, and closing the issue is what moves it there.
 
 The cached title, state and board labels in `tasks` are overwritten on every sync. A task's detail view shows its title and state live from GitHub.
 

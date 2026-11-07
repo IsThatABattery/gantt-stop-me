@@ -60,3 +60,10 @@ func TestShowBoardNeedsSession(t *testing.T) {
 	f := setup(t)
 	f.Do("GET", f.path("/board"), nil).Expect(http.StatusUnauthorized, "unauthorized")
 }
+
+func TestShowBoardWithRevokedCredential(t *testing.T) {
+	f := setup(t, "One")
+	f.exec(`update projects set synced_at = now() - interval '31 seconds'`)
+	f.GitHub.Fail("GET /repositories/{id}/issues", http.StatusUnauthorized) // the token expired or was revoked
+	f.Do("GET", f.path("/board"), nil, f.ada).Expect(http.StatusForbidden, "github_not_linked")
+}

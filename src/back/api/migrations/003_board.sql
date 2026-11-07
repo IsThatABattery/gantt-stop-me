@@ -37,6 +37,7 @@ create table tasks (
   version         integer not null default 1,
   title           text not null, -- cache, overwritten by sync
   state           text not null, -- 'open' or 'closed', cache
+  board_labels    text[] not null default '{}', -- the issue's board:* labels as last seen, so sync spots added ones
   updated_at      timestamptz not null default now(),
   unique (project_id, issue_number)
 );

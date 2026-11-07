@@ -1,11 +1,13 @@
 package board
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -18,6 +20,10 @@ func (b *Board) show(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	if err := b.sync(ctx, p, token); err != nil {
+		if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
+			github.Fail(w, r, err) // a dead credential sends the user to Settings, as on every other project route
+			return
+		}
 		// The cached board is still worth showing, and the next load retries.
 		log.Printf("sync project %d: %v", p.ID, err)
 	}

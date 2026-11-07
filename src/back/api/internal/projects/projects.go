@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,20 +45,17 @@ func Lock(ctx context.Context, tx pgx.Tx, projectID int64) error {
 	return err
 }
 
-// gates queue each project's writers in Serialize. Projects share them by id, which keeps their number fixed.
-var gates = func() (g [64]chan struct{}) {
-	for i := range g {
-		g[i] = make(chan struct{}, 1)
-	}
-	return g
-}()
+// gates holds one gate per project, so a slow write to one project never delays another.
+// shortcut: a gate is never freed, one small channel per project written since start; prune if projects number in the millions.
+var gates sync.Map // project id -> chan struct{}
 
 // Serialize waits, before the writer takes a DB connection, until no other write to the project runs in this
 // process, or until ctx ends. The writer calls unlock when done, and still takes Lock in its transaction.
 // shortcut: in-process only; the advisory lock still serializes across api instances, where waiters would pin
 // connections again. Upgrade to a queue outside the pool before running more than one instance.
 func Serialize(ctx context.Context, projectID int64) (unlock func(), err error) {
-	g := gates[uint64(projectID)%uint64(len(gates))]
+	v, _ := gates.LoadOrStore(projectID, make(chan struct{}, 1))
+	g := v.(chan struct{})
 	select {
 	case g <- struct{}{}:
 		return func() { <-g }, nil
