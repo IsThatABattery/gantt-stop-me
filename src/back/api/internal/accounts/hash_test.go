@@ -1,8 +1,12 @@
 package accounts
 
 import (
+	"runtime"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestHashPassword(t *testing.T) {
@@ -18,6 +22,40 @@ func TestHashPassword(t *testing.T) {
 	}
 	if h == hashPassword("correct horse") {
 		t.Fatal("two hashes of one password are equal; salt is not random")
+	}
+}
+
+// Every login and signup runs one hash of argonMemory, so a burst of them must not hold one each at once.
+func TestHashBurstMemoryIsBounded(t *testing.T) {
+	defer debug.SetGCPercent(debug.SetGCPercent(10)) // keep freed blocks from inflating HeapInuse
+	h := dummyHash()
+	runtime.GC()
+	var peak uint64
+	done, sampled := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(sampled)
+		var ms runtime.MemStats
+		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			runtime.ReadMemStats(&ms)
+			peak = max(peak, ms.HeapInuse)
+			time.Sleep(2 * time.Millisecond)
+		}
+	}()
+	n := 4 * runtime.NumCPU()
+	var wg sync.WaitGroup
+	for range n {
+		wg.Go(func() { checkPassword(h, "x") })
+	}
+	wg.Wait()
+	close(done)
+	<-sampled
+	if limit := uint64(2*runtime.NumCPU()) * argonMemory * 1024; peak > limit {
+		t.Fatalf("%d concurrent hashes peaked at %d MiB, want <= %d MiB", n, peak>>20, limit>>20)
 	}
 }
 
