@@ -11,6 +11,9 @@ services:
       - front-node-modules:/workspaces/gantt-stop-me/src/front/node_modules
     environment:
       DATABASE_URL: postgres://gantt:gantt@db:5432/gantt?sslmode=disable
+      # The browser opens Vite on :5173, which proxies /api, so writes arrive with that Origin.
+      PUBLIC_URL: http://localhost:5173
+      ENCRYPTION_KEY: rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=
     # Delve needs ptrace.
     cap_add:
       - SYS_PTRACE

@@ -1,21 +1,28 @@
+x-postgres: &postgres
+  image: postgres:18
+  environment:
+    POSTGRES_USER: gantt
+    POSTGRES_PASSWORD: gantt
+    POSTGRES_DB: gantt
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U gantt -d gantt"]
+    interval: 2s
+    retries: 15
+
 services:
   db:
-    image: postgres:17
-    environment:
-      POSTGRES_USER: gantt
-      POSTGRES_PASSWORD: gantt
-      POSTGRES_DB: gantt
+    <<: *postgres
     volumes:
-      - db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gantt -d gantt"]
-      interval: 2s
-      retries: 15
+      - db-data:/var/lib/postgresql
 
   api:
     build: src/back/api
     environment:
-      DATABASE_URL: postgres://gantt:gantt@db:5432/gantt?sslmode=disable
+      DATABASE_URL: ${DATABASE_URL:-postgres://gantt:gantt@db:5432/gantt?sslmode=disable}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      # Dev-only default. Set your own in .env for anything beyond local use.
+      # "-", not ":-": a blank ENCRYPTION_KEY in .env stops the API instead of falling back to this public key.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY-rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=}
     depends_on:
       db:
         condition: service_healthy
@@ -27,5 +34,29 @@ services:
     depends_on:
       - api
 
+  # Runs the API tests, or any go command: docker compose run --rm api-test [go ...]
+  api-test:
+    profiles: [test]
+    build:
+      context: src/back/api
+      target: dev
+    volumes:
+      - ./src/back/api:/src
+      - go-cache:/go
+    environment:
+      GOCACHE: /go/cache
+      TEST_DATABASE_URL: postgres://gantt:gantt@test-db:5432/gantt?sslmode=disable
+    command: go test ./...
+    depends_on:
+      test-db:
+        condition: service_healthy
+
+  # Throwaway Postgres for tests, kept in memory and apart from db.
+  test-db:
+    <<: *postgres
+    profiles: [test]
+    tmpfs: /var/lib/postgresql
+
 volumes:
   db-data:
+  go-cache:
