@@ -1,0 +1,100 @@
+package github
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+// Client calls GitHub's REST API and its OAuth endpoints.
+type Client struct {
+	API  string // REST API base URL, https://api.github.com
+	Web  string // site base URL for OAuth, https://github.com
+	HTTP *http.Client
+}
+
+// Error is a non-2xx answer from GitHub.
+type Error struct{ Status int }
+
+func (e *Error) Error() string { return fmt.Sprintf("github: HTTP %d", e.Status) }
+
+// User is a GitHub account.
+type User struct {
+	ID    int64  `json:"id"`
+	Login string `json:"login"`
+}
+
+// User loads the account token belongs to.
+func (c *Client) User(ctx context.Context, token string) (User, error) {
+	var u User
+	_, err := c.do(ctx, http.MethodGet, c.API+"/user", token, nil, nil, &u)
+	return u, err
+}
+
+// ExchangeCode trades an OAuth authorization code for an access token.
+func (c *Client) ExchangeCode(ctx context.Context, clientID, clientSecret, code, redirectURI string) (string, error) {
+	in := map[string]string{"client_id": clientID, "client_secret": clientSecret, "code": code, "redirect_uri": redirectURI}
+	var out struct {
+		AccessToken string `json:"access_token"`
+		Error       string `json:"error"`
+	}
+	// This endpoint answers JSON only when asked for application/json, and reports a bad code with 200.
+	_, err := c.do(ctx, http.MethodPost, c.Web+"/login/oauth/access_token", "", http.Header{"Accept": {"application/json"}}, in, &out)
+	if err != nil {
+		return "", err
+	}
+	if out.AccessToken == "" {
+		return "", fmt.Errorf("github: code exchange failed: %q", out.Error)
+	}
+	return out.AccessToken, nil
+}
+
+// do sends one request to the absolute url and returns the response headers, for ETag and Link.
+// token, if set, is sent as a bearer token; header adds or overrides request headers, such as If-None-Match;
+// in, if not nil, is sent as JSON; out, if not nil, receives the JSON answer.
+// A non-2xx answer returns *Error.
+func (c *Client) do(ctx context.Context, method, url, token string, header http.Header, in, out any) (http.Header, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	var body io.Reader
+	if in != nil {
+		data, err := json.Marshal(in)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewReader(data)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range header {
+		req.Header[k] = v
+	}
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return res.Header, &Error{Status: res.StatusCode}
+	}
+	if out != nil {
+		if err := json.NewDecoder(res.Body).Decode(out); err != nil {
+			return res.Header, fmt.Errorf("github: decode %s %s: %w", method, req.URL.Path, err)
+		}
+	}
+	return res.Header, nil
+}
