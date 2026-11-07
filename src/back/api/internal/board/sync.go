@@ -60,7 +60,7 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 	if skipped {
 		// Give the claim back and drop the ETag, so the next sync refetches from the old cutoff,
 		// which reaches the skipped tasks' issues even when their changes are older than this sync.
-		_, err = b.DB.Exec(ctx, `update projects set synced_at = $2, issues_etag = null where id = $1 and synced_at = $3`, p.ID, prev, claimed)
+		_, err = b.DB.Exec(context.WithoutCancel(ctx), `update projects set synced_at = $2, issues_etag = null where id = $1 and synced_at = $3`, p.ID, prev, claimed)
 		return err
 	}
 	_, err = b.DB.Exec(ctx, `update projects set issues_etag = nullif($2, '') where id = $1`, p.ID, newETag)

@@ -33,6 +33,9 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 		fields["title"] = title
 	}
 	if in.Body != nil {
+		if !validBody(w, *in.Body) {
+			return
+		}
 		fields["body"] = *in.Body
 	}
 	if len(fields) == 0 {
