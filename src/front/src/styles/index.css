@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Tokens from ganttstopme-plan/design/tokens.json. Dark mode only for now. */
+/* Tokens from docs/ganttstopme-plan/design/tokens.json. Dark mode only for now. */
 @theme {
   --color-background: #070b16;
   --color-surface: #0f1626;

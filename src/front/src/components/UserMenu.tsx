@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useUser } from '../data/queries'
+import { useUser } from '../data/core'
 import { signOut, useSession } from '../data/session'
 import { UserAvatar } from './Avatar'
 import { Icon } from './Icon'

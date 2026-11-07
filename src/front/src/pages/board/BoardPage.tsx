@@ -1,15 +1,17 @@
 import { useMemo } from 'react'
+import { Outlet } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { StatusMessage } from '../../components/StatusMessage'
-import { useBoard } from '../../data/queries'
+import { useBoard } from '../../data/views/board'
 import type { Board, Task } from '../../data/types'
 import { columnLabels, labels } from '../../labels/labels'
 import { BoardToolbar } from './BoardToolbar'
 import { TaskCard } from './TaskCard'
 import { TelemetryBar } from './TelemetryBar'
 
-// Mission control, from Main.dc.html. Static cards only in Phase 1:
-// no drag, no drawer, no filtering.
+// Mission control, from Main.dc.html. Static cards for now; drag, filters
+// and keyboard control come in feature/frontend-board. The <Outlet /> renders
+// the payload drawer and the create dialogs over the board.
 export function BoardPage() {
   const project = useProjectContext()
   const { data: board, isPending, error } = useBoard(project.id)
@@ -51,7 +53,7 @@ function BoardView({ board }: { board: Board }) {
     <>
       <TelemetryBar project={board.project} sprint={board.sprint} counts={lookup.counts} />
       <section aria-label={labels.board} className="relative min-w-0 flex-1 overflow-x-auto px-7 py-6">
-        <BoardToolbar features={board.features} />
+        <BoardToolbar projectId={board.project.id} features={board.features} />
         <div className="grid min-w-[1120px] grid-cols-[repeat(5,minmax(216px,1fr))] gap-4">
           {board.columns.map((col) => {
             const name = columnLabels[col.key]
@@ -75,6 +77,7 @@ function BoardView({ board }: { board: Board }) {
                     epic={lookup.epic.get(t.epicId)}
                     feature={lookup.feature.get(t.featureId)}
                     owner={ownerOf(t)}
+                    to={`/projects/${board.project.id}/tasks/${t.id}`}
                   />
                 ))}
                 {col.tasks.length === 0 && (
@@ -87,6 +90,7 @@ function BoardView({ board }: { board: Board }) {
           })}
         </div>
       </section>
+      <Outlet />
     </>
   )
 }

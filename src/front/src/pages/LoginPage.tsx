@@ -5,7 +5,7 @@ import { Eyebrow } from '../components/Eyebrow'
 import { Icon } from '../components/Icon'
 import { Logo } from '../components/Logo'
 import { Button, Checkbox, Field, TextInput } from '../components/controls'
-import { signIn } from '../data/api'
+import { signIn } from '../data/core'
 import { saveSession, useSession } from '../data/session'
 import { labels } from '../labels/labels'
 

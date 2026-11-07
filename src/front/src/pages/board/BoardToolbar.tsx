@@ -1,10 +1,14 @@
+import { Link } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
 import { Select } from '../../components/controls'
 import type { Feature } from '../../data/types'
 import { labels } from '../../labels/labels'
 
-// Shown but inert in Phase 1: filtering and create forms come in Phase 2.
-export function BoardToolbar({ features }: { features: Feature[] }) {
+// The objective filter is inert until feature/frontend-board. The links open
+// the create dialogs and the objective editor (feature/frontend-forms).
+export function BoardToolbar({ projectId, features }: { projectId: string; features: Feature[] }) {
+  const sorted = [...features].sort((a, b) => a.name.localeCompare(b.name))
+  const base = `/projects/${projectId}`
   return (
     <div className="flex flex-wrap items-center gap-3 pb-4">
       <label htmlFor="feature-filter" className="text-[13px] text-text-muted">
@@ -12,23 +16,23 @@ export function BoardToolbar({ features }: { features: Feature[] }) {
       </label>
       <Select id="feature-filter" className="min-h-11 bg-surface">
         <option>{labels.allFeatures}</option>
-        {[...features]
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
+        {sorted.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+          </option>
+        ))}
       </Select>
-      <button type="button" className={buttonClass('link', 'px-3')}>
-        {labels.manageFeatures}
-      </button>
-      <button type="button" className={buttonClass('accent')}>
+      {sorted[0] && (
+        <Link to={`${base}/features/${sorted[0].id}/edit`} className={buttonClass('link', 'px-3')}>
+          {labels.manageFeatures}
+        </Link>
+      )}
+      <Link to={`${base}/new/feature`} className={buttonClass('accent')}>
         {labels.newFeature}
-      </button>
-      <button type="button" className={buttonClass('accent')}>
+      </Link>
+      <Link to={`${base}/new/task`} className={buttonClass('accent')}>
         {labels.newTask}
-      </button>
+      </Link>
     </div>
   )
 }

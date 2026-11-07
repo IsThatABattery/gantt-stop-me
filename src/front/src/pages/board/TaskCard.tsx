@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { AgentTag, UserAvatar } from '../../components/Avatar'
 import { Chip, type Tone } from '../../components/Chip'
 import { Icon, type IconName } from '../../components/Icon'
@@ -46,18 +47,20 @@ interface TaskCardProps {
   epic?: Epic
   feature?: Feature
   owner: { kind: 'user'; user: User } | { kind: 'agent'; agent: Agent } | null
+  /** Opens the payload drawer */
+  to: string
 }
 
-export function TaskCard({ task, epic, feature, owner }: TaskCardProps) {
+export function TaskCard({ task, epic, feature, owner, to }: TaskCardProps) {
   const byAgent = owner?.kind === 'agent'
   const l = look(task.status, byAgent)
   const landed = task.status === 'landed'
 
   return (
-    <article
-      tabIndex={0}
+    <Link
+      to={to}
       aria-label={`${task.key}: ${task.title}. ${taskStatusLabels[task.status]}`}
-      className={`relative overflow-hidden rounded-control border bg-surface text-text outline-none ${l.border ?? 'border-line'} ${
+      className={`relative block overflow-hidden rounded-control border bg-surface text-text no-underline outline-none hover:text-text ${l.border ?? 'border-line'} ${
         landed
           ? 'opacity-60 hover:border-ion focus-visible:border-ion'
           : 'transition-[border-color,translate] hover:-translate-y-px hover:border-ion focus-visible:-translate-y-px focus-visible:border-ion'
@@ -100,6 +103,6 @@ export function TaskCard({ task, epic, feature, owner }: TaskCardProps) {
           </div>
         )}
       </div>
-    </article>
+    </Link>
   )
 }

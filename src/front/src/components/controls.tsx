@@ -1,6 +1,6 @@
 import { cx } from '../lib/cx'
 import { buttonClass, type ButtonVariant } from './buttonClass'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
@@ -19,6 +19,10 @@ export function TextInput({ className = '', ...rest }: InputHTMLAttributes<HTMLI
 
 export function Select({ className = '', ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={cx(`${fieldControl} px-3`, className)} {...rest} />
+}
+
+export function Textarea({ className = '', ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cx(`${fieldControl} w-full px-3.5 py-3 leading-normal`, className)} rows={4} {...rest} />
 }
 
 interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {

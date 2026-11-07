@@ -79,6 +79,23 @@ const paths = {
     </>
   ),
   chat: <path d="M5 5h14v10H9l-4 4z" />,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
+  pause: <path d="M9 5v14M15 5v14" />,
+  edit: <path d="M4 20h4L19 9l-4-4L4 16z" />,
+  link: (
+    <>
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    </>
+  ),
+  pr: (
+    <>
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="6" cy="18" r="2" />
+      <circle cx="18" cy="18" r="2" />
+      <path d="M6 8v8M18 16V9a3 3 0 0 0-3-3h-4" />
+    </>
+  ),
   signOut: (
     <>
       <path d="M10 5H5v14h5" />

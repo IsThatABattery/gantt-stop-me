@@ -1,6 +1,5 @@
 import { Outlet, useParams } from 'react-router'
-import { NotFoundError } from '../data/api'
-import { useProject } from '../data/queries'
+import { NotFoundError, useProject } from '../data/core'
 import type { Project } from '../data/types'
 import { labels } from '../labels/labels'
 import { StatusMessage } from '../components/StatusMessage'
