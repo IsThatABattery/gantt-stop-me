@@ -1,11 +1,13 @@
 package github
 
 import (
+	"crypto/hmac"
 	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"gantt-stop-me/api/internal/accounts"
 )
@@ -30,6 +32,11 @@ func (l *Links) finishOAuth(r *http.Request) error {
 	c, err := r.Cookie(stateCookie)
 	if err != nil || q.Get("state") == "" || subtle.ConstantTimeCompare([]byte(c.Value), []byte(q.Get("state"))) != 1 {
 		return errors.New("state does not match the github_state cookie")
+	}
+	session, _ := r.Cookie(accounts.SessionCookie) // Require guarantees it
+	nonce, mac, _ := strings.Cut(q.Get("state"), ".")
+	if !hmac.Equal([]byte(mac), []byte(stateMAC(session.Value, nonce))) {
+		return errors.New("state is not tied to this session")
 	}
 	token, err := l.Client.ExchangeCode(r.Context(), l.ClientID, l.ClientSecret, q.Get("code"), l.PublicURL+callbackPath)
 	if err != nil {

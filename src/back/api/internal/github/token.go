@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"unicode"
 
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
@@ -21,6 +22,11 @@ func (l *Links) token(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(in.Token)
 	if token == "" {
 		httpx.Error(w, http.StatusBadRequest, "bad_request", "Enter a personal access token.")
+		return
+	}
+	// Go will not send a control character in a header, and that error would read as GitHub being down.
+	if strings.ContainsFunc(token, unicode.IsControl) {
+		httpx.Error(w, http.StatusBadRequest, "invalid_token", "GitHub did not accept this token.")
 		return
 	}
 	u, err := l.Client.User(r.Context(), token)
