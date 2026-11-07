@@ -239,6 +239,14 @@ func TestAddProjectWhenGitHubIsDown(t *testing.T) {
 	}
 }
 
+func TestAddProjectWithRevokedCredential(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	env.GitHub.AddRepo("octo", "hello").Grant(env.LinkGitHub(ada, "ada-gh"), "push")
+	env.GitHub.Fail("GET /repos/{owner}/{name}", http.StatusUnauthorized) // the token expired or was revoked
+	add(env, ada, "https://github.com/octo/hello").Expect(http.StatusForbidden, "github_not_linked")
+}
+
 func TestAddProjectNeedsSession(t *testing.T) {
 	add(apptest.New(t), nil, "https://github.com/octo/hello").Expect(http.StatusUnauthorized, "unauthorized")
 }

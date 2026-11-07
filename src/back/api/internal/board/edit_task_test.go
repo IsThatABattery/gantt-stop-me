@@ -57,7 +57,7 @@ func TestEditTaskNeedsWrite(t *testing.T) {
 func TestEditTaskWhenGitHubFails(t *testing.T) {
 	f := setup(t, "One")
 	id, _ := f.task(1)
-	f.GitHub.Fail("PATCH /repos/{owner}/{name}/issues/{number}", http.StatusInternalServerError)
+	f.GitHub.Fail("PATCH /repositories/{id}/issues/{number}", http.StatusInternalServerError)
 	f.Do("PATCH", f.path("/tasks/%d", id), map[string]string{"title": "Lost"}, f.ada).Expect(http.StatusBadGateway, "github_error")
 	if _, s := f.task(1); s.Title != "One" {
 		t.Fatalf("cached title = %q after GitHub failed, want One", s.Title)

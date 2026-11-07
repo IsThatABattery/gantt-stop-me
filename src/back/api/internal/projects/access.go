@@ -42,10 +42,9 @@ func (p *Projects) Check(w http.ResponseWriter, r *http.Request, need string) (P
 	userID := accounts.UserID(ctx)
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64) // 0, which matches no project, when not a number
 	var pr Project
-	var repoID int64
 	// A project whose initialization has not finished has no board yet.
 	err := p.DB.QueryRow(ctx, `select id, github_repo_id, owner, name from projects where id = $1 and synced_at is not null`, id).
-		Scan(&pr.ID, &repoID, &pr.Owner, &pr.Name)
+		Scan(&pr.ID, &pr.RepoID, &pr.Owner, &pr.Name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		notFound(w)
 		return Project{}, "", false
@@ -64,7 +63,7 @@ func (p *Projects) Check(w http.ResponseWriter, r *http.Request, need string) (P
 		where project_id = $1 and user_id = $2 and checked_at > now() - interval '5 minutes'`, pr.ID, userID).Scan(&pr.Permission)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var repo github.Repo
-		repo, err = p.GitHub.RepoByID(ctx, token, repoID)
+		repo, err = p.GitHub.RepoByID(ctx, token, pr.RepoID)
 		if err == nil {
 			pr.Permission = permission(repo)
 		}
@@ -79,6 +78,14 @@ func (p *Projects) Check(w http.ResponseWriter, r *http.Request, need string) (P
 		case err != nil:
 			github.Fail(w, r, err)
 			return Project{}, "", false
+		}
+		if repo.Owner.Login != pr.Owner || repo.Name != pr.Name {
+			// Renamed or transferred on GitHub: show the name GitHub has now, which task links use.
+			pr.Owner, pr.Name = repo.Owner.Login, repo.Name
+			if _, err := p.DB.Exec(ctx, `update projects set owner = $2, name = $3 where id = $1`, pr.ID, pr.Owner, pr.Name); err != nil {
+				httpx.Internal(w, r, err)
+				return Project{}, "", false
+			}
 		}
 		err = p.remember(ctx, pr.ID, userID, pr.Permission)
 	}

@@ -118,3 +118,10 @@ func TestAccessTreatsForbiddenAsHidden(t *testing.T) {
 	env.GitHub.Fail("GET /repositories/{id}", http.StatusForbidden)
 	env.Do("GET", board, nil, ada).Expect(http.StatusNotFound, "not_found")
 }
+
+func TestAccessWithRevokedCredential(t *testing.T) {
+	env, ada, _, board := shared(t)
+	expire(t, env)
+	env.GitHub.Fail("GET /repositories/{id}", http.StatusUnauthorized) // the token expired or was revoked
+	env.Do("GET", board, nil, ada).Expect(http.StatusForbidden, "github_not_linked")
+}

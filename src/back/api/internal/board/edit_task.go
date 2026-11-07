@@ -49,7 +49,7 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	is, err := b.GitHub.UpdateIssue(ctx, token, p.Owner, p.Name, t.IssueNumber, fields)
+	is, err := b.GitHub.UpdateIssue(ctx, token, p.RepoID, t.IssueNumber, fields)
 	if err != nil {
 		github.Fail(w, r, err)
 		return

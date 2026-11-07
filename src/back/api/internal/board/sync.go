@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"strings"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -41,7 +41,7 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 	}
 	var issues []github.Issue
 	query := url.Values{"state": {"all"}, "sort": {"updated"}, "direction": {"desc"}, "per_page": {"100"}}
-	newETag, err := b.GitHub.Issues(ctx, token, p.Owner, p.Name, query, etag, func(page []github.Issue) bool {
+	newETag, err := b.GitHub.Issues(ctx, token, p.RepoID, query, etag, func(page []github.Issue) bool {
 		issues = append(issues, page...)
 		return len(page) > 0 && !page[len(page)-1].UpdatedAt.Before(cutoff)
 	})
@@ -58,7 +58,10 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 		return err
 	}
 	if skipped {
-		newETag = "" // the next sync must refetch, to reconcile the skipped tasks
+		// Give the claim back and drop the ETag, so the next sync refetches from the old cutoff,
+		// which reaches the skipped tasks' issues even when their changes are older than this sync.
+		_, err = b.DB.Exec(ctx, `update projects set synced_at = $2, issues_etag = null where id = $1 and synced_at = $3`, p.ID, prev, claimed)
+		return err
 	}
 	_, err = b.DB.Exec(ctx, `update projects set issues_etag = nullif($2, '') where id = $1`, p.ID, newETag)
 	return err
@@ -67,6 +70,11 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 // apply brings the project's tasks in line with issues, as GitHub listed them after claimed.
 // It reports whether it skipped a task moved since then.
 func (b *Board) apply(ctx context.Context, projectID int64, issues []github.Issue, claimed time.Time) (skipped bool, err error) {
+	unlock, err := projects.Serialize(ctx, projectID)
+	if err != nil {
+		return false, err
+	}
+	defer unlock()
 	err = pgx.BeginFunc(ctx, b.DB, func(tx pgx.Tx) error {
 		if err := projects.Lock(ctx, tx, projectID); err != nil {
 			return err
@@ -83,12 +91,13 @@ func (b *Board) apply(ctx context.Context, projectID int64, issues []github.Issu
 			}
 			var id int64
 			var movedSince bool
+			var seen []string
 			var cur column
 			err := tx.QueryRow(ctx, `
-				select t.id, t.updated_at > $3, c.id, c.key, c.name, c.position, c.closes_issue
+				select t.id, t.updated_at > $3, t.board_labels, c.id, c.key, c.name, c.position, c.closes_issue
 				from tasks t join columns c on c.id = t.column_id
 				where t.project_id = $1 and t.github_issue_id = $2`, projectID, is.ID, claimed).
-				Scan(&id, &movedSince, &cur.ID, &cur.Key, &cur.Name, &cur.Position, &cur.ClosesIssue)
+				Scan(&id, &movedSince, &seen, &cur.ID, &cur.Key, &cur.Name, &cur.Position, &cur.ClosesIssue)
 			if errors.Is(err, pgx.ErrNoRows) {
 				if is.State == "open" {
 					err = projects.AddTask(ctx, tx, projectID, is)
@@ -98,7 +107,7 @@ func (b *Board) apply(ctx context.Context, projectID int64, issues []github.Issu
 			} else if err == nil && movedSince {
 				skipped = true // a move landed after the fetch began; its issue may be stale here
 			} else if err == nil {
-				err = refresh(ctx, tx, id, cur, target(cols, cur, is), is)
+				err = refresh(ctx, tx, id, cur, target(cols, cur, is, seen), is)
 			}
 			if err != nil {
 				return err
@@ -109,21 +118,19 @@ func (b *Board) apply(ctx context.Context, projectID int64, issues []github.Issu
 	return skipped, err
 }
 
-// target is the column a task in cur belongs in, given its issue on GitHub: Closed for a closed issue;
-// for an open one the first column in board order whose label it carries, other than cur and Closed,
-// else Backlog when it is in Closed, else cur.
-func target(cols []column, cur column, is github.Issue) column {
-	labels := map[string]bool{}
-	for _, l := range is.Labels {
-		labels[strings.ToLower(l.Name)] = true
-	}
+// target is the column a task in cur belongs in, given its issue on GitHub and the board labels seen on it before:
+// Closed for a closed issue; for an open one the first column in board order whose label was added since,
+// other than cur and Closed, else Backlog when it is in Closed, else cur. Only an added label moves the task,
+// so one left on the issue, such as by a close on GitHub, cannot pull it back on every sync.
+func target(cols []column, cur column, is github.Issue, seen []string) column {
+	labels := projects.BoardLabels(is)
 	open := is.State == "open"
 	backlog := cur
 	for _, c := range cols {
 		switch {
 		case !open && c.ClosesIssue && !cur.ClosesIssue:
 			return c
-		case open && c.ID != cur.ID && !c.ClosesIssue && labels[c.label()]:
+		case open && c.ID != cur.ID && !c.ClosesIssue && slices.Contains(labels, c.label()) && !slices.Contains(seen, c.label()):
 			return c
 		case c.Key == "backlog":
 			backlog = c
@@ -135,7 +142,8 @@ func target(cols []column, cur column, is github.Issue) column {
 	return cur
 }
 
-// refresh overwrites the task's cached title and state, and moves it to the end of column to when that is not cur.
+// refresh overwrites the task's cached title, state and board labels, and moves it to the end of column to
+// when that is not cur.
 func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github.Issue) error {
 	if to.ID != cur.ID {
 		_, err := tx.Exec(ctx, `
@@ -146,6 +154,7 @@ func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3 where id = $1`, id, is.Title, is.State)
+	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3, board_labels = $4 where id = $1`,
+		id, is.Title, is.State, projects.BoardLabels(is))
 	return err
 }

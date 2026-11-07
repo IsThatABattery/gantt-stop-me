@@ -29,6 +29,23 @@ func TestGetTask(t *testing.T) {
 	}
 }
 
+func TestGetTaskShowsLiveTitleAndState(t *testing.T) {
+	f := setup(t, "One")
+	id, _ := f.task(1)
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Title = "Renamed"; is.State = "closed"; is.Body = "New body" })
+
+	res := f.Do("GET", f.path("/tasks/%d", id), nil, f.reader())
+	res.Expect(http.StatusOK, "")
+	var got struct {
+		task
+		Body string
+	}
+	res.JSON(&got)
+	if got.Title != "Renamed" || got.State != "closed" || got.Body != "New body" {
+		t.Fatalf("title %q, state %q, body %q; want the issue as GitHub has it now", got.Title, got.State, got.Body)
+	}
+}
+
 func TestGetTaskUnknown(t *testing.T) {
 	f := setup(t, "One")
 	f.Do("GET", f.path("/tasks/999"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
@@ -54,6 +71,6 @@ func TestGetTaskNeedsAccess(t *testing.T) {
 func TestGetTaskWhenGitHubFails(t *testing.T) {
 	f := setup(t, "One")
 	id, _ := f.task(1)
-	f.GitHub.Fail("GET /repos/{owner}/{name}/issues/{number}", http.StatusInternalServerError)
+	f.GitHub.Fail("GET /repositories/{id}/issues/{number}", http.StatusInternalServerError)
 	f.Do("GET", f.path("/tasks/%d", id), nil, f.ada).Expect(http.StatusBadGateway, "github_error")
 }

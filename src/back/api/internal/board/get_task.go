@@ -27,11 +27,12 @@ func (b *Board) getTask(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	is, err := b.GitHub.Issue(ctx, token, p.Owner, p.Name, t.IssueNumber)
+	is, err := b.GitHub.Issue(ctx, token, p.RepoID, t.IssueNumber)
 	if err != nil {
 		github.Fail(w, r, err)
 		return
 	}
+	t.Title, t.State = is.Title, is.State // GitHub owns these; the row is a cache only a sync refreshes
 	httpx.JSON(w, http.StatusOK, struct {
 		task
 		Body   string         `json:"body"`

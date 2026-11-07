@@ -11,11 +11,11 @@ import (
 	"gantt-stop-me/api/internal/github/githubtest"
 )
 
-// listings counts the issue list requests among reqs.
+// listings counts the issue list requests among reqs, for octo/hello, which as the fake's first repository has id 1.
 func listings(reqs []string) int {
 	n := 0
 	for _, r := range reqs {
-		if strings.HasPrefix(r, "GET /repos/octo/hello/issues?") {
+		if strings.HasPrefix(r, "GET /repositories/1/issues?") {
 			n++
 		}
 	}
@@ -144,7 +144,7 @@ func TestSyncUsesETag(t *testing.T) {
 func TestSyncFailureServesCachedBoard(t *testing.T) {
 	f := setup(t, "One")
 	f.repo.AddIssue("Two")
-	f.GitHub.Fail("GET /repos/{owner}/{name}/issues", http.StatusInternalServerError)
+	f.GitHub.Fail("GET /repositories/{id}/issues", http.StatusInternalServerError)
 	f.dueSync()
 	before, _ := f.synced()
 
@@ -155,7 +155,7 @@ func TestSyncFailureServesCachedBoard(t *testing.T) {
 		t.Fatalf("synced_at = %v after a failed sync, want it put back to %v", after, before)
 	}
 
-	f.GitHub.Fail("GET /repos/{owner}/{name}/issues", 0)
+	f.GitHub.Fail("GET /repositories/{id}/issues", 0)
 	if n := len(f.board().Tasks); n != 2 {
 		t.Fatalf("the next load has %d tasks, want it to retry the sync and find 2", n)
 	}
@@ -204,5 +204,101 @@ func TestSyncSkipsTasksMovedSinceItBegan(t *testing.T) {
 	f.board()
 	if _, s := f.task(1); s.Title != "Renamed" || s.Column != "testing" {
 		t.Fatalf("next sync: task = %+v, want it reconciled", s)
+	}
+}
+
+func TestSyncReconcilesSkippedTaskOlderThanTheNextCutoff(t *testing.T) {
+	f := setup(t, "A", "B", "C")
+	f.GitHub.PageSize = 1 // stands in for 100+ issues updated since A's change
+	now := time.Now()
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.State = "closed"; is.UpdatedAt = now.Add(-170 * time.Second) })
+	f.repo.EditIssue(2, func(is *githubtest.Issue) { is.Title = "B2"; is.UpdatedAt = now.Add(-160 * time.Second) })
+	f.repo.EditIssue(3, func(is *githubtest.Issue) { is.Title = "C2" })
+	f.exec(`update tasks set updated_at = now() + interval '1 hour' where issue_number = 1`) // reordered after the claim, no GitHub write
+	f.dueSync()
+	f.board()
+	if _, s := f.task(1); s.State != "open" {
+		t.Fatalf("first sync should skip A: %+v", s)
+	}
+
+	f.exec(`update tasks set updated_at = now() - interval '1 hour' where issue_number = 1`)
+	f.exec(`update projects set synced_at = synced_at - interval '31 seconds'`) // the next load, 31 seconds later
+	f.board()
+	if _, s := f.task(1); s.Column != "closed" || s.State != "closed" {
+		t.Fatalf("skipped task never reconciled: %+v, GitHub has it closed", s)
+	}
+}
+
+func TestSyncSettlesOnTwoBoardLabels(t *testing.T) {
+	f := setup(t, "One", "Two")
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Labels = []string{"board:backlog", "board:in-progress"} })
+	f.dueSync()
+	f.board()
+	_, first := f.task(1)
+	if first.Column != "in-progress" {
+		t.Fatalf("task = %+v, want it in In Progress, the label added on GitHub", first)
+	}
+	for i := range 3 {
+		f.repo.EditIssue(2, func(is *githubtest.Issue) { is.Title += "!" }) // so the listing misses its ETag
+		f.dueSync()
+		f.board()
+		if _, s := f.task(1); s != first {
+			t.Fatalf("sync %d moved the task from %+v to %+v, though its labels did not change", i, first, s)
+		}
+	}
+}
+
+func TestSyncReopenIgnoresStaleLabel(t *testing.T) {
+	f := setup(t, "One")
+	f.move(f.ada, 1, "in-progress", 0).Expect(http.StatusOK, "") // the issue now carries board:in-progress
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.State = "closed" })
+	f.dueSync()
+	f.board()
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.State = "open" }) // labels untouched: still board:in-progress
+	f.dueSync()
+	f.board()
+	if _, s := f.task(1); s.Column != "backlog" || s.State != "open" || s.Version != 4 {
+		t.Fatalf("reopened on GitHub with its old label: task = %+v, want Backlog, open, version 4", s)
+	}
+
+	// It stays there when the issue is listed again with the same old label.
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Title = "One, again" })
+	f.dueSync()
+	f.board()
+	if _, s := f.task(1); s.Column != "backlog" || s.Title != "One, again" || s.Version != 4 {
+		t.Fatalf("next sync: task = %+v, want it left in Backlog at version 4", s)
+	}
+}
+
+func TestSyncFollowsTheRepositoryAcrossRenames(t *testing.T) {
+	f := setup(t, "One")
+	bob := f.reader()
+	f.board()
+	f.repo.Rename("octo", "hello-old")
+	other := f.GitHub.AddRepo("octo", "hello") // takes the old name; only ada sees it
+	other.Grant(f.token, "push")
+	other.AddIssue("Other #1")
+	other.AddIssue("SECRET")
+	f.repo.AddIssue("Two")
+	f.dueSync()
+	f.board()
+
+	res := f.Do("GET", f.path("/board"), nil, bob)
+	res.Expect(http.StatusOK, "")
+	if strings.Contains(string(res.Body), "SECRET") {
+		t.Fatal("the board shows an issue of the repository that took the old name")
+	}
+	if _, s := f.task(2); s.Title != "Two" {
+		t.Fatalf("task 2 = %+v, want the renamed repository's issue", s)
+	}
+	f.move(f.ada, 1, "testing", 0).Expect(http.StatusOK, "")
+	if len(other.Issue(1).Labels) != 0 || !slices.Contains(f.repo.Issue(1).Labels, "board:testing") {
+		t.Fatal("the move labeled the other repository's issue")
+	}
+
+	// Once the access check asks GitHub again, the project shows the new name.
+	f.exec(`delete from project_members`)
+	if b := f.board(); b.Project.Name != "hello-old" {
+		t.Fatalf("project name = %q, want hello-old", b.Project.Name)
 	}
 }

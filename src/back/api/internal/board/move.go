@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -16,7 +17,8 @@ import (
 const minGap = 1e-9
 
 // move puts a task in a column before another task, or at its end, and writes a column change through to GitHub
-// first. It holds the project's lock throughout, so nothing else places tasks in the meantime.
+// first. It holds the project's lock throughout, so nothing else places tasks in the meantime. Moves waiting for
+// the lock queue in projects.Serialize, before they take a DB connection.
 func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 	p, token, ok := b.Projects.Check(w, r, projects.Write)
 	if !ok {
@@ -30,6 +32,11 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 	if !httpx.Decode(w, r, &in) {
 		return
 	}
+	unlock, err := projects.Serialize(r.Context(), p.ID)
+	if err != nil {
+		return // the client gave up waiting
+	}
+	defer unlock()
 	// Once GitHub has the move, finish saving it even if the browser goes away.
 	ctx := context.WithoutCancel(r.Context())
 	tx, err := b.DB.Begin(ctx)
@@ -83,17 +90,19 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state := t.State
+	state, labels := t.State, []string(nil) // nil keeps the board labels: a reorder writes nothing to GitHub
 	if to.ID != from.ID {
 		if state, err = b.relabel(ctx, token, p, t, from, to); err != nil {
 			github.Fail(w, r, err)
 			return
 		}
+		labels = []string{to.label()}
 	}
 	// clock_timestamp, not now(): a sync that began fetching before GitHub had this move must see it as newer.
 	t, err = b.scanTask(tx.QueryRow(ctx, `
-		update tasks t set column_id = $2, position = $3, version = version + 1, state = $4, updated_at = clock_timestamp()
-		where t.id = $1 returning `+taskColumns, t.ID, to.ID, pos, state), p)
+		update tasks t set column_id = $2, position = $3, version = version + 1, state = $4, updated_at = clock_timestamp(),
+			board_labels = coalesce($5, t.board_labels)
+		where t.id = $1 returning `+taskColumns, t.ID, to.ID, pos, state, labels), p)
 	if err == nil {
 		err = tx.Commit(ctx)
 	}
@@ -148,17 +157,30 @@ func position(ctx context.Context, tx pgx.Tx, taskID, columnID int64, before *in
 	return (at + *above) / 2, true, nil
 }
 
-// relabel moves the issue's board label from one column's to the other's, closes it on entering a closing column
-// and reopens it on leaving one. It returns the issue's state.
-func (b *Board) relabel(ctx context.Context, token string, p projects.Project, t task, from, to column) (string, error) {
+// relabel replaces the issue's board labels with the to column's, closes it on entering a closing column
+// and reopens it on leaving one. It returns the issue's state. When a step fails after GitHub took the new label,
+// it puts from's label back, as far as GitHub lets it, so GitHub matches the board the failed move leaves as it was.
+func (b *Board) relabel(ctx context.Context, token string, p projects.Project, t task, from, to column) (state string, err error) {
 	gh := b.GitHub
-	if err := gh.RemoveLabel(ctx, token, p.Owner, p.Name, t.IssueNumber, from.label()); err != nil {
+	labels, err := gh.AddLabels(ctx, token, p.RepoID, t.IssueNumber, []string{to.label()})
+	if err != nil {
 		return "", err
 	}
-	if err := gh.AddLabels(ctx, token, p.Owner, p.Name, t.IssueNumber, []string{to.label()}); err != nil {
-		return "", err
+	defer func() {
+		if err != nil {
+			gh.RemoveLabel(ctx, token, p.RepoID, t.IssueNumber, to.label())
+			gh.AddLabels(ctx, token, p.RepoID, t.IssueNumber, []string{from.label()})
+		}
+	}()
+	for _, l := range labels {
+		// Every other board label, not just from's: one a sync move left behind would pull the task back.
+		if name := strings.ToLower(l.Name); strings.HasPrefix(name, "board:") && name != to.label() {
+			if err := gh.RemoveLabel(ctx, token, p.RepoID, t.IssueNumber, l.Name); err != nil {
+				return "", err
+			}
+		}
 	}
-	state := t.State
+	state = t.State
 	switch {
 	case to.ClosesIssue && !from.ClosesIssue:
 		state = "closed"
@@ -167,6 +189,6 @@ func (b *Board) relabel(ctx context.Context, token string, p projects.Project, t
 	default:
 		return state, nil
 	}
-	_, err := gh.UpdateIssue(ctx, token, p.Owner, p.Name, t.IssueNumber, map[string]string{"state": state})
+	_, err = gh.UpdateIssue(ctx, token, p.RepoID, t.IssueNumber, map[string]string{"state": state})
 	return state, err
 }

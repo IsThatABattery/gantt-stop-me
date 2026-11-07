@@ -1,9 +1,12 @@
 package board_test
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -136,17 +139,108 @@ func TestMoveWhenGitHubFails(t *testing.T) {
 		want   int
 		code   string
 	}{
-		{"POST /repos/{owner}/{name}/issues/{number}/labels", http.StatusInternalServerError, http.StatusBadGateway, "github_error"},
-		{"DELETE /repos/{owner}/{name}/issues/{number}/labels/{label}", http.StatusForbidden, http.StatusForbidden, "forbidden"},
-		{"PATCH /repos/{owner}/{name}/issues/{number}", http.StatusNotFound, http.StatusForbidden, "forbidden"},
+		{"POST /repositories/{id}/issues/{number}/labels", http.StatusInternalServerError, http.StatusBadGateway, "github_error"},
+		{"DELETE /repositories/{id}/issues/{number}/labels/{label}", http.StatusForbidden, http.StatusForbidden, "forbidden"},
+		{"PATCH /repositories/{id}/issues/{number}", http.StatusNotFound, http.StatusForbidden, "forbidden"},
 	} {
 		f := setup(t, "One")
+		f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Labels = []string{"board:backlog"} }) // for the move to remove
 		_, before := f.task(1)
 		f.GitHub.Fail(c.route, c.status)
 		f.move(f.ada, 1, "closed", 0).Expect(c.want, c.code)
 		if _, after := f.task(1); after != before {
 			t.Errorf("%s failing: task = %+v, want it unchanged from %+v", c.route, after, before)
 		}
+	}
+}
+
+func TestMoveUndoesLabelsWhenStateChangeFails(t *testing.T) {
+	for _, c := range []struct{ from, to, label, state string }{
+		{"testing", "closed", "board:testing", "open"},
+		{"closed", "testing", "board:closed", "closed"},
+	} {
+		f := setup(t, "One")
+		f.move(f.ada, 1, c.from, 0).Expect(http.StatusOK, "")
+		f.GitHub.Fail("PATCH /repositories/{id}/issues/{number}", http.StatusBadGateway)
+		f.move(f.ada, 1, c.to, 0).Expect(http.StatusBadGateway, "github_error")
+		if is := f.repo.Issue(1); is.State != c.state || !slices.Equal(is.Labels, []string{c.label}) {
+			t.Errorf("%s to %s with PATCH failing: issue = %s %v, want %s with only %s", c.from, c.to, is.State, is.Labels, c.state, c.label)
+		}
+	}
+}
+
+func TestMoveOutOfClosedDropsStaleLabels(t *testing.T) {
+	f := setup(t, "One")
+	f.move(f.ada, 1, "testing", 0).Expect(http.StatusOK, "")
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.State = "closed" }) // closed on GitHub, say by a pull request: keeps board:testing
+	f.dueSync()
+	f.board()
+	f.move(f.ada, 1, "backlog", 0).Expect(http.StatusOK, "")
+	if is := f.repo.Issue(1); is.State != "open" || !slices.Equal(is.Labels, []string{"board:backlog"}) {
+		t.Fatalf("issue = %s %v, want it reopened with only board:backlog", is.State, is.Labels)
+	}
+	_, moved := f.task(1)
+	f.dueSync()
+	f.board()
+	if _, s := f.task(1); s != moved {
+		t.Fatalf("the next sync changed the task from %+v to %+v, want the move kept", moved, s)
+	}
+}
+
+// slowGitHub delays every request to GitHub.
+type slowGitHub struct{ http.RoundTripper }
+
+func (s slowGitHub) RoundTrip(r *http.Request) (*http.Response, error) {
+	time.Sleep(300 * time.Millisecond)
+	return s.RoundTripper.RoundTrip(r)
+}
+
+func TestQueuedMovesDoNotStarveThePool(t *testing.T) {
+	f := setup(t)
+	n := int(f.DB.Config().MaxConns) + 2 // more moves than the pool has connections
+	for i := range n {
+		f.repo.AddIssue(fmt.Sprint("Task ", i+1))
+	}
+	f.dueSync()
+	f.board()
+	col := f.column("testing")
+	var ids []int64
+	for i := range n {
+		id, _ := f.task(i + 1)
+		ids = append(ids, id)
+	}
+	f.Config.GitHub.HTTP = &http.Client{Transport: slowGitHub{f.Config.GitHub.HTTP.Transport}}
+
+	codes := make(chan int, n)
+	for _, id := range ids {
+		go func() {
+			body := strings.NewReader(fmt.Sprintf(`{"columnId": %d, "version": 1}`, col))
+			req, _ := http.NewRequest("POST", f.Server.URL+f.path("/tasks/%d/move", id), body)
+			req.Header.Set("Origin", apptest.PublicURL)
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(f.ada)
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				codes <- 0
+				return
+			}
+			res.Body.Close()
+			codes <- res.StatusCode
+		}()
+	}
+	time.Sleep(150 * time.Millisecond) // until the moves queue behind the first
+	start := time.Now()
+	f.Do("GET", "/api/me", nil, f.ada).Expect(http.StatusOK, "")
+	if d := time.Since(start); d > 250*time.Millisecond {
+		t.Errorf("GET /api/me took %v behind %d queued moves, want it served at once", d, n)
+	}
+	for range n {
+		if code := <-codes; code != http.StatusOK {
+			t.Errorf("a move answered %d, want 200", code)
+		}
+	}
+	if got := f.order("testing"); len(got) != n {
+		t.Fatalf("testing holds %d tasks, want all %d moved", len(got), n)
 	}
 }
 

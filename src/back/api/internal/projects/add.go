@@ -44,7 +44,7 @@ func (p *Projects) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pr := Project{Permission: permission(repo)}
+	pr := Project{RepoID: repo.ID, Permission: permission(repo)}
 	if rank[pr.Permission] < rank[Write] {
 		// Initializing creates labels, which needs write access, so read access can only open a finished project.
 		err := p.DB.QueryRow(ctx, `select id, owner, name from projects where github_repo_id = $1 and synced_at is not null`, repo.ID).

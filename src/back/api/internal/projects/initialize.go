@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -39,14 +38,14 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 		}
 	}
 	for _, c := range columns {
-		if err := p.GitHub.CreateLabel(ctx, token, pr.Owner, pr.Name, "board:"+c.key, c.color); err != nil {
+		if err := p.GitHub.CreateLabel(ctx, token, pr.RepoID, "board:"+c.key, c.color); err != nil {
 			github.Fail(w, r, err)
 			return false
 		}
 	}
 	var issues []github.Issue
 	query := url.Values{"state": {"open"}, "sort": {"created"}, "direction": {"asc"}, "per_page": {"100"}}
-	if _, err := p.GitHub.Issues(ctx, token, pr.Owner, pr.Name, query, "", func(page []github.Issue) bool {
+	if _, err := p.GitHub.Issues(ctx, token, pr.RepoID, query, "", func(page []github.Issue) bool {
 		issues = append(issues, page...)
 		return true
 	}); err != nil {
@@ -54,7 +53,12 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 		return false
 	}
 
-	err := pgx.BeginFunc(ctx, p.DB, func(tx pgx.Tx) error {
+	unlock, err := Serialize(ctx, pr.ID)
+	if err != nil {
+		return false // the client gave up waiting
+	}
+	defer unlock()
+	err = pgx.BeginFunc(ctx, p.DB, func(tx pgx.Tx) error {
 		if err := Lock(ctx, tx, pr.ID); err != nil {
 			return err
 		}
@@ -77,16 +81,14 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 }
 
 // AddTask adds an open issue as a task at the end of the first column, in board order, whose board:<key> label
-// it carries, else Backlog. Closing columns are skipped: an open issue does not belong in one.
+// it carries, else Backlog. Closing columns are skipped: an open issue does not belong in one. The task records
+// those labels as seen, so a sync moves it only for a label added later.
 // An issue that already has a task keeps it as it is. Call it holding Lock.
 func AddTask(ctx context.Context, tx pgx.Tx, projectID int64, is github.Issue) error {
-	labels := make([]string, len(is.Labels))
-	for i, l := range is.Labels {
-		labels[i] = strings.ToLower(l.Name) // GitHub label names ignore case
-	}
+	labels := BoardLabels(is)
 	_, err := tx.Exec(ctx, `
-		insert into tasks (project_id, issue_number, github_issue_id, column_id, position, title, state)
-		select $1, $2, $3, c.id, coalesce((select max(position) from tasks where column_id = c.id), 0) + 1, $4, 'open'
+		insert into tasks (project_id, issue_number, github_issue_id, column_id, position, title, state, board_labels)
+		select $1, $2, $3, c.id, coalesce((select max(position) from tasks where column_id = c.id), 0) + 1, $4, 'open', $5
 		from columns c
 		where c.project_id = $1 and c.key = coalesce(
 			(select key from columns

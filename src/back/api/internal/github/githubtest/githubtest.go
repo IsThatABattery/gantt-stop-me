@@ -86,13 +86,13 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("POST /login/oauth/access_token", f.accessToken)
 	f.mux.HandleFunc("GET /repos/{owner}/{name}", f.getRepo)
 	f.mux.HandleFunc("GET /repositories/{id}", f.getRepo)
-	f.mux.HandleFunc("POST /repos/{owner}/{name}/labels", f.createLabel)
-	f.mux.HandleFunc("GET /repos/{owner}/{name}/issues", f.listIssues)
-	f.mux.HandleFunc("POST /repos/{owner}/{name}/issues", f.createIssue)
-	f.mux.HandleFunc("GET /repos/{owner}/{name}/issues/{number}", f.getIssue)
-	f.mux.HandleFunc("PATCH /repos/{owner}/{name}/issues/{number}", f.editIssue)
-	f.mux.HandleFunc("POST /repos/{owner}/{name}/issues/{number}/labels", f.addLabels)
-	f.mux.HandleFunc("DELETE /repos/{owner}/{name}/issues/{number}/labels/{label}", f.removeLabel)
+	f.mux.HandleFunc("POST /repositories/{id}/labels", f.createLabel)
+	f.mux.HandleFunc("GET /repositories/{id}/issues", f.listIssues)
+	f.mux.HandleFunc("POST /repositories/{id}/issues", f.createIssue)
+	f.mux.HandleFunc("GET /repositories/{id}/issues/{number}", f.getIssue)
+	f.mux.HandleFunc("PATCH /repositories/{id}/issues/{number}", f.editIssue)
+	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/labels", f.addLabels)
+	f.mux.HandleFunc("DELETE /repositories/{id}/issues/{number}/labels/{label}", f.removeLabel)
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Server.Close)
 	return f
@@ -112,7 +112,7 @@ func (f *Fake) AddCode(code, token string) {
 	f.codes[code] = token
 }
 
-// Fail makes the route pattern, as New registers it (such as "POST /repos/{owner}/{name}/labels"),
+// Fail makes the route pattern, as New registers it (such as "POST /repositories/{id}/labels"),
 // answer status instead of serving the request. Status 0 serves it again.
 func (f *Fake) Fail(pattern string, status int) {
 	f.mu.Lock()
@@ -147,6 +147,13 @@ func (r *Repo) Grant(token, role string) {
 		return
 	}
 	r.roles[token] = role
+}
+
+// Rename renames or transfers the repository, as its owner on GitHub would. Its id stays the same.
+func (r *Repo) Rename(owner, name string) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	r.Owner, r.Name = owner, name
 }
 
 // AddIssue opens an issue with these labels and returns its number.
@@ -349,7 +356,7 @@ func (f *Fake) createLabel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, in)
 }
 
-// listIssues serves GET /repos/{owner}/{name}/issues with its state, sort, direction, per_page and page
+// listIssues serves GET /repositories/{id}/issues with its state, sort, direction, per_page and page
 // parameters, an ETag per page, and a Link header to the next and last pages.
 func (f *Fake) listIssues(w http.ResponseWriter, r *http.Request) {
 	rp, _, ok := f.repo(w, r, false)

@@ -28,11 +28,16 @@ func (b *Board) createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	is, err := b.GitHub.CreateIssue(ctx, token, p.Owner, p.Name, title, in.Body, []string{"board:backlog"})
+	is, err := b.GitHub.CreateIssue(ctx, token, p.RepoID, title, in.Body, []string{"board:backlog"})
 	if err != nil {
 		github.Fail(w, r, err)
 		return
 	}
+	unlock, err := projects.Serialize(ctx, p.ID)
+	if err != nil {
+		return // the client gave up waiting; the next sync imports the issue
+	}
+	defer unlock()
 	var t task
 	err = pgx.BeginFunc(ctx, b.DB, func(tx pgx.Tx) error {
 		if err := projects.Lock(ctx, tx, p.ID); err != nil {
@@ -43,7 +48,7 @@ func (b *Board) createTask(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var err error
-		t, err = b.scanTask(tx.QueryRow(ctx, `select `+taskColumns+` from tasks t where t.github_issue_id = $1`, is.ID), p)
+		t, err = b.scanTask(tx.QueryRow(ctx, `select `+taskColumns+` from tasks t where t.github_issue_id = $1 and t.project_id = $2`, is.ID, p.ID), p)
 		return err
 	})
 	if err != nil {

@@ -49,9 +49,9 @@ func TestCreateTaskNeedsWrite(t *testing.T) {
 
 func TestCreateTaskWhenGitHubFails(t *testing.T) {
 	f := setup(t)
-	f.GitHub.Fail("POST /repos/{owner}/{name}/issues", http.StatusInternalServerError)
+	f.GitHub.Fail("POST /repositories/{id}/issues", http.StatusInternalServerError)
 	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Lost"}, f.ada).Expect(http.StatusBadGateway, "github_error")
-	f.GitHub.Fail("POST /repos/{owner}/{name}/issues", http.StatusForbidden)
+	f.GitHub.Fail("POST /repositories/{id}/issues", http.StatusForbidden)
 	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Lost"}, f.ada).Expect(http.StatusForbidden, "forbidden")
 	if n := len(f.board().Tasks); n != 0 {
 		t.Fatalf("%d tasks stored", n)

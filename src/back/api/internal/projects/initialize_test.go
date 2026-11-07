@@ -107,7 +107,7 @@ func TestInitializeImportsOpenIssues(t *testing.T) {
 	}
 	pages := 0
 	for _, r := range env.GitHub.Requests() {
-		if strings.HasPrefix(r, "GET /repos/octo/hello/issues?") {
+		if strings.HasPrefix(r, "GET /repositories/1/issues?") {
 			pages++
 		}
 	}
@@ -122,7 +122,7 @@ func TestInitializeFinishesHalfInitializedProject(t *testing.T) {
 	repo := env.GitHub.AddRepo("octo", "hello")
 	repo.Grant(env.LinkGitHub(ada, "ada-gh"), "push")
 	repo.AddIssue("One")
-	env.GitHub.Fail("GET /repos/{owner}/{name}/issues", http.StatusInternalServerError)
+	env.GitHub.Fail("GET /repositories/{id}/issues", http.StatusInternalServerError)
 
 	add(env, ada, "https://github.com/octo/hello").Expect(http.StatusBadGateway, "github_error")
 	var id int64
@@ -136,7 +136,7 @@ func TestInitializeFinishesHalfInitializedProject(t *testing.T) {
 	}
 	env.Do("GET", fmt.Sprintf("/api/projects/%d/board", id), nil, ada).Expect(http.StatusNotFound, "not_found")
 
-	env.GitHub.Fail("GET /repos/{owner}/{name}/issues", 0)
+	env.GitHub.Fail("GET /repositories/{id}/issues", 0)
 	res := add(env, ada, "https://github.com/octo/hello")
 	res.Expect(http.StatusOK, "") // not 201: the first attempt created the project
 	var p project
