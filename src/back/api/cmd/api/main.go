@@ -37,11 +37,12 @@ func main() {
 	}
 
 	cfg := app.Config{
-		PublicURL:          strings.TrimSuffix(os.Getenv("PUBLIC_URL"), "/"),
-		Secrets:            box,
-		GitHub:             &github.Client{API: "https://api.github.com", Web: "https://github.com", HTTP: http.DefaultClient},
-		GitHubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-		GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		PublicURL:                strings.TrimSuffix(os.Getenv("PUBLIC_URL"), "/"),
+		Secrets:                  box,
+		GitHub:                   &github.Client{API: "https://api.github.com", Web: "https://github.com", HTTP: http.DefaultClient},
+		GitHubClientID:           os.Getenv("GITHUB_CLIENT_ID"),
+		GitHubClientSecret:       os.Getenv("GITHUB_CLIENT_SECRET"),
+		AllowPrivateProviderURLs: os.Getenv("ALLOW_PRIVATE_PROVIDER_URLS") == "true",
 	}
 	srv := &http.Server{
 		Addr:              ":8080",

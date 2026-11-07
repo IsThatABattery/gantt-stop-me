@@ -25,6 +25,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY-rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      ALLOW_PRIVATE_PROVIDER_URLS: ${ALLOW_PRIVATE_PROVIDER_URLS:-false}
     depends_on:
       db:
         condition: service_healthy

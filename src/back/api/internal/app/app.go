@@ -13,6 +13,7 @@ import (
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/secret"
+	"gantt-stop-me/api/internal/settings"
 )
 
 // Config is everything the API reads from the environment, besides the database.
@@ -22,6 +23,8 @@ type Config struct {
 	GitHub             *github.Client // GitHub's API and OAuth endpoints
 	GitHubClientID     string         // OAuth App used to link accounts; linking with OAuth is off while either is empty
 	GitHubClientSecret string
+	// AllowPrivateProviderURLs lets provider base URLs reach loopback and private networks, such as a local Ollama.
+	AllowPrivateProviderURLs bool
 }
 
 // New returns the API handler.
@@ -43,6 +46,7 @@ func New(db *pgxpool.Pool, cfg Config) http.Handler {
 	prj := &projects.Projects{DB: db, Accounts: acc, Secrets: cfg.Secrets, GitHub: cfg.GitHub}
 	prj.Register(mux)
 	(&board.Board{DB: db, Accounts: acc, Projects: prj, GitHub: cfg.GitHub}).Register(mux)
+	settings.New(db, cfg.Secrets, acc, cfg.AllowPrivateProviderURLs).Register(mux)
 	return httpx.CheckOrigin(cfg.PublicURL, jsonErrors(mux))
 }
 

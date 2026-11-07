@@ -39,8 +39,8 @@ type Env struct {
 }
 
 // New starts the API on a new, migrated schema, with OAuth linking enabled against a fake GitHub.
-// All are torn down when the test ends.
-func New(t testing.TB) *Env {
+// configure, if given, changes the config before the API starts. All are torn down when the test ends.
+func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	t.Helper()
 	key := make([]byte, 32)
 	rand.Read(key)
@@ -51,11 +51,15 @@ func New(t testing.TB) *Env {
 	db := DB(t)
 	gh := githubtest.New(t)
 	cfg := app.Config{
-		PublicURL:          PublicURL,
-		Secrets:            box,
-		GitHub:             &github.Client{API: gh.Server.URL, Web: gh.Server.URL, HTTP: gh.Server.Client()},
-		GitHubClientID:     gh.ClientID,
-		GitHubClientSecret: gh.ClientSecret,
+		PublicURL:                PublicURL,
+		Secrets:                  box,
+		GitHub:                   &github.Client{API: gh.Server.URL, Web: gh.Server.URL, HTTP: gh.Server.Client()},
+		GitHubClientID:           gh.ClientID,
+		GitHubClientSecret:       gh.ClientSecret,
+		AllowPrivateProviderURLs: true, // fake provider endpoints listen on 127.0.0.1
+	}
+	for _, c := range configure {
+		c(&cfg)
 	}
 	srv := httptest.NewServer(app.New(db, cfg))
 	t.Cleanup(srv.Close)
