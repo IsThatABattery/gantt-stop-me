@@ -125,7 +125,7 @@ Initialization runs once per repository:
 3. Create one label per column in the repository, unless it already exists. This needs write permission, so a user with read access alone cannot add a new project.
 4. Import the repository's open issues as tasks in Backlog. Issues that already carry a `board:*` label go to that column.
 
-Initialization is idempotent. Running it again on a half-initialized project finishes what is missing and duplicates nothing.
+Initialization is idempotent. Running it again on a half-initialized project finishes what is missing and duplicates nothing. Until it finishes, the project's routes answer `404`, and adding the repository again finishes it.
 
 ### Board columns
 
@@ -149,7 +149,7 @@ Moving a task is a single call:
 
 ```
 POST /api/projects/{projectID}/tasks/{taskID}/move
-{ "columnId": "...", "beforeTaskId": "...", "version": 7 }
+{ "columnId": 3, "beforeTaskId": 12, "version": 7 }
 ```
 
 The API then:
@@ -199,6 +199,7 @@ Provider keys are encrypted like GitHub credentials and are never returned to th
 | `POST /api/projects` | Add a repository by URL. Returns the existing project if already added. |
 | `GET /api/projects/{id}/board` | Columns and tasks, after a sync if one is due. |
 | `POST /api/projects/{id}/tasks` | Create an issue and its task. |
+| `GET /api/projects/{id}/tasks/{taskID}` | A task with its issue's body and labels, loaded live from GitHub. |
 | `PATCH /api/projects/{id}/tasks/{taskID}` | Edit title or body, written through to the issue. |
 | `POST /api/projects/{id}/tasks/{taskID}/move` | Move a task. |
 | `GET /api/providers` | List the user's providers, keys masked. |

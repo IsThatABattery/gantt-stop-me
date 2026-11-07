@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
+
+	"gantt-stop-me/api/internal/httpx"
 )
 
 // Client calls GitHub's REST API and its OAuth endpoints.
@@ -21,6 +25,17 @@ type Client struct {
 type Error struct{ Status int }
 
 func (e *Error) Error() string { return fmt.Sprintf("github: HTTP %d", e.Status) }
+
+// Fail answers a request whose GitHub call failed: 403 forbidden when GitHub refused it with 403 or 404,
+// else 502 github_error.
+func Fail(w http.ResponseWriter, r *http.Request, err error) {
+	log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+	if ghErr := (*Error)(nil); errors.As(err, &ghErr) && (ghErr.Status == http.StatusForbidden || ghErr.Status == http.StatusNotFound) {
+		httpx.Error(w, http.StatusForbidden, "forbidden", "GitHub refused this. Your GitHub account may have lost access to the repository.")
+		return
+	}
+	httpx.Error(w, http.StatusBadGateway, "github_error", "GitHub could not be reached or did not accept the change. Try again.")
+}
 
 // User is a GitHub account.
 type User struct {

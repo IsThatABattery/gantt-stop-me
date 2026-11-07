@@ -7,8 +7,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gantt-stop-me/api/internal/accounts"
+	"gantt-stop-me/api/internal/board"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
+	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/secret"
 )
 
@@ -37,5 +39,8 @@ func New(db *pgxpool.Pool, cfg Config) http.Handler {
 		PublicURL:    cfg.PublicURL,
 	}
 	links.Register(mux)
+	prj := &projects.Projects{DB: db, Accounts: acc, Secrets: cfg.Secrets, GitHub: cfg.GitHub}
+	prj.Register(mux)
+	(&board.Board{DB: db, Accounts: acc, Projects: prj, GitHub: cfg.GitHub}).Register(mux)
 	return httpx.CheckOrigin(cfg.PublicURL, mux)
 }

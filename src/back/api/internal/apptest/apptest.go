@@ -210,3 +210,16 @@ func (e *Env) LinkGitHub(session *http.Cookie, login string) string {
 	e.Do("POST", "/api/github/token", map[string]string{"token": token}, session).Expect(http.StatusOK, "")
 	return token
 }
+
+// AddProject adds the fake repository owner/name, which the session's GitHub account must be able to write to
+// or to see as an existing project, through POST /api/projects, and returns the project's id.
+func (e *Env) AddProject(session *http.Cookie, owner, name string) int64 {
+	e.t.Helper()
+	res := e.Do("POST", "/api/projects", map[string]string{"url": "https://github.com/" + owner + "/" + name}, session)
+	if res.Status != http.StatusCreated && res.Status != http.StatusOK {
+		e.t.Fatalf("add project %s/%s: got %d %s", owner, name, res.Status, res.Body)
+	}
+	var p struct{ ID int64 }
+	res.JSON(&p)
+	return p.ID
+}
