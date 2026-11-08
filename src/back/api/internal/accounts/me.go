@@ -46,8 +46,11 @@ func (a *Accounts) editMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Name != nil {
 		name := strings.TrimSpace(*in.Name)
-		if n := utf8.RuneCountInString(name); n < 1 || n > 100 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
-			httpx.Error(w, http.StatusBadRequest, "invalid_name", "A name needs 1 to 100 characters and no control characters.")
+		// Format characters and line separators are invisible or reorder text, so they could hide or fake a name.
+		invisible := func(r rune) bool { return unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp) }
+		if n := utf8.RuneCountInString(name); n < 1 || n > 100 || strings.IndexFunc(name, invisible) >= 0 {
+			httpx.Error(w, http.StatusBadRequest, "invalid_name",
+				"A name needs 1 to 100 characters, not all spaces, and no control, format or line separator characters.")
 			return
 		}
 		in.Name = &name

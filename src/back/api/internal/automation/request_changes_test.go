@@ -94,3 +94,82 @@ func TestRequestChangesNeedsWriteAccess(t *testing.T) {
 		Expect(http.StatusUnauthorized, "unauthorized")
 	f.Do("POST", f.path("/tasks/999/request-changes"), map[string]any{"feedback": "Fix it."}, f.ada).Expect(http.StatusNotFound, "not_found")
 }
+
+// changeRequests counts the "Changes requested" comments on pull request n.
+func (f *fixture) changeRequests(n int) int {
+	count := 0
+	for _, c := range f.repo.Issue(n).Comments {
+		if strings.HasPrefix(c.Body, "Changes requested by ") {
+			count++
+		}
+	}
+	return count
+}
+
+// backToUserCheck puts issue 1's task back in User Check, as if it had been tested again.
+func (f *fixture) backToUserCheck() {
+	f.exec(`update tasks set column_id = (select id from columns c where c.project_id = tasks.project_id and c.key = 'user-check')`)
+}
+
+func TestRequestChangesPrefersTheTestedPullRequest(t *testing.T) {
+	f, n := inUserCheck(t)
+	draft := f.repo.AddPull("Draft", githubtest.Pull{Draft: true, Closes: f.closing(1)})
+	ready := f.repo.AddPull("Ready", githubtest.Pull{Closes: f.closing(1)})
+	f.requestChanges(f.ada, "Fix it.").Expect(http.StatusOK, "")
+	if f.changeRequests(n) != 1 || f.changeRequests(draft) != 0 || f.changeRequests(ready) != 0 {
+		t.Fatal("the feedback did not go to the tested pull request alone")
+	}
+
+	// Once that one is closed, an open one ready for review wins over a draft GitHub lists first.
+	f.repo.EditIssue(n, func(is *githubtest.Issue) { is.State = "closed" })
+	f.exec(`update tasks set pull_requests_at = null`)
+	f.backToUserCheck()
+	f.requestChanges(f.ada, "Fix it.").Expect(http.StatusOK, "")
+	if f.changeRequests(ready) != 1 || f.changeRequests(draft) != 0 || !f.repo.Issue(ready).Pull.Draft {
+		t.Fatal("the feedback did not go to the ready pull request, or it is not a draft now")
+	}
+}
+
+// A pull request of another repository can close the issue too, and its number is another pull request's here.
+func TestRequestChangesIgnoresOtherRepositories(t *testing.T) {
+	f, n := inUserCheck(t)
+	f.repo.EditIssue(n, func(is *githubtest.Issue) { is.State = "closed" })
+	other := f.GitHub.AddRepo("octo", "fork")
+	other.Grant(f.token, "push")
+	other.AddIssue("Padding")
+	if m := other.AddPull("Elsewhere", githubtest.Pull{Closes: f.closing(1)}); m != n {
+		t.Fatalf("the other repository's pull request is #%d, want #%d like this one's", m, n)
+	}
+	f.requestChanges(f.ada, "Fix it.").Expect(http.StatusConflict, "no_pull_request")
+	if f.changeRequests(n) != 0 || f.changeRequests(1) != 0 || f.repo.Issue(n).Pull.Draft {
+		t.Fatal("request changes commented by another repository's pull request's number")
+	}
+}
+
+// The comment is the last write, so a move GitHub refused, then a retry, comments once.
+func TestRequestChangesRetriedCommentsOnce(t *testing.T) {
+	f, n := inUserCheck(t)
+	f.GitHub.Fail("POST /repositories/{id}/issues/{number}/labels", http.StatusBadGateway)
+	f.requestChanges(f.ada, "Fix it.").Expect(http.StatusBadGateway, "github_error")
+	if f.task(1).Column != "user-check" || f.changeRequests(n) != 0 {
+		t.Fatalf("after a failed move: task %+v, %d comments; want it in User Check with none", f.task(1), f.changeRequests(n))
+	}
+	f.GitHub.Fail("POST /repositories/{id}/issues/{number}/labels", 0)
+	f.requestChanges(f.ada, "Fix it.").Expect(http.StatusOK, "")
+	if got := f.changeRequests(n); got != 1 || f.task(1).Column != "in-progress" {
+		t.Fatalf("after the retry: %d comments, task %+v; want one, in In Progress", got, f.task(1))
+	}
+}
+
+func TestRequestChangesWhenTheDraftFails(t *testing.T) {
+	f, n := inUserCheck(t)
+	f.GitHub.Fail("GET /repositories/{id}/pulls/{number}", http.StatusBadGateway)
+	res := f.requestChanges(f.ada, "Fix it.")
+	res.Expect(http.StatusBadGateway, "github_error")
+	if msg := errorMessage(res); !strings.Contains(msg, "draft") {
+		t.Fatalf("message = %q, want it to say the pull request is not a draft", msg)
+	}
+	if f.task(1).Column != "in-progress" || f.changeRequests(n) != 1 || f.repo.Issue(n).Pull.Draft {
+		t.Fatalf("task %+v, %d comments; want it in In Progress with the feedback, the pull request still ready", f.task(1), f.changeRequests(n))
+	}
+}

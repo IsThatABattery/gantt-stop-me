@@ -163,7 +163,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
 
 | Status | Body |
 | --- | --- |
-| `200` | task, with its issue's body and labels, its tests and `testsError`, `pullRequests` and `takenOverBy` |
+| `200` | task, with its issue's body and labels, its tests and `testsError`, `pullRequests` and `pullRequestsError`, and `takenOverBy` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
 | `404` | `not_found` |
@@ -179,7 +179,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
 | `details` | string | a check's indented block, such as its steps, `""` when none or for a script |
 | `workflow` | string or null | the workflow its `[name]` pin names, as written, else `null` for the decision model to pick |
 
-`pullRequests` are the pull requests, open, closed or merged, that close the issue on GitHub, such as with "Closes #12", whether the project's automation is on or off. They are read from GitHub with the caller's credential when the task's last read of them is over 30 seconds old, else answered as last read; a failed read answers `403` or `502` as other GitHub failures do. Each has `number`, `title`, `state` (`open`, `closed` or `merged`), `draft` and `url`. `takenOverBy` is the member who [took the task over](automation.md#take-over-task) from automation, by user `id` and GitHub `login` (`null` once they unlink GitHub), else `null`.
+`pullRequests` are the pull requests of the project's repository, open, closed or merged, that close the issue on GitHub, such as with "Closes #12", whether the project's automation is on or off. Pull requests of other repositories that close it are left out. They are read from GitHub with the caller's credential when the task's last read of them is over 30 seconds old, else answered as last read. When that read fails, they are answered as last read too, and `pullRequestsError` says so, else it is `null`; the next view reads them again. Each has `number`, `title`, `state` (`open`, `closed` or `merged`), `draft` and `url`. `takenOverBy` is the member who [took the task over](automation.md#take-over-task) from automation, by user `id` and GitHub `login` (`null` once they unlink GitHub), else `null`.
 
 ```json
 {
@@ -207,6 +207,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
   "pullRequests": [
     { "number": 15, "title": "Draw the timeline", "state": "open", "draft": false, "url": "https://github.com/ada/gantt/pull/15" }
   ],
+  "pullRequestsError": null,
   "takenOverBy": null
 }
 ```

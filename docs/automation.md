@@ -428,11 +428,12 @@ Merges a task's linked pull request once the caller has checked its manual tests
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
-| `409` | `not_tested`, `run_in_progress`, `head_moved`, `not_mergeable`, `pull_request_closed`, `automation_paused`, `automation_off` |
+| `409` | `not_tested`, `taken_over`, `run_in_progress`, `head_moved`, `not_mergeable`, `pull_request_closed`, `automation_paused`, `automation_off` |
 | `422` | `unchecked_manual_tests` |
 | `502` | `github_error` |
 
 - `not_tested`: the task is not in User Check, or its latest test run did not pass.
+- `taken_over`: a member [took the task over](#take-over-task), so automation leaves merging it to them. Nothing merged. [Give it back](#give-back-task) to approve it.
 - `run_in_progress`: another task linked to the same pull request has a test run queued or running. Merging closes its issue too, so approve once that run ends. Nothing merged.
 - `unchecked_manual_tests`: `checked` misses a manual test or holds an id that is none of the run's. The message names the tests not ticked and the ids that are not the run's.
 - `head_moved`: the pull request has commits newer than the one tested, found before merging or by GitHub refusing the merge. Nothing merged: the task moved back to Testing and a new test run of the new head is queued. When the pull request is a draft again, or its author no longer has write access, that run ends at once as a runner error saying so, as the triggers would refuse it.
@@ -459,7 +460,7 @@ A merge stands even when GitHub then fails the move to Closed: the answer is sti
 
 ## Request changes
 
-Sends a task in User Check back to its author: it posts the caller's feedback on the task's linked pull request with the caller's GitHub credential, moves the task to the end of In Progress, and turns the pull request back into a draft, as a failed test run does, so marking it ready for review again starts a new test run. The comment starts with `Changes requested by {login}:`. The linked pull request is the open one closing the task's issue that its latest test run tested, else the open one GitHub lists first. A failure to make it a draft is logged and changes nothing else. It answers the task as [Get task](board.md#get-task) does.
+Sends a task in User Check back to its author: it moves the task to the end of In Progress, turns the task's linked pull request back into a draft, as a failed test run does, so marking it ready for review again starts a new test run, and last posts the caller's feedback on the pull request, all with the caller's GitHub credential. The comment starts with `Changes requested by {login}:`. The linked pull request is, of the open ones in the project's repository closing the task's issue, the one its latest test run tested, else one ready for review, else a draft, each the first GitHub lists. It answers the task as [Get task](board.md#get-task) does.
 
 `POST /api/projects/{id}/tasks/{taskID}/request-changes`
 
@@ -488,7 +489,7 @@ Sends a task in User Check back to its author: it posts the caller's feedback on
 | `409` | `not_in_user_check`, `no_pull_request` when no open pull request closes the issue |
 | `502` | `github_error` |
 
-A comment stands even when GitHub then fails the move: the answer is GitHub's error and the task stays in User Check, so a retry comments again.
+When GitHub fails the move, nothing else is written and the task stays in User Check, so a retry comments once. Once the task has moved, it stays in In Progress whatever GitHub does next, and a failure answers `502` `github_error` with a message saying what to do by hand: post the feedback when the comment failed, or mark the pull request draft and then ready for review when it could not be made a draft, since new commits on a ready pull request start no test run.
 
 ## Take over task
 

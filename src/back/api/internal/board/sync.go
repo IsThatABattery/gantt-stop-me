@@ -224,8 +224,9 @@ func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3, board_labels = $4, body = $5, labels = $6, assignees = $7 where id = $1`,
-		id, is.Title, is.State, projects.BoardLabels(is), is.Body, projects.Labels(is), projects.Assignees(is))
+	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3, board_labels = $4, body = $5, labels = $6, assignees = $7,
+		issue_node_id = $8 where id = $1`,
+		id, is.Title, is.State, projects.BoardLabels(is), is.Body, projects.Labels(is), projects.Assignees(is), is.NodeID)
 	if err == nil {
 		_, err = projects.TakeTests(ctx, tx, id, is.Body)
 	}

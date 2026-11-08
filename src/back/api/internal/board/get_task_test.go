@@ -255,13 +255,67 @@ func TestGetTaskReadsPullRequestsAtMostEvery30Seconds(t *testing.T) {
 	if got := get(); len(got) != 1 || got[0].Title != "Fix" {
 		t.Fatalf("after 30 seconds: pull requests = %+v, want the new one", got)
 	}
+
+	// The issue's GraphQL id is read once, by the sync or else the first read of the pull requests.
+	f.exec(`update tasks set issue_node_id = null`)
+	n := len(f.GitHub.Requests())
+	for range 2 {
+		f.exec(`update tasks set pull_requests_at = null`)
+		get()
+	}
+	if got := slices.DeleteFunc(f.since(n), func(r string) bool { return r != "GET /repositories/1/issues/1" }); len(got) != 1 {
+		t.Fatalf("issue reads = %v, want one", got)
+	}
 }
 
+// A failed read answers the cached pull requests, saying why, and gives its claim back so the next view tries again.
 func TestGetTaskWhenPullRequestsFail(t *testing.T) {
 	f := setup(t, "One")
 	id, _ := f.task(1)
+	f.repo.AddPull("Fix", githubtest.Pull{Closes: []githubtest.Ref{{RepoID: f.repo.ID, Number: 1}}})
+	type answer struct {
+		PullRequests      []pullRequest
+		PullRequestsError *string
+	}
+	get := func() answer {
+		t.Helper()
+		res := f.Do("GET", f.path("/tasks/%d", id), nil, f.ada)
+		res.Expect(http.StatusOK, "")
+		var got answer
+		res.JSON(&got)
+		return got
+	}
+	if got := get(); len(got.PullRequests) != 1 || got.PullRequestsError != nil {
+		t.Fatalf("got %+v, want the pull request and no error", got)
+	}
+	f.repo.AddPull("Second fix", githubtest.Pull{Closes: []githubtest.Ref{{RepoID: f.repo.ID, Number: 1}}})
+	f.exec(`update tasks set pull_requests_at = now() - interval '31 seconds'`)
 	f.GitHub.Fail("POST /graphql", http.StatusBadGateway)
-	f.Do("GET", f.path("/tasks/%d", id), nil, f.ada).Expect(http.StatusBadGateway, "github_error")
+	if got := get(); len(got.PullRequests) != 1 || got.PullRequestsError == nil {
+		t.Fatalf("got %+v, want the cached pull request and an error", got)
+	}
 	f.GitHub.Fail("POST /graphql", 0)
-	f.Do("GET", f.path("/tasks/%d", id), nil, f.ada).Expect(http.StatusOK, "") // the failed read gave its claim back
+	if got := get(); len(got.PullRequests) != 2 || got.PullRequestsError != nil {
+		t.Fatalf("got %+v, want both pull requests read again", got)
+	}
+}
+
+// A pull request of another repository can close the issue too. It is left out, so a member who cannot see that
+// repository never sees it through another's cached read, nor its number taken for one here.
+func TestGetTaskLeavesOutOtherRepositoriesPullRequests(t *testing.T) {
+	f := setup(t, "One")
+	id, _ := f.task(1)
+	private := f.GitHub.AddRepo("octo", "private")
+	private.Grant(f.token, "push") // ada sees it, bob does not
+	private.AddPull("Secret fix", githubtest.Pull{Closes: []githubtest.Ref{{RepoID: f.repo.ID, Number: 1}}})
+	reader := f.reader()
+	for _, session := range []*http.Cookie{f.ada, reader} { // ada's read fills the cache bob's answers from
+		res := f.Do("GET", f.path("/tasks/%d", id), nil, session)
+		res.Expect(http.StatusOK, "")
+		var got struct{ PullRequests []pullRequest }
+		res.JSON(&got)
+		if len(got.PullRequests) != 0 {
+			t.Fatalf("pull requests = %+v, want none of another repository", got.PullRequests)
+		}
+	}
 }

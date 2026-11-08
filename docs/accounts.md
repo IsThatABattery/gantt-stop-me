@@ -114,7 +114,7 @@ Sets or clears the signed-in user's display name.
 | Name | In | Type | Rules |
 | --- | --- | --- | --- |
 | `session` | cookie | string | required |
-| `name` | body | string or null | trimmed, 1 to 100 characters, no control characters; `null` or left out clears it |
+| `name` | body | string or null | trimmed, 1 to 100 characters, not all whitespace, no control, format (such as zero-width or right-to-left marks) or line and paragraph separator characters; `null` or left out clears it |
 
 ```json
 { "name": "Ada Lovelace" }

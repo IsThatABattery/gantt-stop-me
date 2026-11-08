@@ -47,7 +47,8 @@ func (a *Automation) takeOver(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return gitHubError{err}
 		}
-		_, err = tx.Exec(ctx, `update tasks set taken_over_by = $2, assignees = $3 where id = $1`,
+		// updated_at, as a move sets it: a sync that fetched the issue before this then skips the task instead of undoing it.
+		_, err = tx.Exec(ctx, `update tasks set taken_over_by = $2, assignees = $3, updated_at = clock_timestamp() where id = $1`,
 			taskID, accounts.UserID(ctx), projects.Assignees(is))
 		if err != nil {
 			return err

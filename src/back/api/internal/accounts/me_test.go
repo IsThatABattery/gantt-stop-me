@@ -117,7 +117,8 @@ func TestEditMeName(t *testing.T) {
 func TestEditMeRefusesBadNames(t *testing.T) {
 	env := apptest.New(t)
 	session := env.SignUp("ada@example.com", "correct horse")
-	for _, bad := range []string{"", "   ", strings.Repeat("a", 101), "Ada\tLovelace", "Ada\x00"} {
+	for _, bad := range []string{"", "   ", strings.Repeat("a", 101), "Ada\tLovelace", "Ada\x00",
+		"\u200b", "\u202eadmin", "a\u2028b", "a\u2029b", "\ufeff", " \u3000 "} {
 		env.Do("PATCH", "/api/me", map[string]any{"name": bad}, session).Expect(http.StatusBadRequest, "invalid_name")
 	}
 	env.Do("PATCH", "/api/me", map[string]any{"name": 7}, session).Expect(http.StatusBadRequest, "bad_request")

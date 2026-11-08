@@ -34,6 +34,9 @@ var (
 		"Another task linked to this pull request has a test run in progress. Approve once it ends."}
 	// closedPull refuses approving a task whose pull request is closed or merged, maybe by an approval just before.
 	closedPull = &refused{http.StatusConflict, "pull_request_closed", "The linked pull request is closed or merged already."}
+	// takenOverRefusal refuses approving a task a member took over: automation leaves it to them.
+	takenOverRefusal = &refused{http.StatusConflict, "taken_over",
+		"A member took this task over from automation, so it does not merge it. Give it back to approve it."}
 	// headMoved answers an approval that found new commits on the pull request and started a test run of them instead.
 	headMoved = &refused{http.StatusConflict, "head_moved",
 		"The pull request has new commits since it was tested. The task is back in Testing for a test run of them."}
@@ -247,11 +250,11 @@ func approvable(ctx context.Context, db interface {
 }, projectID, taskID int64, checked []int64) (approval, error) {
 	var ap approval
 	var column, status string
-	var approved, siblingRunning bool
+	var approved, siblingRunning, takenOver bool
 	var ids []int64
 	var texts []string
 	err := db.QueryRow(ctx, `
-		select c.key, coalesce(r.id, 0), coalesce(r.pr_number, 0), coalesce(r.head_sha, ''), coalesce(r.status, ''),
+		select c.key, t.taken_over_by is not null, coalesce(r.id, 0), coalesce(r.pr_number, 0), coalesce(r.head_sha, ''), coalesce(r.status, ''),
 			r.approved_at is not null,
 			exists (select from test_runs o join tasks ot on ot.id = o.task_id
 				where ot.project_id = t.project_id and o.task_id <> t.id and o.pr_number = r.pr_number
@@ -261,12 +264,14 @@ func approvable(ctx context.Context, db interface {
 		from tasks t join columns c on c.id = t.column_id
 		left join lateral (select * from test_runs where task_id = t.id order by id desc limit 1) r on true
 		where t.id = $1 and t.project_id = $2`, taskID, projectID).
-		Scan(&column, &ap.run, &ap.pr, &ap.head, &status, &approved, &siblingRunning, &ids, &texts)
+		Scan(&column, &takenOver, &ap.run, &ap.pr, &ap.head, &status, &approved, &siblingRunning, &ids, &texts)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return approval{}, &refused{http.StatusNotFound, "not_found", "Task not found."}
 	case err != nil:
 		return approval{}, err
+	case takenOver: // the member who took it over merges it, not automation with its owner's credential
+		return approval{}, takenOverRefusal
 	case approved: // merged by an approval, maybe one at the same time as this
 		return approval{}, closedPull
 	case column != "user-check" || status != "passed" || ap.pr == 0:

@@ -960,7 +960,7 @@ func (f *Fake) linkedPullRequests(w http.ResponseWriter, r *http.Request, id str
 				state = "MERGED"
 			}
 			nodes = append(nodes, map[string]any{"number": is.Number, "title": is.Title, "state": state, "isDraft": is.Pull.Draft,
-				"url": fmt.Sprintf("%s/%s/%s/pull/%d", f.Server.URL, rp.Owner, rp.Name, is.Number)})
+				"repository": map[string]any{"databaseId": rp.ID}, "url": fmt.Sprintf("%s/%s/%s/pull/%d", f.Server.URL, rp.Owner, rp.Name, is.Number)})
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"node": map[string]any{

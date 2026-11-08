@@ -122,7 +122,7 @@ func (c *Client) ClosingIssues(ctx context.Context, token string, repoID int64, 
 const linkedPullRequests = `query LinkedPullRequests($id: ID!) {
   node(id: $id) {
     ... on Issue {
-      closedByPullRequestsReferences(first: 50, includeClosedPrs: true) { nodes { number title state isDraft url } }
+      closedByPullRequestsReferences(first: 50, includeClosedPrs: true) { nodes { number title state isDraft url repository { databaseId } } }
     }
   }
 }`
@@ -136,29 +136,32 @@ type LinkedPull struct {
 	URL    string `json:"url"`
 }
 
-// LinkedPulls returns the pull requests, open, closed or merged, that close issue number, such as with "Closes #42".
-// It reads the issue for its GraphQL id first, by the repository's id, as every call goes.
-func (c *Client) LinkedPulls(ctx context.Context, token string, repoID int64, number int) ([]LinkedPull, error) {
-	is, err := c.Issue(ctx, token, repoID, number)
-	if err != nil {
-		return nil, err
-	}
+// LinkedPulls returns the pull requests, open, closed or merged, that close the issue with this GraphQL node id,
+// such as with "Closes #42". It keeps only pull requests of the repository repoID: one elsewhere can close the issue
+// too, and its number means nothing here.
+func (c *Client) LinkedPulls(ctx context.Context, token string, repoID int64, nodeID string) ([]LinkedPull, error) {
 	var out struct {
 		Node struct {
 			ClosedBy struct {
 				Nodes []struct {
 					LinkedPull
-					State   string `json:"state"` // OPEN, CLOSED or MERGED
-					IsDraft bool   `json:"isDraft"`
+					State      string `json:"state"` // OPEN, CLOSED or MERGED
+					IsDraft    bool   `json:"isDraft"`
+					Repository struct {
+						DatabaseID int64 `json:"databaseId"`
+					} `json:"repository"`
 				} `json:"nodes"`
 			} `json:"closedByPullRequestsReferences"`
 		} `json:"node"`
 	}
-	if err := c.graphql(ctx, token, linkedPullRequests, map[string]any{"id": is.NodeID}, &out); err != nil {
+	if err := c.graphql(ctx, token, linkedPullRequests, map[string]any{"id": nodeID}, &out); err != nil {
 		return nil, err
 	}
 	pulls := []LinkedPull{} // not nil, which would answer null
 	for _, n := range out.Node.ClosedBy.Nodes {
+		if n.Repository.DatabaseID != repoID {
+			continue
+		}
 		pr := n.LinkedPull
 		pr.State, pr.Draft = strings.ToLower(n.State), n.IsDraft
 		pulls = append(pulls, pr)

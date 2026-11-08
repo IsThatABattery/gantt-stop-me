@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
+
+	"gantt-stop-me/api/internal/github/githubtest"
 )
 
 // takeover sends method, POST or DELETE, to issue 1's task's takeover route as session and returns the task it answers.
@@ -86,5 +90,51 @@ func TestTakeOverNeedsWriteAccess(t *testing.T) {
 	}
 	if len(f.repo.Issue(1).Assignees) != 0 {
 		t.Fatal("a refused takeover assigned the issue")
+	}
+}
+
+func TestTakenOverStartsNoRunFromAWebhook(t *testing.T) {
+	f := automated(t)
+	f.takeover("POST", f.ada)
+	f.hint(f.pull("ada", false, 1))
+	if runs := f.runs(); len(runs) != 0 || f.task(1).Column != "backlog" {
+		t.Fatalf("after a ready pull request's webhook: runs %+v, task %+v; want neither changed", runs, f.task(1))
+	}
+}
+
+// The takeover is done once GitHub has the assignee: a failed read of the pull requests after it answers it anyway.
+func TestTakeOverWhenPullRequestsFail(t *testing.T) {
+	f := on(t)
+	f.GitHub.Fail("POST /graphql", http.StatusBadGateway)
+	if got := f.takeover("POST", f.ada); got.TakenOverBy == nil {
+		t.Fatal("takenOverBy is null, want ada")
+	}
+}
+
+// A sync that fetched the issue before a takeover must not write the old assignees back over it.
+func TestTakeOverSurvivesASyncThatFetchedBeforeIt(t *testing.T) {
+	f := on(t)
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Title = "One!" }) // so the listing misses the ETag
+	var once sync.Once
+	var status int
+	next := f.Config.GitHub.HTTP.Transport
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		res, err := next.RoundTrip(r)
+		if err == nil && r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/issues") {
+			once.Do(func() {
+				status = f.Do("POST", f.path(fmt.Sprintf("/tasks/%d/takeover", f.taskID(1))), nil, f.ada).Status
+			})
+		}
+		return res, err
+	})}
+	f.exec(`update projects set synced_at = now() - interval '1 minute'`)
+	f.Do("GET", f.path("/board"), nil, f.ada).Expect(http.StatusOK, "")
+	if status != http.StatusOK {
+		t.Fatalf("takeover during the sync answered %d", status)
+	}
+	var got shownTask
+	f.Do("GET", f.path(fmt.Sprintf("/tasks/%d", f.taskID(1))), nil, f.ada).JSON(&got)
+	if len(got.Assignees) != 1 || got.Assignees[0].Login != "ada" {
+		t.Fatalf("assignees = %+v after the sync, want ada", got.Assignees)
 	}
 }
