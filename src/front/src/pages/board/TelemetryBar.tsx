@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Counter } from '../../components/Counter'
 import type { Project, Sprint } from '../../data/types'
 import { labels } from '../../labels/labels'
 import { countdown, isFinalDay, shortDate } from '../../lib/time'
+import type { CounterFilter } from './filters'
 
 interface TelemetryBarProps {
   project: Project
   sprint: Sprint | null
   counts: { awaitingApproval: number; blocked: number; agentsActive: number }
+  /** The counter currently filtering the board */
+  active: CounterFilter | null
+  /** Clicking the active counter again clears the filter */
+  onToggle: (filter: CounterFilter) => void
 }
 
 /** Ticks once a minute so the countdown stays current. */
@@ -20,8 +24,8 @@ function useNow() {
   return now
 }
 
-// Top bar from Main.dc.html. Counters are inert until the Phase 2 board.
-export function TelemetryBar({ project, sprint, counts }: TelemetryBarProps) {
+// Top bar from Main.dc.html. The three counters double as board filters.
+export function TelemetryBar({ project, sprint, counts, active, onToggle }: TelemetryBarProps) {
   const now = useNow()
   const finalDay = sprint ? isFinalDay(sprint.end, now) : false
 
@@ -62,10 +66,58 @@ export function TelemetryBar({ project, sprint, counts }: TelemetryBarProps) {
       </div>
 
       <div className="flex flex-wrap gap-2.5">
-        <Counter tone="warning" count={counts.awaitingApproval} label={labels.awaitingApproval} />
-        <Counter tone="critical" count={counts.blocked} label={labels.blocked} />
-        <Counter tone="astronaut" count={counts.agentsActive} label={labels.agentsActive} />
+        {counters.map((c) => (
+          <FilterCounter
+            key={c.filter}
+            tone={c.tone}
+            count={counts[c.count]}
+            label={c.label}
+            pressed={active === c.filter}
+            onClick={() => onToggle(c.filter)}
+          />
+        ))}
       </div>
     </header>
+  )
+}
+
+const counters = [
+  { filter: 'awaiting-approval', tone: 'warning', count: 'awaitingApproval', label: labels.awaitingApproval },
+  { filter: 'blocked', tone: 'critical', count: 'blocked', label: labels.blocked },
+  { filter: 'agents-active', tone: 'astronaut', count: 'agentsActive', label: labels.agentsActive },
+] as const
+
+const tones = {
+  warning: { box: 'border-warning bg-warning/8', on: 'bg-warning/20 ring-2 ring-warning', num: 'text-warning' },
+  critical: { box: 'border-critical bg-critical/8', on: 'bg-critical/20 ring-2 ring-critical', num: 'text-critical' },
+  astronaut: { box: 'border-astronaut bg-astronaut/8', on: 'bg-astronaut/20 ring-2 ring-astronaut', num: 'text-astronaut' },
+}
+
+// components/Counter with a pressed state. Kept here while the shared
+// components are frozen; Counter can take `pressed` in a later shared PR.
+function FilterCounter({
+  tone,
+  count,
+  label,
+  pressed,
+  onClick,
+}: {
+  tone: keyof typeof tones
+  count: number
+  label: string
+  pressed: boolean
+  onClick: () => void
+}) {
+  const t = tones[tone]
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-control border px-3.5 text-text ${t.box} ${pressed ? t.on : ''}`}
+    >
+      <span className={`font-mono text-lg ${t.num}`}>{count}</span>
+      {label}
+    </button>
   )
 }

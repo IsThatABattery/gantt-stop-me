@@ -49,9 +49,11 @@ interface TaskCardProps {
   owner: { kind: 'user'; user: User } | { kind: 'agent'; agent: Agent } | null
   /** Opens the payload drawer */
   to: string
+  /** The copy under the pointer while dragging: not focusable, hidden from screen readers */
+  overlay?: boolean
 }
 
-export function TaskCard({ task, epic, feature, owner, to }: TaskCardProps) {
+export function TaskCard({ task, epic, feature, owner, to, overlay = false }: TaskCardProps) {
   const byAgent = owner?.kind === 'agent'
   const l = look(task.status, byAgent)
   const landed = task.status === 'landed'
@@ -59,14 +61,19 @@ export function TaskCard({ task, epic, feature, owner, to }: TaskCardProps) {
   return (
     <Link
       to={to}
+      data-task-id={overlay ? undefined : task.id}
+      tabIndex={overlay ? -1 : undefined}
+      aria-hidden={overlay || undefined}
+      aria-describedby={overlay ? undefined : 'board-keys'}
+      // The board's own drag replaces the browser's native link drag.
+      draggable={false}
       aria-label={`${task.key}: ${task.title}. ${taskStatusLabels[task.status]}`}
-      className={`relative block overflow-hidden rounded-control border bg-surface text-text no-underline outline-none hover:text-text ${l.border ?? 'border-line'} ${
+      className={`relative block overflow-hidden rounded-control border bg-surface text-text no-underline outline-none hover:text-text ${l.border ?? 'border-line'} ${overlay ? 'shadow-xl shadow-black/40' : ''} ${
         landed
           ? 'opacity-60 hover:border-ion focus-visible:border-ion'
           : 'transition-[border-color,translate] hover:-translate-y-px hover:border-ion focus-visible:-translate-y-px focus-visible:border-ion'
       }`}
     >
-      <div className="h-[3px]" style={{ background: epic?.color ?? 'var(--color-line)' }} />
       <div className="flex flex-col gap-2.5 p-3">
         <div className="flex items-center justify-between">
           <span className="font-mono text-xs text-text-muted">{task.key}</span>
