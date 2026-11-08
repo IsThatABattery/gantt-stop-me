@@ -27,7 +27,7 @@ export function BoardColumn({ columnKey, tasks, total, filtered, renderCard }: B
     <section
       ref={setNodeRef}
       aria-label={`${name.name} · ${name.plain}, ${count} ${labels.tasks.toLowerCase()}`}
-      className={`flex min-h-[640px] flex-col gap-3 rounded-card border bg-surface/60 p-3 transition-colors ${
+      className={`flex max-h-[calc(100dvh-2rem)] min-h-[640px] flex-col gap-3 rounded-card border bg-surface/60 p-3 transition-colors ${
         isOver ? 'border-ion/60' : 'border-line-soft'
       }`}
     >
@@ -40,18 +40,22 @@ export function BoardColumn({ columnKey, tasks, total, filtered, renderCard }: B
           {count}
         </span>
       </div>
-      <SortableContext id={columnDropId(columnKey)} items={tasks.map((t) => String(t.id))} strategy={verticalListSortingStrategy}>
-        {tasks.map((t) => (
-          <SortableCard key={t.id} id={String(t.id)}>
-            {renderCard(t)}
-          </SortableCard>
-        ))}
-      </SortableContext>
-      {tasks.length === 0 && (
-        <p className="m-0 rounded-control border border-dashed border-line px-3 py-6 text-center text-[13px] text-text-muted">
-          {filtered ? `No matching ${labels.tasks.toLowerCase()}` : `No ${labels.tasks.toLowerCase()} here yet`}
-        </p>
-      )}
+      {/* At most a viewport tall: the cards scroll under the header, and the board's sideways scrollbar stays in reach.
+          pt-px leaves room for a card's hover lift. */}
+      <div className="-mt-px flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-px">
+        <SortableContext id={columnDropId(columnKey)} items={tasks.map((t) => String(t.id))} strategy={verticalListSortingStrategy}>
+          {tasks.map((t) => (
+            <SortableCard key={t.id} id={String(t.id)}>
+              {renderCard(t)}
+            </SortableCard>
+          ))}
+        </SortableContext>
+        {tasks.length === 0 && (
+          <p className="m-0 rounded-control border border-dashed border-line px-3 py-6 text-center text-[13px] text-text-muted">
+            {filtered ? `No matching ${labels.tasks.toLowerCase()}` : `No ${labels.tasks.toLowerCase()} here yet`}
+          </p>
+        )}
+      </div>
     </section>
   )
 }

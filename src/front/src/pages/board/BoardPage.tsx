@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { Outlet } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { StatusMessage } from '../../components/StatusMessage'
+import { Button } from '../../components/controls'
 import type { Task } from '../../data/api/types'
 import { ConflictError } from '../../data/errors'
 import { COLUMN_ORDER, type ColumnKey } from '../../data/types'
@@ -35,10 +36,15 @@ import { drawTrail } from './trail'
 // payload drawer and the create dialogs over the board.
 export function BoardPage() {
   const project = useProjectContext()
-  const { data: board, isPending, error } = useBoard(String(project.id))
+  const { data: board, isPending, error, refetch } = useBoard(String(project.id))
 
   if (isPending) return <StatusMessage title={`Loading ${labels.board.toLowerCase()}…`} />
-  if (error) return <StatusMessage title="Something went wrong" body={error.message} />
+  if (error && !board)
+    return (
+      <StatusMessage title="Something went wrong" body={error.message}>
+        <Button onClick={() => refetch()}>Try again</Button>
+      </StatusMessage>
+    )
   return <BoardView board={board} />
 }
 
@@ -91,14 +97,21 @@ function BoardView({ board }: { board: Board }) {
   }, [board, filter])
   const layout = drag?.layout ?? visible
   const filtered = isFiltered(filter)
+  const canWrite = board.project.permission !== 'read'
 
+  // `task` is where the card lands: where it was, or for a conflict where the API says it is.
   const onRejected = useCallback(
     (task: Task, error: Error) => {
-      pending.current = null
       const back = lookup.keyOf.get(task.columnId)
-      const why = error instanceof ConflictError && error.code === 'conflict' ? 'someone else changed it first' : error.message
+      // The rollback remounts the card, so focus follows it back if it was on it.
+      const focused = document.activeElement?.getAttribute('data-task-id') === String(task.id)
+      pending.current = focused && back ? { taskId: String(task.id), column: back, from: null, refocus: true } : null
+      const conflict = error instanceof ConflictError && error.code === 'conflict'
+      const why = conflict ? 'someone else changed it first' : error.message
       const sentence = /[.!?]$/.test(why) ? why : `${why}.`
-      setRejection(`#${task.issueNumber} couldn't move: ${sentence}${back ? ` It's back in ${columnLabels[back].name}.` : ''}`)
+      setRejection(
+        `#${task.issueNumber} couldn't move: ${sentence}${back ? ` It's ${conflict ? '' : 'back '}in ${columnLabels[back].name}.` : ''}`,
+      )
     },
     [lookup],
   )
@@ -230,7 +243,7 @@ function BoardView({ board }: { board: Board }) {
       case MOVE_LEFT:
       case MOVE_RIGHT: {
         const target = COLUMN_ORDER[col + (e.key === MOVE_LEFT ? -1 : 1)]
-        if (!target) return
+        if (!target || !canWrite) return
         e.preventDefault()
         // Lands at the same height in the next column, or at the bottom.
         requestMove(task, target, visible[target][row] ?? null, cardEl(id)?.getBoundingClientRect() ?? null, true)
@@ -256,53 +269,57 @@ function BoardView({ board }: { board: Board }) {
         active={filter.counter}
         onToggle={toggleCounter}
       />
-      <section aria-label={labels.board} className="relative min-w-0 flex-1 overflow-x-auto px-7 py-6">
-        <BoardToolbar projectId={board.project.id} onClear={filtered ? () => setFilter(noFilter) : undefined} />
-        {rejection && (
-          <div
-            role="alert"
-            className="mb-4 flex items-center justify-between gap-3 rounded-control border border-critical/60 bg-critical/8 px-3.5 py-2 text-[13px] text-critical"
-          >
-            <span>{rejection}</span>
-            <button
-              type="button"
-              onClick={() => setRejection(null)}
-              className="min-h-11 cursor-pointer rounded-control px-3 text-critical hover:underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
+      <section aria-label={labels.board} className="relative min-w-0 flex-1 px-7 py-6">
+        <BoardToolbar projectId={board.project.id} canWrite={canWrite} onClear={filtered ? () => setFilter(noFilter) : undefined} />
         <p aria-live="polite" className="sr-only">
           {announcement}
         </p>
         <DndContext
-          sensors={sensors}
+          sensors={canWrite ? sensors : []}
           collisionDetection={collision}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
           onDragCancel={() => setDrag(null)}
         >
-          <div
-            ref={gridRef}
-            onKeyDown={onKeyDown}
-            className="grid min-w-[1120px] grid-cols-[repeat(5,minmax(216px,1fr))] gap-4"
-          >
-            {COLUMN_ORDER.map((key) => (
-              <BoardColumn
-                key={key}
-                columnKey={key}
-                tasks={layout[key].flatMap((id) => lookup.task.get(id) ?? [])}
-                total={lookup.column.get(key)?.tasks.length ?? 0}
-                filtered={filtered}
-                renderCard={(t) => card(t)}
-              />
-            ))}
+          {/* Only the columns scroll sideways; the toolbar stays put. */}
+          <div className="-mx-7 overflow-x-auto px-7">
+            <div
+              ref={gridRef}
+              onKeyDown={onKeyDown}
+              className="grid min-w-[1144px] grid-cols-[repeat(5,minmax(216px,1fr))] gap-4"
+            >
+              {COLUMN_ORDER.map((key) => (
+                <BoardColumn
+                  key={key}
+                  columnKey={key}
+                  tasks={layout[key].flatMap((id) => lookup.task.get(id) ?? [])}
+                  total={lookup.column.get(key)?.tasks.length ?? 0}
+                  filtered={filtered}
+                  renderCard={(t) => card(t)}
+                />
+              ))}
+            </div>
           </div>
           <DragOverlay>{dragged ? card(dragged, true) : null}</DragOverlay>
         </DndContext>
       </section>
+      {/* Out of flow, so it never shifts the columns under the pointer and shows at any scroll position. */}
+      {rejection && (
+        <div
+          role="alert"
+          className="fixed right-4 bottom-4 left-4 z-40 flex items-center justify-between gap-3 rounded-control border border-critical/60 bg-surface px-3.5 py-2 text-[13px] text-critical shadow-lg shadow-black/40 sm:left-auto sm:max-w-md"
+        >
+          <span className="min-w-0 wrap-anywhere">{rejection}</span>
+          <button
+            type="button"
+            onClick={() => setRejection(null)}
+            className="min-h-11 flex-none cursor-pointer rounded-control px-3 text-critical hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* The drawer and dialogs read the project too. */}
       <Outlet context={board.project} />
     </>
