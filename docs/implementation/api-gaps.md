@@ -2,11 +2,11 @@
 
 The frontend was built on mock data for an agent-team product: agents, epics, objectives, sprints, an activity log, planning. The API is a Kanban board over GitHub issues, with test-run automation, LLM providers and planning. This page lists what each side is missing, so the work can be split up.
 
-Branch `feature/api-wiring` connects the screens the API already supports. The rest stay on mock data and are hidden from the app until their API exists. Their files remain in `src/front/src/pages`, and their tests are skipped with a pointer here.
+Branch `feature/api-wiring` connects the screens the API already supports. The rest stay on mock data and are hidden from the app until their API exists. Their files remain in `src/front/src/pages`, and their tests are skipped with a pointer here. To bring one back, see "Mock data, for the hidden screens" in [src/front/README.md](../../src/front/README.md).
 
 Status as of 2026-11-08, with `main` at `eed7adb` (PRs #20 planning and #21 card tests merged).
 
-## Being wired on `feature/api-wiring` (in progress)
+## Wired on `feature/api-wiring`
 
 | Screen | API |
 | --- | --- |
