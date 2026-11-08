@@ -1,6 +1,6 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { http } from 'msw'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import type { Automation, Provider } from '../../data/api/types'
 import { fake, failNext } from '../../test/fakeApi'
@@ -90,6 +90,7 @@ describe('project automation', () => {
   it('starts empty when taking over on providers the caller does not have', async () => {
     const { agent } = await openAutomation({ ...enabled, owner: { id: 7, login: 'bob' }, decisionProviderId: 9, chatProviderId: 9 })
     await screen.findByText('Automation is on.')
+    expect(screen.getByText('Decision agent: gpt-6-luna. Check agent: llama.')).toBeInTheDocument()
     for (const name of ['Decision agent', 'Check agent']) {
       expect(agent(name).getByLabelText('Provider')).toHaveDisplayValue('Choose a provider')
       expect(agent(name).getByLabelText('Model')).toHaveDisplayValue('None')
@@ -115,15 +116,21 @@ describe('project automation', () => {
     it(`goes read-only after a 403 on ${what}`, async () => {
       // Write access was lost on GitHub after the page loaded.
       const { agent } = await openAutomation({ ...enabled, owner: { id: 7, login: 'bob' } })
+      await screen.findByText('Automation is on.')
+    await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
       failNext(`${method} /api${PATH}`, { status: 403, code: 'forbidden', message: 'You need write access.' })
       if (method === 'PUT') await userEvent.click(await screen.findByRole('button', { name: 'Save changes' }))
       else {
         await userEvent.click(await screen.findByRole('button', { name: 'Turn off automation' }))
         await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Turn off' }))
       }
-      expect(await screen.findByText(/You have read access only/)).toBeInTheDocument()
+      expect(await screen.findByText(/You have read access only/)).toHaveFocus()
       expect(agent('Decision agent').getByLabelText('Model')).toBeDisabled()
+      // It shows what's saved, not the edits.
+      expect(agent('Check agent').getByLabelText('Your instructions')).toHaveValue('Use the staging login.')
       expect(agent('Check agent').getByLabelText('Your instructions')).toBeDisabled()
+      // The project, with its permission, is refetched.
+      expect(fake.requests.filter((r) => r.method === 'GET' && r.path === '/api/projects/1/board')).toHaveLength(2)
       expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Turn off/ })).not.toBeInTheDocument()
       expect(screen.queryByText(/Saving makes you the owner/)).not.toBeInTheDocument()
@@ -137,6 +144,42 @@ describe('project automation', () => {
     expect(agent('Decision agent').getByLabelText('Provider')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Turn off automation' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the form and its edits when refetching providers fails', async () => {
+    const { agent } = await openAutomation(enabled)
+    await screen.findByText('Automation is on.')
+    await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
+    failNext(`PUT /api${PATH}`, { status: 400, code: 'invalid_model', message: 'Pick a chosen model.' })
+    failNext('GET /api/providers', { status: 500, code: 'internal', message: 'Something broke.' })
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('Pick a chosen model.')).toBeInTheDocument()
+    expect(agent('Check agent').getByLabelText('Your instructions')).toHaveValue('Use the staging login. Then log out.')
+  })
+
+  it("doesn't carry one project's read-only state to another", async () => {
+    server.use(
+      http.get('/api/projects/2/board', () => HttpResponse.json({ project: { ...fake.project, id: 2, name: 'second' }, columns: fake.columns, tasks: [] })),
+      http.get('/api/projects/2/automation', () => HttpResponse.json(enabled)),
+    )
+    fake.providers = providers
+    fake.automation = enabled
+    const { router } = renderApp(PATH)
+    const visit = async (path: string, name: string) => {
+      await act(() => router.navigate(path))
+      await screen.findByText(`Mission · ${name}`)
+      await screen.findByRole('form', { name: 'Automation' })
+    }
+    // Both projects are cached, so going back and forth keeps the page mounted.
+    await visit('/projects/2/automation', 'second')
+    await visit(PATH, 'gantt')
+    failNext(`PUT /api${PATH}`, { status: 403, code: 'forbidden', message: 'You need write access.' })
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText(/You have read access only/)
+
+    await visit('/projects/2/automation', 'second')
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+    expect(screen.queryByText(/You have read access only/)).not.toBeInTheDocument()
   })
 
   it('places a 400 against fresh providers and focuses that field', async () => {
@@ -173,8 +216,22 @@ describe('project automation', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Turn off automation' }))
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Turn off' }))
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    // Cancel would close the confirm and focus the disabled Turn off automation.
+    expect(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' })).toBeDisabled()
     finish()
   })
+
+  for (const fromConfirm of [false, true]) {
+    it(`can't turn off while saving${fromConfirm ? ', from the confirm' : ''}`, async () => {
+      let finish = () => {}
+      server.use(http.put(`/api${PATH}`, () => new Promise<Response>((done) => (finish = () => done(HttpResponse.json(enabled))))))
+      await openAutomation(enabled)
+      if (fromConfirm) await userEvent.click(await screen.findByRole('button', { name: 'Turn off automation' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'Save changes' }))
+      expect(screen.getByRole('button', { name: fromConfirm ? 'Turn off' : 'Turn off automation' })).toBeDisabled()
+      finish()
+    })
+  }
 
   it('warns before leaving with unsaved changes', async () => {
     const { agent } = await openAutomation(enabled)
@@ -182,7 +239,22 @@ describe('project automation', () => {
     await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))
-    expect(await screen.findByRole('alertdialog')).toHaveTextContent('You have unsaved changes')
+    const dialog = within(await screen.findByRole('alertdialog'))
+    expect(dialog.getByText(/You have unsaved changes/)).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Stay' })).toHaveFocus()
+    await userEvent.click(dialog.getByRole('button', { name: 'Leave without saving' }))
+    expect(await screen.findByRole('heading', { name: 'Add a mission', level: 1 })).toBeInTheDocument()
+  })
+
+  it('leaves without asking once the changes are saved', async () => {
+    const { agent } = await openAutomation(enabled)
+    await screen.findByText('Automation is on.')
+    await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Automation saved')
+    await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))
+    expect(await screen.findByRole('heading', { name: 'Add a mission', level: 1 })).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 
   it('turns off after an in-page confirm', async () => {
@@ -196,5 +268,14 @@ describe('project automation', () => {
     expect(sent('DELETE')).toHaveLength(1)
     expect(fake.automation).toEqual({ enabled: false })
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('focuses the status after turning off with no providers to turn it back on', async () => {
+    fake.providers = []
+    fake.automation = enabled
+    renderApp(PATH)
+    await userEvent.click(await screen.findByRole('button', { name: 'Turn off automation' }))
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Turn off' }))
+    expect(await screen.findByText('Automation is off.')).toHaveFocus()
   })
 })

@@ -16,6 +16,10 @@ export function UnsavedChangesGuard({ when }: { when: boolean }) {
     window.addEventListener('beforeunload', onUnload)
     return () => window.removeEventListener('beforeunload', onUnload)
   }, [when])
+  // focus() also scrolls Stay into view, so the click on a link visibly lands here.
+  useEffect(() => {
+    if (blocker.state === 'blocked') document.getElementById(`${id}-stay`)?.focus()
+  }, [blocker.state, id])
 
   if (blocker.state !== 'blocked') return null
   return (
@@ -23,7 +27,7 @@ export function UnsavedChangesGuard({ when }: { when: boolean }) {
       <p id={id} className="m-0 flex-1 text-[13px]">
         You have unsaved changes. Leave without saving?
       </p>
-      <Button onClick={() => blocker.reset()}>Stay</Button>
+      <Button id={`${id}-stay`} onClick={() => blocker.reset()}>Stay</Button>
       <Button onClick={() => blocker.proceed()} className="border-warning text-warning hover:border-warning hover:text-warning">
         Leave without saving
       </Button>

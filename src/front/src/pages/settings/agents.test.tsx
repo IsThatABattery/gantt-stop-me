@@ -97,6 +97,16 @@ describe('agent settings', () => {
     expect(fake.planning.interviewer.instructions).toBe('🚀'.repeat(3000))
   })
 
+  it('trims as the server does, keeping U+FEFF and dropping U+0085', async () => {
+    const { form, agent } = await openAgents()
+    await userEvent.click(agent('Interviewer').getByLabelText('Your instructions'))
+    await userEvent.paste('\u0085\u3000\uFEFFx\u0085')
+    expect(agent('Interviewer').getByText('2 / 4000')).toBeInTheDocument()
+    await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
+    expect(await form.findByText('Agent settings saved')).toBeInTheDocument()
+    expect(fake.planning.interviewer.instructions).toBe('\uFEFFx')
+  })
+
   it('refuses a NUL character', async () => {
     const { form, agent } = await openAgents()
     const instructions = agent('Task agent').getByLabelText('Your instructions')
@@ -146,6 +156,26 @@ describe('agent settings', () => {
     expect(model).toHaveFocus()
     expect(agent('Interviewer').getByLabelText('Model')).toHaveAttribute('aria-invalid', 'false')
     expect(form.getByText('Fix the marked field and save again.')).toBeInTheDocument()
+  })
+
+  it('places a 400 against freshly fetched providers', async () => {
+    const { form, agent } = await openAgents()
+    // gpt-5 is retired after the page loads, so the fake API refuses it.
+    fake.providers = [{ ...providers[0], models: ['o3'] }, providers[1]]
+    await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
+    const model = agent('Interviewer').getByLabelText('Model')
+    await expect.poll(() => model.getAttribute('aria-invalid')).toBe('true')
+    expect(model).toHaveFocus()
+  })
+
+  it('keeps the form and its edits when refetching providers fails', async () => {
+    const { form, agent } = await openAgents()
+    await userEvent.type(agent('Interviewer').getByLabelText('Your instructions'), 'Be brief.')
+    failNext('PUT /api/me/planning', { status: 400, code: 'invalid_model', message: 'Pick a chosen model.' })
+    failNext('GET /api/providers', { status: 500, code: 'internal', message: 'Something broke.' })
+    await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
+    expect(await form.findByText('Pick a chosen model.')).toBeInTheDocument()
+    expect(agent('Interviewer').getByLabelText('Your instructions')).toHaveValue('Be brief.')
   })
 
   it('links to the providers instead of empty selects when there are none', async () => {

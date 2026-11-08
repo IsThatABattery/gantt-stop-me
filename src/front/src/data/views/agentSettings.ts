@@ -32,8 +32,11 @@ export type AgentField = 'provider' | 'model' | 'instructions'
 export type AgentErrors = Partial<Record<AgentField, string>>
 const fields: AgentField[] = ['provider', 'model', 'instructions']
 
+/** Go's strings.TrimSpace: unicode.IsSpace is \t-\r, U+0085 and category Z. JS trim() differs on U+FEFF and U+0085. */
+export const trimSpace = (s: string) => s.replace(/^[\t\n\v\f\r\u0085\p{Z}]+|[\t\n\v\f\r\u0085\p{Z}]+$/gu, '')
+
 /** Characters as the server counts them: trimmed, in code points. */
-export const instructionsLength = (s: string) => [...s.trim()].length
+export const instructionsLength = (s: string) => [...trimSpace(s)].length
 
 function instructionsProblem(s: string) {
   if (instructionsLength(s) > INSTRUCTIONS_MAX) return `Use ${INSTRUCTIONS_MAX} characters or fewer.`

@@ -133,12 +133,40 @@ describe('LLM providers', () => {
     expect(saved?.body).toEqual({ models: ['llama3', 'mistral'] })
   })
 
-  it('says why a provider in use cannot be removed', async () => {
-    fake.providersInUse = [1]
+  for (const [what, use] of [
+    ['planning', () => (fake.planning.taskAgent = { providerId: 1, model: 'llama3', instructions: '' })],
+    [
+      'automation',
+      () =>
+        (fake.automation = {
+          enabled: true,
+          owner: { id: 1, login: 'ada' },
+          decisionProviderId: 2,
+          decisionModel: 'gpt-5',
+          decisionInstructions: '',
+          chatProviderId: 1,
+          chatModel: 'llama3',
+          chatInstructions: '',
+          pausedReason: null,
+          payloadUrl: 'https://gantt.example.com/api/github/webhook/1',
+          webhookSecretSet: false,
+        }),
+    ],
+  ] as const) {
+    it(`says why a provider ${what} uses cannot be removed`, async () => {
+      use()
+      await openSettings()
+      const s = within(section('LLM providers'))
+      await userEvent.click(await s.findByRole('button', { name: 'Remove Local' }))
+      expect(await s.findByRole('alert')).toHaveTextContent('Automation or planning uses this provider.')
+      expect(fake.providers).toHaveLength(1)
+    })
+  }
+
+  it('removes a provider nothing uses', async () => {
     await openSettings()
     const s = within(section('LLM providers'))
     await userEvent.click(await s.findByRole('button', { name: 'Remove Local' }))
-    expect(await s.findByRole('alert')).toHaveTextContent('Automation or planning uses this provider.')
-    expect(fake.providers).toHaveLength(1)
+    await waitFor(() => expect(fake.providers).toEqual([]))
   })
 })

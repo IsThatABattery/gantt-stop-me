@@ -20,7 +20,8 @@ const same = (a: PlanningSettings, b: PlanningSettings) => JSON.stringify(a) ===
 export function PlanningSection() {
   const planning = usePlanning()
   const providers = useProviders()
-  const error = planning.error ?? providers.error
+  // A failed refetch keeps the data, and the form with its edits.
+  const error = (!planning.data && planning.error) || (!providers.data && providers.error)
 
   return (
     <Section id={sectionIds.agents} title={settingsLabels.agents} intro={settingsLabels.agentsHelp}>

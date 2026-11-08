@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { useParams } from 'react-router'
@@ -10,6 +11,7 @@ import { StatusMessage } from '../../components/StatusMessage'
 import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { AgentSettings, Automation, Me, Permission, Provider } from '../../data/api/types'
 import { errorCode, NotFoundError } from '../../data/errors'
+import { keys } from '../../data/keys'
 import { useMe } from '../../data/session'
 import {
   agentProblems,
@@ -35,7 +37,8 @@ export function AutomationPage() {
   const automation = useAutomation(projectId)
   const providers = useProviders()
   const me = useMe()
-  const error = automation.error ?? providers.error ?? me.error
+  // A failed refetch keeps the data, and the form with its edits.
+  const error = [automation, providers, me].find((q) => !q.data && q.error)?.error
 
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
@@ -45,7 +48,7 @@ export function AutomationPage() {
         </Eyebrow>
         <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.automation}</h1>
       </header>
-      {automation.error instanceof NotFoundError ? (
+      {!automation.data && automation.error instanceof NotFoundError ? (
         <StatusMessage
           title="Automation isn't available for this project"
           body="The server may have no test runner, or the project wasn't found."
@@ -56,6 +59,7 @@ export function AutomationPage() {
         <StatusMessage title={`Loading ${labels.automation.toLowerCase()}…`} />
       ) : (
         <AutomationForm
+          key={projectId}
           projectId={projectId}
           permission={project.permission}
           automation={automation.data}
@@ -104,23 +108,32 @@ function AutomationForm({
   const save = useSaveAutomation(projectId)
   const turnOff = useTurnOffAutomation(projectId)
   const placeApiError = usePlaceApiError()
+  const client = useQueryClient()
   const id = useId()
 
   const takesOver = !readOnly && automation.enabled && automation.owner.id !== me.id
   // automation is refetched after a save or turn-off, so it's what the server has.
   const dirty = !readOnly && !same(agents, fromData(automation, providers))
   const busy = save.isPending || turnOff.isPending
-  // The Turn off button is gone once it succeeds, so focus moves to the one that turns automation back on.
+  // The Turn off button is gone once it succeeds, so focus moves to the one that turns automation back on, or the status without one.
   useEffect(() => {
-    if (turnOff.isSuccess) document.getElementById(`${id}-save`)?.focus()
+    if (turnOff.isSuccess) (document.getElementById(`${id}-save`) ?? document.getElementById(`${id}-state`))?.focus()
   }, [turnOff.isSuccess, id])
 
   const focus = (at: { agent: AutomationAgent; field: string } | null) => at && document.getElementById(`${id}-${at.agent}-${at.field}`)?.focus()
 
   const showError = (err: Error) => {
     if (errorCode(err) === 'forbidden') {
-      setForbidden(true)
-      setConfirmOff(false)
+      // Read-only shows what's saved, not the edits; the project's permission is refetched.
+      flushSync(() => {
+        setForbidden(true)
+        setConfirmOff(false)
+        setAgents(fromData(automation, providers))
+        setErrors({})
+        setFormError(null)
+      })
+      document.getElementById(`${id}-readonly`)?.focus()
+      client.invalidateQueries({ queryKey: keys.board(projectId) })
     } else setFormError(err.message)
   }
 
@@ -189,7 +202,7 @@ function AutomationForm({
   return (
     <form onSubmit={submit} noValidate aria-label={labels.automation} className="flex max-w-[820px] flex-col gap-5 rounded-[14px] border border-line bg-surface p-6">
       <div className="flex flex-col gap-1.5">
-        <p className="m-0 font-medium">
+        <p id={`${id}-state`} tabIndex={-1} className="m-0 font-medium">
           {automation.enabled ? (automation.pausedReason ? 'Automation is on, but paused.' : 'Automation is on.') : 'Automation is off.'}
         </p>
         <p className="m-0 text-[13px] leading-normal text-text-muted-strong">
@@ -197,6 +210,12 @@ function AutomationForm({
             ? `Owner: ${automation.owner.login ?? 'none, they unlinked GitHub'}. Test runs and merges use the owner's GitHub account and providers.`
             : 'Choose both agents’ models to turn it on. You become its owner: test runs and merges use your GitHub account and providers.'}
         </p>
+        {automation.enabled && (
+          // The editors below show only the caller's own providers, so this is what runs for everyone else.
+          <p className="m-0 text-[13px] leading-normal text-text-muted-strong">
+            {llmAgentLabels.decision.name}: {automation.decisionModel}. {llmAgentLabels.chat.name}: {automation.chatModel}.
+          </p>
+        )}
         {automation.enabled && automation.pausedReason && (
           <p className="m-0 flex items-start gap-2 rounded-control border border-warning bg-warning/6 px-3 py-2 text-[13px]">
             <Icon name="alert" size={16} className="mt-0.5 flex-none text-warning" />
@@ -239,7 +258,7 @@ function AutomationForm({
           <p id={`${id}-off`} className="m-0 flex-1 text-[13px]">
             Turn off automation? Queued and running test runs are cancelled.
           </p>
-          <Button id={`${id}-off-cancel`} onClick={() => openOff(false)}>
+          <Button id={`${id}-off-cancel`} onClick={() => openOff(false)} disabled={busy}>
             {actionLabels.cancel}
           </Button>
           <Button onClick={off} disabled={busy} className="border-warning text-warning hover:border-warning hover:text-warning">
@@ -259,7 +278,9 @@ function AutomationForm({
             </span>
           )}
           {readOnly ? (
-            <span className="text-text-muted-strong">You have read access only, so you can’t change automation here.</span>
+            <span id={`${id}-readonly`} tabIndex={-1} className="text-text-muted-strong">
+              You have read access only, so you can’t change automation here.
+            </span>
           ) : (
             formError && <span className="text-critical">{formError}</span>
           )}
