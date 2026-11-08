@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -8,11 +9,17 @@ import (
 // MaxInstructions is the most characters a person's own instructions to an agent can have.
 const MaxInstructions = 4000
 
-// Instructions trims s, a person's own instructions to an agent, and reports whether it has at most MaxInstructions
-// characters and no NUL, which Postgres cannot store. Empty is none.
-func Instructions(s string) (string, bool) {
+// Instructions trims s, a person's own instructions to an agent, and returns it with why it is refused: more than
+// MaxInstructions characters, or a NUL, which Postgres cannot store. The reason is "" when it is fine. Empty is none.
+func Instructions(s string) (string, string) {
 	s = strings.TrimSpace(s)
-	return s, utf8.RuneCountInString(s) <= MaxInstructions && !strings.ContainsRune(s, 0)
+	switch {
+	case utf8.RuneCountInString(s) > MaxInstructions:
+		return s, fmt.Sprintf("Instructions can have at most %d characters.", MaxInstructions)
+	case strings.ContainsRune(s, 0):
+		return s, "Instructions cannot contain a NUL character."
+	}
+	return s, ""
 }
 
 // Extra is the prompt section, after an agent's own rules, that adds instructions from who, such as "the plan's

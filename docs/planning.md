@@ -51,11 +51,11 @@ Replaces the caller's planning settings. The agents of every plan the caller sta
 | --- | --- | --- | --- |
 | `session` | cookie | string | required |
 | `review` | body | boolean | optional, default `true`; `false` approves plan docs without review |
-| `interviewer` | body | object | optional; left out, it has no model and no instructions |
-| `taskAgent` | body | object | optional; left out, it has no model and no instructions |
+| `interviewer` | body | object | required, so a save cannot wipe it by leaving it out; `{}` has no model and no instructions |
+| `taskAgent` | body | object | required, as `interviewer` |
 | `….providerId` | body | integer or null | one of the caller's providers; `null` with `model` picks no model, so the caller can delete the provider |
 | `….model` | body | string or null | one of that provider's chosen `models`; it should support tool calling |
-| `….instructions` | body | string | optional, default `""`; at most 4000 characters, trimmed; added to the agent's prompt after its own rules, which win where they conflict |
+| `….instructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added to the agent's prompt after its own rules, which win where they conflict |
 
 ```json
 {
@@ -70,7 +70,7 @@ Replaces the caller's planning settings. The agents of every plan the caller sta
 | Status | Body |
 | --- | --- |
 | `200` | the settings, as [Show planning settings](#show-planning-settings) answers them |
-| `400` | `invalid_provider`, `invalid_model`, `invalid_instructions`, `bad_request` |
+| `400` | `invalid_provider`, `invalid_model`, `invalid_instructions`, `bad_request`: also when `interviewer` or `taskAgent` is missing |
 | `401` | `unauthorized` |
 
 ## Start a plan

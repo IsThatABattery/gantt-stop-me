@@ -63,8 +63,8 @@ Turns automation on with the caller as its owner, or takes it over: the caller r
 | `decisionModel` | body | string | one of that provider's chosen `models`; picks workflows, so it should serve the OpenAI Decisions API |
 | `chatProviderId` | body | integer | one of the caller's providers, the same or another |
 | `chatModel` | body | string | one of that provider's chosen `models`; runs LLM checks, so it should support tool calling |
-| `decisionInstructions` | body | string | optional, default `""`; at most 4000 characters, trimmed; added to every question the decision model answers, after its own |
-| `chatInstructions` | body | string | optional, default `""`; at most 4000 characters, trimmed; added to every LLM check's prompt after its rules, which win where they conflict |
+| `decisionInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added once to the end of the decision model's input |
+| `chatInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added to every LLM check's prompt after its rules, which win where they conflict |
 
 ```json
 {

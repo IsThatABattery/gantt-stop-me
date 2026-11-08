@@ -1,6 +1,7 @@
 package automation
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,11 +38,11 @@ func (a *Automation) enable(w http.ResponseWriter, r *http.Request) {
 	if !a.chosenModel(w, r, userID, in.DecisionProviderID, in.DecisionModel) || !a.chosenModel(w, r, userID, in.ChatProviderID, in.ChatModel) {
 		return
 	}
-	var okDecision, okChat bool
-	in.DecisionInstructions, okDecision = llm.Instructions(in.DecisionInstructions)
-	in.ChatInstructions, okChat = llm.Instructions(in.ChatInstructions)
-	if !okDecision || !okChat {
-		httpx.Error(w, http.StatusBadRequest, "invalid_instructions", fmt.Sprintf("Instructions can have at most %d characters.", llm.MaxInstructions))
+	var whyDecision, whyChat string
+	in.DecisionInstructions, whyDecision = llm.Instructions(in.DecisionInstructions)
+	in.ChatInstructions, whyChat = llm.Instructions(in.ChatInstructions)
+	if why := cmp.Or(whyDecision, whyChat); why != "" {
+		httpx.Error(w, http.StatusBadRequest, "invalid_instructions", why)
 		return
 	}
 	var s settings

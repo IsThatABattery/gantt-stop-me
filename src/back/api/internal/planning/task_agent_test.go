@@ -413,7 +413,7 @@ func TestTaskAgentSettings(t *testing.T) {
 		"interviewer": map[string]any{"providerId": f.provider, "model": llmtest.ChatModel},
 		"taskAgent":   map[string]any{"providerId": f.provider, "model": llmtest.DecisionModel, "instructions": "Name tasks in French."},
 	}, f.ada).Expect(http.StatusOK, "")
-	f.generate(f.approved(), task("Export endpoint", nil, script("go test ./...")))
+	pl := f.generate(f.approved(), task("Export endpoint", nil, script("go test ./...")))
 
 	chats := f.llm.Chats() // each plan's interview, then its tasks
 	if len(chats) != 4 || chats[2].Model != llmtest.ChatModel || chats[3].Model != llmtest.DecisionModel {
@@ -431,12 +431,20 @@ func TestTaskAgentSettings(t *testing.T) {
 	if strings.Contains(f.prompt(1), "Extra instructions") {
 		t.Fatalf("prompt without instructions:\n%s", f.prompt(1))
 	}
+
+	// A revision runs on the task agent's model too.
+	f.review(f.ada, pl, 1, "deny", map[string]string{"feedback": "Smaller.", "outcome": "revise"}).Expect(http.StatusOK, "")
+	f.llm.Reply(reply(task("Export endpoint", nil, script("go test ./..."))))
+	f.work()
+	if chats = f.llm.Chats(); len(chats) != 5 || chats[4].Model != llmtest.DecisionModel || !strings.Contains(f.prompt(4), "Name tasks in French.") {
+		t.Fatalf("%d chats, the revision's model %q", len(chats), chats[len(chats)-1].Model)
+	}
 }
 
 // A creator without a task agent model can still be interviewed, but the tasks fail without calling a model.
 func TestTaskAgentWithoutAModel(t *testing.T) {
 	f := setup(t)
-	f.Do("PUT", "/api/me/planning", map[string]any{"interviewer": map[string]any{"providerId": f.provider, "model": llmtest.ChatModel}}, f.ada).
+	f.Do("PUT", "/api/me/planning", map[string]any{"interviewer": map[string]any{"providerId": f.provider, "model": llmtest.ChatModel}, "taskAgent": map[string]any{}}, f.ada).
 		Expect(http.StatusOK, "")
 	pl := f.approved()
 	f.work()

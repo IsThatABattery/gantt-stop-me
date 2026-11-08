@@ -266,9 +266,9 @@ func (a *Automation) decide(ctx context.Context, projectID int64, title string, 
 	questions := make([]llm.Question, len(ask))
 	for i, pos := range ask {
 		fmt.Fprintf(&in, "\n%d. %s", pos, strings.ReplaceAll(testText(tests[pos-1]), "\n", "\n   "))
-		questions[i] = llm.Question{Name: question(pos), Choices: choices, Instructions: fmt.Sprintf("Which workflow can run test %d?", pos) +
-			llm.Extra("the project's automation owner", instructions)}
+		questions[i] = llm.Question{Name: question(pos), Instructions: fmt.Sprintf("Which workflow can run test %d?", pos), Choices: choices}
 	}
+	in.WriteString(llm.Extra("the project's automation owner", instructions)) // once, not per question: up to 64 of them
 	c := &llm.Client{BaseURL: baseURL, Key: string(key), HTTP: a.LLM}
 	return c.Decide(ctx, model, in.String(), questions)
 }

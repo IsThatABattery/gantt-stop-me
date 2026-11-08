@@ -40,8 +40,17 @@ func TestSaveSettings(t *testing.T) {
 		t.Fatalf("saved %s, shown %s, want %s", got, f.planningSettings(f.ada), want)
 	}
 
-	// Left out is none.
-	f.Do("PUT", "/api/me/planning", map[string]any{}, f.ada).Expect(http.StatusOK, "")
+	// An agent left out, as in the old flat shape, is refused rather than wiped.
+	for _, body := range []map[string]any{{}, {"review": true}, {"providerId": f.provider, "model": llmtest.ChatModel},
+		{"interviewer": map[string]any{}}, {"taskAgent": map[string]any{}}, {"interviewer": nil, "taskAgent": map[string]any{}}} {
+		f.Do("PUT", "/api/me/planning", body, f.ada).Expect(http.StatusBadRequest, "bad_request")
+	}
+	if got := f.planningSettings(f.ada); got != want {
+		t.Fatalf("settings %s after refused saves, want %s", got, want)
+	}
+	// An empty agent is none.
+	f.Do("PUT", "/api/me/planning", map[string]any{"interviewer": map[string]any{}, "taskAgent": map[string]any{}}, f.ada).
+		Expect(http.StatusOK, "")
 	if got, want := f.planningSettings(f.ada), `{"review":true,"interviewer":`+none+`,"taskAgent":`+none+`}`; got != want {
 		t.Fatalf("cleared settings %s, want %s", got, want)
 	}
@@ -64,7 +73,8 @@ func TestSaveSettingsValidates(t *testing.T) {
 		{map[string]any{"instructions": "Be brief.\x00"}, "invalid_instructions"},
 	} {
 		for _, name := range []string{"interviewer", "taskAgent"} {
-			f.Do("PUT", "/api/me/planning", map[string]any{name: bad.agent}, f.ada).Expect(http.StatusBadRequest, bad.code)
+			body := map[string]any{"interviewer": map[string]any{}, "taskAgent": map[string]any{}, name: bad.agent}
+			f.Do("PUT", "/api/me/planning", body, f.ada).Expect(http.StatusBadRequest, bad.code)
 		}
 	}
 	f.Do("PUT", "/api/me/planning", "{", f.ada).Expect(http.StatusBadRequest, "bad_request")
@@ -73,7 +83,7 @@ func TestSaveSettingsValidates(t *testing.T) {
 		t.Fatalf("settings %s after refused saves, want %s", got, want)
 	}
 	// The most characters are fine.
-	f.Do("PUT", "/api/me/planning", map[string]any{"taskAgent": map[string]any{"instructions": strings.Repeat("é", 4000)}}, f.ada).
+	f.Do("PUT", "/api/me/planning", map[string]any{"interviewer": map[string]any{}, "taskAgent": map[string]any{"instructions": strings.Repeat("é", 4000)}}, f.ada).
 		Expect(http.StatusOK, "")
 	f.Do("PUT", "/api/me/planning", map[string]any{}).Expect(http.StatusUnauthorized, "unauthorized")
 }
@@ -83,7 +93,8 @@ func TestSettingsKeepTheirProvider(t *testing.T) {
 	f := setup(t)
 	path := fmt.Sprintf("/api/providers/%d", f.provider)
 	for _, name := range []string{"interviewer", "taskAgent"} {
-		f.Do("PUT", "/api/me/planning", map[string]any{name: map[string]any{"providerId": f.provider, "model": llmtest.ChatModel}}, f.ada).
+		body := map[string]any{"interviewer": map[string]any{}, "taskAgent": map[string]any{}, name: map[string]any{"providerId": f.provider, "model": llmtest.ChatModel}}
+		f.Do("PUT", "/api/me/planning", body, f.ada).
 			Expect(http.StatusOK, "")
 		f.Do("DELETE", path, nil, f.ada).Expect(http.StatusConflict, "provider_in_use")
 	}

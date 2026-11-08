@@ -2,7 +2,6 @@ package planning
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 
@@ -13,22 +12,27 @@ import (
 	"gantt-stop-me/api/internal/llm"
 )
 
-// saveSettings replaces the caller's planning settings. An agent left out, or with a null provider and model, has
-// none, so the caller can delete the provider; review left out is on.
+// saveSettings replaces the caller's planning settings. Both agents must be sent, so a body that leaves one out, such
+// as the old flat shape, cannot wipe it; an agent with a null provider and model has none, so the caller can delete
+// the provider. Review left out is on.
 func (p *Planning) saveSettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Review      *bool `json:"review"`
-		Interviewer agent `json:"interviewer"`
-		TaskAgent   agent `json:"taskAgent"`
+		Review      *bool  `json:"review"`
+		Interviewer *agent `json:"interviewer"`
+		TaskAgent   *agent `json:"taskAgent"`
 	}
 	if !httpx.Decode(w, r, &in) {
 		return
 	}
-	ctx, userID := r.Context(), accounts.UserID(r.Context())
-	if !p.validAgent(w, r, userID, &in.Interviewer) || !p.validAgent(w, r, userID, &in.TaskAgent) {
+	if in.Interviewer == nil || in.TaskAgent == nil {
+		httpx.Error(w, http.StatusBadRequest, "bad_request", "Send both interviewer and taskAgent.")
 		return
 	}
-	s := settings{Review: in.Review == nil || *in.Review, Interviewer: in.Interviewer, TaskAgent: in.TaskAgent}
+	ctx, userID := r.Context(), accounts.UserID(r.Context())
+	if !p.validAgent(w, r, userID, in.Interviewer) || !p.validAgent(w, r, userID, in.TaskAgent) {
+		return
+	}
+	s := settings{Review: in.Review == nil || *in.Review, Interviewer: *in.Interviewer, TaskAgent: *in.TaskAgent}
 	i, t := s.Interviewer, s.TaskAgent
 	if _, err := p.DB.Exec(ctx, `
 		insert into planning_settings (user_id, review, provider_id, model, interviewer_instructions,
@@ -66,9 +70,9 @@ func (p *Planning) validAgent(w http.ResponseWriter, r *http.Request, userID int
 			return false
 		}
 	}
-	var ok bool
-	if a.Instructions, ok = llm.Instructions(a.Instructions); !ok {
-		httpx.Error(w, http.StatusBadRequest, "invalid_instructions", fmt.Sprintf("Instructions can have at most %d characters.", llm.MaxInstructions))
+	var why string
+	if a.Instructions, why = llm.Instructions(a.Instructions); why != "" {
+		httpx.Error(w, http.StatusBadRequest, "invalid_instructions", why)
 		return false
 	}
 	return true
