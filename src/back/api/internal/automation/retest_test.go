@@ -27,3 +27,13 @@ func TestRetestNeedsAutomation(t *testing.T) {
 	f := setup(t)
 	f.Do("POST", f.path("/tasks/1/retest"), nil, f.ada).Expect(http.StatusConflict, "automation_off")
 }
+
+func TestRetestOutsideTestingNeedsNoAttention(t *testing.T) {
+	f := on(t)
+	f.Do("POST", f.path("/tasks/1/retest"), nil, f.ada).Expect(http.StatusOK, "")
+	f.expectRuns(testRun{Issue: 1, Status: "error", Reason: "No linked pull request.", Finished: true})
+	// No move out of Testing would ever clear it.
+	if s := f.task(1); s.NeedsAttention != "" {
+		t.Fatalf("a retest of a task in %s flagged it %q", s.Column, s.NeedsAttention)
+	}
+}

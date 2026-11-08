@@ -33,9 +33,10 @@ func (a *Automation) retest(w http.ResponseWriter, r *http.Request) {
 		if err := projects.Lock(ctx, tx, p.ID); err != nil {
 			return err
 		}
-		var on, taken bool
-		err := tx.QueryRow(ctx, `select exists (select from project_automation where project_id = $2), taken_over_by is not null
-			from tasks where id = $1 and project_id = $2`, taskID, p.ID).Scan(&on, &taken)
+		var on, taken, inTesting bool
+		err := tx.QueryRow(ctx, `select exists (select from project_automation where project_id = $2), taken_over_by is not null,
+			(select key from columns where id = column_id) = 'testing'
+			from tasks where id = $1 and project_id = $2`, taskID, p.ID).Scan(&on, &taken, &inTesting)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return noTask
@@ -46,7 +47,12 @@ func (a *Automation) retest(w http.ResponseWriter, r *http.Request) {
 		case taken:
 			return retestTakenOver
 		}
-		return a.startLinked(ctx, tx, token, p, taskID)
+		if err := a.startLinked(ctx, tx, token, p, taskID); err != nil || inTesting {
+			return err
+		}
+		// Only a task in Testing needs attention, and only a move out of Testing would clear it.
+		_, err = tx.Exec(ctx, `update tasks set needs_attention = null where id = $1`, taskID)
+		return err
 	})
 	unlock()
 	a.answerTask(w, r, p, token, taskID, err)

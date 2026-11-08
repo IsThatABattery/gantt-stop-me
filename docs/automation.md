@@ -544,7 +544,7 @@ Starts a new test run of a task's linked pull request at its head, as a move int
 | `409` | `automation_off`, `taken_over` |
 | `502` | `github_error` |
 
-With no linked pull request, or more than one, the run ends at once as a runner error saying so, as from a move.
+With no linked pull request, or more than one, the run ends at once as a runner error saying so, as from a move. Only a task in Testing then needs attention.
 
 ## Request changes
 
