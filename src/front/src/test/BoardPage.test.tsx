@@ -20,9 +20,10 @@ async function openBoard() {
 }
 
 describe('board', () => {
-  it('puts Plan a feature on top of the Backlog column', async () => {
+  it('offers Plan a feature from the board', async () => {
     await openBoard()
-    const plan = within(column(/Backlog/)).getByRole('link', { name: 'Plan a feature' })
+    // The rail has a link of the same name; this is the board's own.
+    const plan = within(screen.getByRole('region', { name: 'Mission control' })).getByRole('link', { name: 'Plan a feature' })
     expect(plan).toHaveAttribute('href', '/projects/1/plans')
   })
 

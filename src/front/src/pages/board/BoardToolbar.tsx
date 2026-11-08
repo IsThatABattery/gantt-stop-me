@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
+import { Icon } from '../../components/Icon'
 import { labels } from '../../labels/labels'
 
 interface BoardToolbarProps {
@@ -8,13 +9,16 @@ interface BoardToolbarProps {
   onClear?: () => void
 }
 
-const kbd = 'rounded border border-line bg-surface px-1.5 font-mono text-[11px] text-text-muted-strong'
-
 // "New payload" opens the create dialog over the board.
 export function BoardToolbar({ projectId, onClear }: BoardToolbarProps) {
   return (
-    <div className="flex flex-col gap-2 pb-4">
+    <div className="flex flex-col pb-4">
       <div className="flex flex-wrap items-center gap-3">
+        {/* Sits above Backlog, the first column, where planned tasks land. */}
+        <Link to={`/projects/${projectId}/plans`} className={buttonClass('primary', 'gap-2')}>
+          <Icon name="target" size={16} />
+          {labels.plans}
+        </Link>
         {onClear && (
           <button type="button" onClick={onClear} className={buttonClass('link', 'px-3')}>
             Clear filters
@@ -24,10 +28,9 @@ export function BoardToolbar({ projectId, onClear }: BoardToolbarProps) {
           {labels.newTask}
         </Link>
       </div>
-      <p id="board-keys" className="m-0 text-xs text-text-muted">
-        <kbd className={kbd}>←</kbd> <kbd className={kbd}>↑</kbd> <kbd className={kbd}>↓</kbd>{' '}
-        <kbd className={kbd}>→</kbd> move between {labels.tasks.toLowerCase()} · <kbd className={kbd}>[</kbd>{' '}
-        <kbd className={kbd}>]</kbd> move one column left or right · <kbd className={kbd}>Enter</kbd> opens it
+      {/* Cards drag with the pointer; the keys stay for keyboard users, described to screen readers only. */}
+      <p id="board-keys" className="sr-only">
+        Arrow keys move between {labels.tasks.toLowerCase()}. [ and ] move one column left or right. Enter opens it.
       </p>
     </div>
   )
