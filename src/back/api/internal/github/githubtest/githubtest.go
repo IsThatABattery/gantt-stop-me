@@ -81,7 +81,10 @@ type Pull struct {
 	Closes   []Ref // the issues it closes, such as with "Closes #42"
 	// Unmergeable is GitHub's message refusing to merge it, as for a conflict or a required check; "" lets it merge.
 	Unmergeable string
-	MergedWith  string // the merge method that merged it, "" until then
+	// MergeState is GitHub's mergeable_state for it, such as "blocked"; "" is "clean". The merge route ignores it, as
+	// GitHub does for an admin who may bypass branch protection.
+	MergeState string
+	MergedWith string // the merge method that merged it, "" until then
 }
 
 // Ref names an issue in a repository.
@@ -705,7 +708,9 @@ func (f *Fake) getPull(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, rp.pullJSON(is))
+	pr := rp.pullJSON(is)
+	pr["merged"], pr["mergeable_state"] = is.Pull.MergedWith != "", cmp.Or(is.Pull.MergeState, "clean") // not in the list, as on GitHub
+	writeJSON(w, http.StatusOK, pr)
 }
 
 // mergePull serves PUT /repositories/{id}/pulls/{number}/merge like GitHub: 405 for a pull request closed already,

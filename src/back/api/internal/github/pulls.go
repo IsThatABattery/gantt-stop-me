@@ -24,6 +24,11 @@ type PullRequest struct {
 		} `json:"repo"` // nil once the fork it came from is deleted
 	} `json:"head"`
 	User User `json:"user"` // its author
+	// Only PullRequest, which reads one pull request, fills these two: GitHub's list leaves them out.
+	Merged bool `json:"merged"`
+	// MergeableState is GitHub's mergeable_state: "clean", "has_hooks" or "unstable" when it may merge as it is, and
+	// "blocked", "behind", "dirty", "draft" or "unknown" (not worked out yet) when it may not.
+	MergeableState string `json:"mergeable_state"`
 }
 
 // ErrPullsChanged reports an open pull request list that changed while PullRequests read its pages, so it may hold a

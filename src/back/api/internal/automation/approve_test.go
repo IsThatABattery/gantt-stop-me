@@ -2,7 +2,9 @@ package automation_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -169,6 +171,116 @@ func TestApproveHeadMovedAtMergeTime(t *testing.T) {
 		t.Fatalf("merge requests = %d, want the one GitHub refused", got)
 	}
 	f.expectHeadMoved(n)
+}
+
+func TestApproveHeadMovedRetestsOnlyWhatMayRun(t *testing.T) {
+	t.Run("draft", func(t *testing.T) {
+		f, n := inUserCheck(t)
+		f.repo.EditPull(n, func(p *githubtest.Pull) { p.HeadSHA, p.Draft = "b2", true })
+		f.poll() // back in draft, with nothing to cancel
+		f.approve(f.ada, f.manual()...).Expect(http.StatusConflict, "head_moved")
+		const why = "The pull request is a draft. Mark it ready for review to test it."
+		f.expectRuns(pass(n), testRun{Issue: 1, PR: n, Head: "b2", Status: "error", Reason: why, Finished: true})
+		if got := f.task(1); got.Column != "testing" || got.NeedsAttention != why {
+			t.Fatalf("task = %+v, want it in Testing, flagged", got)
+		}
+		f.repo.EditPull(n, func(p *githubtest.Pull) { p.Draft = false })
+		f.poll() // ready again: the trigger tests it
+		f.expectRuns(pass(n), testRun{Issue: 1, PR: n, Head: "b2", Status: "error", Reason: why, Finished: true},
+			testRun{Issue: 1, PR: n, Head: "b2", Status: "queued"})
+	})
+	t.Run("author lost write access", func(t *testing.T) {
+		f := withLLM(t)
+		f.tests(1, manualCheck)
+		f.llm.Reply(reported("unverifiable", "It needs a person's eye."))
+		_, _, bob := f.member("bob", "push")
+		n := f.pull("bob", false, 1)
+		f.poll()
+		f.work()
+		f.repo.Grant(bob, "pull")
+		f.repo.EditPull(n, func(p *githubtest.Pull) { p.HeadSHA = "b2" })
+		f.approve(f.ada, f.manual()...).Expect(http.StatusConflict, "head_moved")
+		const why = "Not tested: bob does not have write access to this repository. Automation tests only pull requests by authors who can push to it."
+		f.expectRuns(pass(n), testRun{Issue: 1, PR: n, Head: "b2", Status: "error", Reason: why, Finished: true})
+		if got := f.task(1); got.Column != "testing" || got.NeedsAttention != why {
+			t.Fatalf("task = %+v, want it in Testing, flagged", got)
+		}
+	})
+}
+
+func TestApproveMergeRefusedOnTheTestedHead(t *testing.T) {
+	f, n := inUserCheck(t)
+	manual := f.manual()
+	// GitHub answers 409, but reading the pull request again still shows the tested head, as when the read lags a push.
+	next := f.Config.GitHub.HTTP.Transport
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/merge") {
+			return &http.Response{StatusCode: http.StatusConflict, Header: http.Header{}, Request: r,
+				Body: io.NopCloser(strings.NewReader(`{"message": "Head branch was modified. Review and try the merge again."}`))}, nil
+		}
+		return next.RoundTrip(r)
+	})}
+	f.approve(f.ada, manual...).Expect(http.StatusBadGateway, "github_error")
+	if got := f.task(1); got.Column != "user-check" || f.approvals() != 0 {
+		t.Fatalf("task = %+v with %d approvals, want it left in User Check unapproved", got, f.approvals())
+	}
+	f.expectRuns(pass(n)) // no run of the commit that just passed
+}
+
+func TestApproveKeepsAMergeWhoseAnswerIsLost(t *testing.T) {
+	f, n := inUserCheck(t)
+	manual := f.manual()
+	next := f.Config.GitHub.HTTP.Transport
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		res, err := next.RoundTrip(r)
+		if err == nil && r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/merge") {
+			res.Body.Close()
+			return nil, errors.New("connection reset by peer")
+		}
+		return res, err
+	})}
+	f.approve(f.ada, manual...).Expect(http.StatusOK, "")
+	if pr := f.repo.Issue(n); pr.State != "closed" || f.approvals() != 1 || f.task(1).Column != "closed" {
+		t.Fatalf("pull request = %s with %d approvals, task in %s; want it merged, approved and closed", pr.State, f.approvals(), f.task(1).Column)
+	}
+}
+
+func TestApproveRefusesWhatBranchProtectionBlocks(t *testing.T) {
+	f, n := inUserCheck(t)
+	f.repo.Grant(f.token, "admin") // the owner may bypass branch protection, so GitHub's merge would go through
+	for _, state := range []string{"blocked", "behind", "dirty", "draft", "unknown"} {
+		f.repo.EditPull(n, func(p *githubtest.Pull) { p.MergeState = state })
+		res := f.approve(f.ada, f.manual()...)
+		res.Expect(http.StatusConflict, "not_mergeable")
+		if state == "blocked" {
+			if got, want := errorMessage(res), "Branch protection blocks merging this pull request, such as for a required review or status check."; got != want {
+				t.Fatalf("message = %q, want %q", got, want)
+			}
+		}
+	}
+	if got := f.merges(); got != 0 || f.task(1).Column != "user-check" {
+		t.Fatalf("merge requests = %d, task in %s; want none, left in User Check", got, f.task(1).Column)
+	}
+	f.repo.EditPull(n, func(p *githubtest.Pull) { p.MergeState = "unstable" }) // only checks that are not required failed
+	f.approve(f.ada, f.manual()...).Expect(http.StatusOK, "")
+}
+
+func TestApproveTurnedOffMeanwhile(t *testing.T) {
+	f, n := inUserCheck(t)
+	manual := f.manual()
+	// Turned off after the approval checked the owner, while it reads the repository's merge methods.
+	next, off := f.Config.GitHub.HTTP.Transport, false
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/graphql" && !off {
+			off = true
+			f.Do("DELETE", f.path("/automation"), nil, f.ada).Expect(http.StatusNoContent, "")
+		}
+		return next.RoundTrip(r)
+	})}
+	f.approve(f.ada, manual...).Expect(http.StatusConflict, "automation_off")
+	if pr := f.repo.Issue(n); pr.State != "open" || f.merges() != 0 || f.approvals() != 0 {
+		t.Fatalf("pull request = %s with %d merge requests and %d approvals, want nothing merged", pr.State, f.merges(), f.approvals())
+	}
 }
 
 func TestApproveNeedsEveryManualTick(t *testing.T) {

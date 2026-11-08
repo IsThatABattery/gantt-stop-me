@@ -390,13 +390,13 @@ Merges a task's linked pull request once the caller has checked its manual tests
 
 - `not_tested`: the task is not in User Check, or its latest test run did not pass.
 - `unchecked_manual_tests`: `checked` misses a manual test or holds an id that is none of the run's. The message names the tests not ticked and the ids that are not the run's.
-- `head_moved`: the pull request has commits newer than the one tested, found before merging or by GitHub refusing the merge. Nothing merged: the task moved back to Testing and a new test run of the new head is queued.
-- `not_mergeable`: GitHub will not merge the pull request, as for a conflict, a required check or branch protection. The message is GitHub's. The task stays in User Check.
+- `head_moved`: the pull request has commits newer than the one tested, found before merging or by GitHub refusing the merge. Nothing merged: the task moved back to Testing and a new test run of the new head is queued. When the pull request is a draft again, or its author no longer has write access, that run ends at once as a runner error saying so, as the triggers would refuse it.
+- `not_mergeable`: GitHub will not merge the pull request as it is. Before merging, the API reads GitHub's `mergeable_state` and merges only when it is `clean`, `has_hooks` or `unstable`, so branch protection that the owner may bypass, such as an admin, still holds for the approver: `blocked` (a required review or check), `behind`, `dirty` (conflicts), `draft` and `unknown` (GitHub has not worked it out yet; try again) each answer with their own message. When GitHub then refuses the merge itself, the message is GitHub's. The task stays in User Check.
 - `pull_request_closed`: the pull request is closed or merged already, also by another approval at the same moment. Of two approvals at once, one merges.
-- `automation_paused`, `automation_off`: automation is paused, also when GitHub just refused the owner's credential, or off. Nothing merged.
-- `403` and `502`: GitHub refused or failed a call with the owner's credential, answered as on other routes. Nothing merged.
+- `automation_paused`, `automation_off`: automation is paused, also when GitHub just refused the owner's credential, or off, also when it was turned off while the approval read GitHub. Nothing merged.
+- `403` and `502`: GitHub refused or failed a call with the owner's credential, answered as on other routes. Nothing merged. GitHub refusing the merge with `409` while a new read still shows the tested head also answers `502`: try again.
 
-A merge stands even when GitHub then fails the move to Closed: the answer is still `200`, and the task stays in User Check until the issue sync sees its issue closed.
+A merge stands even when GitHub then fails the move to Closed: the answer is still `200`, and the task stays in User Check until the issue sync sees its issue closed. So does a merge whose answer got lost, as on a timeout: the API reads the pull request again, and when it merged at the tested head, the approval is saved as usual.
 
 ```json
 {

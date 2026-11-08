@@ -154,11 +154,17 @@ func TestMerge(t *testing.T) {
 		ghErr.Status != http.StatusMethodNotAllowed || ghErr.Message != why {
 		t.Fatalf("Merge GitHub refuses: err = %#v, want HTTP 405 with its message", err)
 	}
-	repo.EditPull(n, func(p *githubtest.Pull) { p.Unmergeable = "" })
+	repo.EditPull(n, func(p *githubtest.Pull) { p.Unmergeable, p.MergeState = "", "blocked" })
+	if pr, err := gh.PullRequest(t.Context(), "token", repo.ID, n); err != nil || pr.MergeableState != "blocked" || pr.Merged {
+		t.Fatalf("PullRequest = %+v, %v; want it blocked, not merged", pr, err)
+	}
 	if err := gh.Merge(t.Context(), "token", repo.ID, n, "a1", "squash"); err != nil {
 		t.Fatal(err)
 	}
 	if is := repo.Issue(n); is.State != "closed" || is.Pull.MergedWith != "squash" {
 		t.Fatalf("pull request = %s, merged with %q; want closed by a squash", is.State, is.Pull.MergedWith)
+	}
+	if pr, err := gh.PullRequest(t.Context(), "token", repo.ID, n); err != nil || !pr.Merged {
+		t.Fatalf("PullRequest = %+v, %v; want it merged", pr, err)
 	}
 }

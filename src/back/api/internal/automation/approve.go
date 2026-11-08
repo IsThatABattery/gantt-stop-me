@@ -75,9 +75,9 @@ func (a *Automation) approve(w http.ResponseWriter, r *http.Request) {
 
 // merge approves the project's task taskID with checked, the manual test results the caller ticked, merges its pull
 // request with the automation owner's credential, and returns the approved test run. It reads GitHub before it takes
-// the project's lock, then checks the task again under the lock, so of two approvals at once only the first merges.
-// A pull request whose head moved since the run, seen before merging or by GitHub refusing the merge, moves the task
-// back to Testing as an ordinary move, with a new test run of the new head, and returns headMoved.
+// the project's lock, then checks automation and the task again under the lock, so of two approvals at once only the
+// first merges. A pull request whose head moved since the run, seen before merging or by GitHub refusing the merge,
+// moves the task back to Testing as an ordinary move, with a new test run of the new head, and returns headMoved.
 func (a *Automation) merge(ctx context.Context, p projects.Project, taskID int64, checked []int64) (approved run, err error) {
 	ap, err := approvable(ctx, a.DB, p.ID, taskID, checked)
 	if err != nil {
@@ -95,11 +95,17 @@ func (a *Automation) merge(ctx context.Context, p projects.Project, taskID int64
 	if pr.State != "open" {
 		return run{}, closedPull
 	}
-	method := ""
+	method, why := "", "" // why, once the head moved, is why its test run may not run
 	if pr.Head.SHA == ap.head {
-		if method, err = a.GitHub.MergeMethod(ctx, token, pr.NodeID); err != nil {
-			return run{}, gitHubError{err}
+		if err := unmergeable(pr); err != nil {
+			return run{}, err
 		}
+		method, err = a.GitHub.MergeMethod(ctx, token, pr.NodeID)
+	} else {
+		why, err = a.retestRefusal(ctx, token, p, pr)
+	}
+	if err != nil {
+		return run{}, gitHubError{err}
 	}
 
 	unlock, err := projects.Serialize(ctx, p.ID)
@@ -113,6 +119,17 @@ func (a *Automation) merge(ctx context.Context, p projects.Project, taskID int64
 		if err := projects.Lock(ctx, tx, p.ID); err != nil {
 			return err
 		}
+		// Turned off or paused since OwnerToken: no merge, and no run that turning it off would have cancelled.
+		var paused bool
+		err := tx.QueryRow(ctx, `select paused_reason is not null from project_automation where project_id = $1`, p.ID).Scan(&paused)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrOff
+		case err != nil:
+			return err
+		case paused:
+			return ErrPaused
+		}
 		again, err := approvable(ctx, tx, p.ID, taskID, checked)
 		if err != nil {
 			return err
@@ -121,36 +138,78 @@ func (a *Automation) merge(ctx context.Context, p projects.Project, taskID int64
 			return untested
 		}
 		if pr.Head.SHA == ap.head {
-			err := a.GitHub.Merge(ctx, token, p.RepoID, pr.Number, ap.head, method)
+			mergeErr := a.GitHub.Merge(ctx, token, p.RepoID, pr.Number, ap.head, method)
 			var ghErr *github.Error
-			errors.As(err, &ghErr)
+			errors.As(mergeErr, &ghErr)
 			switch {
-			case err == nil:
+			case mergeErr == nil:
 				approved, err = a.approved(ctx, tx, p, token, taskID, ap.run)
 				return err
 			case ghErr != nil && ghErr.Status == http.StatusMethodNotAllowed: // a conflict, a required check, branch protection
 				return &refused{http.StatusConflict, "not_mergeable", cmp.Or(ghErr.Message, "GitHub cannot merge this pull request.")}
 			case ghErr == nil || ghErr.Status != http.StatusConflict:
-				return gitHubError{err}
+				// GitHub may have merged with its answer lost, as on a timeout: only a new read tells.
+				if pr, err := a.GitHub.PullRequest(ctx, token, p.RepoID, pr.Number); err == nil && pr.Merged && pr.Head.SHA == ap.head {
+					approved, err = a.approved(ctx, tx, p, token, taskID, ap.run)
+					return err
+				}
+				return gitHubError{mergeErr}
 			}
 			// GitHub's 409: the head moved at the last moment, to a commit only a new read tells.
 			if pr, err = a.GitHub.PullRequest(ctx, token, p.RepoID, pr.Number); err != nil {
 				return gitHubError{err}
 			}
-			if pr.State != "open" {
+			switch {
+			case pr.State != "open":
 				return closedPull
+			case pr.Head.SHA == ap.head: // the read lags the push, or GitHub refused for another reason: try again
+				return gitHubError{mergeErr}
+			}
+			if why, err = a.retestRefusal(ctx, token, p, pr); err != nil {
+				return gitHubError{err}
 			}
 		}
 		if err := a.Board.MoveToEnd(ctx, tx, token, p, taskID, "testing"); err != nil {
 			return err
 		}
 		moved = true
-		return startRun(ctx, tx, p.ID, taskID, pr.Number, pr.Head.SHA, "")
+		return startRun(ctx, tx, p.ID, taskID, pr.Number, pr.Head.SHA, why)
 	})
 	if err == nil && moved {
 		err = headMoved
 	}
 	return approved, err
+}
+
+// unmergeable refuses merging pr unless GitHub's mergeable_state says it may merge as it is. The owner's credential
+// may be one GitHub lets bypass branch protection, as an admin's, and the merge endpoint then bypasses it without a
+// word: an approver with only write access must not borrow that.
+func unmergeable(pr github.PullRequest) error {
+	why := "GitHub cannot merge this pull request as it is."
+	switch pr.MergeableState {
+	case "clean", "has_hooks", "unstable": // unstable: only checks that are not required failed
+		return nil
+	case "blocked":
+		why = "Branch protection blocks merging this pull request, such as for a required review or status check."
+	case "behind":
+		why = "Branch protection wants the pull request's branch up to date with its base. Updating it tests it again."
+	case "dirty":
+		why = "The pull request has merge conflicts."
+	case "draft":
+		why = "The pull request is a draft."
+	case "unknown":
+		why = "GitHub has not worked out yet whether this pull request can merge. Try again in a moment."
+	}
+	return &refused{http.StatusConflict, "not_mergeable", why}
+}
+
+// retestRefusal says why a test run of pr's new head may not run, as the triggers would refuse it, or is "" when it
+// may: since the run that passed, the author may have lost write access, or pr may be a draft again.
+func (a *Automation) retestRefusal(ctx context.Context, token string, p projects.Project, pr github.PullRequest) (string, error) {
+	if pr.Draft { // the draft-to-ready trigger tests it once it is ready
+		return "The pull request is a draft. Mark it ready for review to test it.", nil
+	}
+	return a.refusal(ctx, token, p, pr)
 }
 
 // approved saves the caller's approval of test run runID, whose pull request just merged, moves its task to Closed
