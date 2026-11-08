@@ -40,6 +40,8 @@ type listedRun struct {
 	Reason     *string
 	CreatedAt  time.Time
 	FinishedAt *time.Time
+	ApprovedBy *string
+	ApprovedAt *time.Time
 }
 
 func TestListRuns(t *testing.T) {

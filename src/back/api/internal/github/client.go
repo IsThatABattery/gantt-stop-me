@@ -23,7 +23,10 @@ type Client struct {
 }
 
 // Error is a non-2xx answer from GitHub.
-type Error struct{ Status int }
+type Error struct {
+	Status  int
+	Message string // GitHub's message, such as why it will not merge, or "" when its answer had none
+}
 
 func (e *Error) Error() string { return fmt.Sprintf("github: HTTP %d", e.Status) }
 
@@ -133,17 +136,15 @@ func (c *Client) open(ctx context.Context, method, url, token string, header htt
 		return res, nil
 	}
 	defer res.Body.Close()
-	status := res.StatusCode
-	if status == http.StatusForbidden {
-		var e struct {
-			Message string `json:"message"`
-		}
-		json.NewDecoder(io.LimitReader(res.Body, 64<<10)).Decode(&e)
-		// GitHub answers some rate limits with 403; report them as the 429 it uses for others, not as lost access.
-		if res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "" ||
-			strings.Contains(strings.ToLower(e.Message), "rate limit") {
-			status = http.StatusTooManyRequests
-		}
+	var e struct {
+		Message string `json:"message"`
 	}
-	return nil, &Error{Status: status}
+	json.NewDecoder(io.LimitReader(res.Body, 64<<10)).Decode(&e)
+	status := res.StatusCode
+	// GitHub answers some rate limits with 403; report them as the 429 it uses for others, not as lost access.
+	if status == http.StatusForbidden && (res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "" ||
+		strings.Contains(strings.ToLower(e.Message), "rate limit")) {
+		status = http.StatusTooManyRequests
+	}
+	return nil, &Error{Status: status, Message: e.Message}
 }
