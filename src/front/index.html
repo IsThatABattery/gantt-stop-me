@@ -11,6 +11,12 @@
       rel="stylesheet"
     />
     <title>GanttStopMe</title>
+    <!-- The saved theme, before the first paint: pages without the rail (sign in, 404) never mount ThemeToggle. -->
+    <script>
+      try {
+        if (localStorage.getItem('theme') === 'light') document.documentElement.dataset.theme = 'light'
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
