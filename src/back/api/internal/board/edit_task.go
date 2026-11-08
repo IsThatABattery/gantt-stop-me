@@ -11,7 +11,8 @@ import (
 	"gantt-stop-me/api/internal/projects"
 )
 
-// editTask changes the title or body of a task's issue on GitHub, then the cached title, body and labels.
+// editTask changes the title or body of a task's issue on GitHub, then the cached title, body and labels, and takes
+// the card's tests from the body.
 func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 	p, token, ok := b.Projects.Check(w, r, projects.Write)
 	if !ok {
@@ -57,10 +58,16 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 		github.Fail(w, r, err)
 		return
 	}
-	// updated_at, as a move sets it: a sync that fetched the issue before this edit then skips the task instead of undoing it.
-	t, err = b.scanTask(b.DB.QueryRow(ctx, `
-		update tasks t set title = $2, body = $3, labels = $4, updated_at = clock_timestamp()
-		where t.id = $1 returning `+taskColumns, t.ID, is.Title, is.Body, projects.Labels(is)), p)
+	err = pgx.BeginFunc(ctx, b.DB, func(tx pgx.Tx) error {
+		// updated_at, as a move sets it: a sync that fetched the issue before this edit then skips the task instead of undoing it.
+		t, err = b.scanTask(tx.QueryRow(ctx, `
+			update tasks t set title = $2, body = $3, labels = $4, updated_at = clock_timestamp()
+			where t.id = $1 returning `+taskColumns, t.ID, is.Title, is.Body, projects.Labels(is)), p)
+		if err == nil {
+			_, err = projects.TakeTests(ctx, tx, t.ID, is.Body)
+		}
+		return err
+	})
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return

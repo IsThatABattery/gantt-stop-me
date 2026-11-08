@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/github/githubtest"
 	"gantt-stop-me/api/internal/store"
+	"gantt-stop-me/api/internal/tasktests"
 	"gantt-stop-me/api/migrations"
 )
 
@@ -737,4 +739,68 @@ func TestSyncFollowsTheRepositoryAcrossRenames(t *testing.T) {
 	if b := f.board(); b.Project.Name != "hello-old" {
 		t.Fatalf("project name = %q, want hello-old", b.Project.Name)
 	}
+}
+
+func TestSyncTakesTests(t *testing.T) {
+	f := setup(t, "One")
+	f.expectCard(1, "")
+
+	// A GitHub edit is pulled into the card.
+	tested := "Intro\n\n## Tests\n- [ ] `make`\n- [ ] It works\n  Look.\n"
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = tested })
+	f.dueSync()
+	f.expectCard(1, "", script("make"), check("It works", "Look."))
+
+	// A section that does not parse leaves the card as it is and says why, on every sync until it is put back.
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = tooMany })
+	for range 2 {
+		f.dueSync()
+		f.expectCard(1, "the Tests section has 65 tests, more than 64", script("make"), check("It works", "Look."))
+	}
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = tested })
+	f.dueSync()
+	f.expectCard(1, "", script("make"), check("It works", "Look."))
+
+	// A deleted section empties the card.
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "Intro\n" })
+	f.dueSync()
+	f.expectCard(1, "")
+
+	// A task the sync adds takes its issue's tests.
+	f.repo.EditIssue(f.repo.AddIssue("Two"), func(is *githubtest.Issue) { is.Body = "## Tests\n- [ ] `true`\n" })
+	f.dueSync()
+	f.board()
+	f.expectCard(2, "", script("true"))
+}
+
+func TestAddProjectTakesTests(t *testing.T) {
+	f := setup(t)
+	other := f.GitHub.AddRepo("octo", "other")
+	other.Grant(f.token, "push")
+	other.EditIssue(other.AddIssue("Tested"), func(is *githubtest.Issue) { is.Body = "## Tests\n- [ ] `make`\n" })
+	var tests []tasktests.Test
+	var synced string
+	err := f.DB.QueryRow(t.Context(), `select tests, tests_synced from tasks where project_id = $1`, f.AddProject(f.ada, "octo", "other")).
+		Scan(&tests, &synced)
+	if err != nil || !reflect.DeepEqual(tests, []tasktests.Test{script("make")}) || synced != "## Tests\n- [ ] `make`\n" {
+		t.Fatalf("card = %+v, synced %q, %v; want the issue's tests", tests, synced, err)
+	}
+}
+
+// Tasks from before migration 011 have never seen their issue's Tests section. 011 makes the next sync read every
+// issue, so each takes its tests, though the issue list is unchanged since the last sync.
+func TestSyncBackfillsCardTests(t *testing.T) {
+	f := setup(t, "One")
+	f.repo.EditIssue(1, func(is *githubtest.Issue) {
+		is.Body, is.UpdatedAt = "## Tests\n- [ ] `make`\n", time.Now().Add(-time.Hour)
+	})
+	f.dueSync()
+	f.board() // the last sync before the upgrade, which stores the ETag
+	f.exec(`alter table tasks drop column tests, drop column tests_synced, drop column tests_error`)
+	f.exec(`delete from schema_migrations where version = '011_card_tests.sql'`)
+	if err := store.Migrate(context.Background(), f.DB, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	f.dueSync()
+	f.expectCard(1, "", script("make"))
 }

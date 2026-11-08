@@ -10,13 +10,14 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/projects"
+	"gantt-stop-me/api/internal/tasktests"
 )
 
 // planAll plans every queued test run of an automated, unpaused project that has no test results yet, oldest first.
@@ -34,19 +35,22 @@ func (a *Automation) planAll(ctx context.Context) {
 }
 
 // plan works out a queued test run's workflow executions, outside the project's lock: it reads the issue fresh from
-// GitHub with the owner's credential, checks its author can push, parses its Tests section, reads .gantt/workflows.yml
-// at the run's head, and routes each test. Then, if the run is still queued, it saves in one transaction a queued
-// workflow execution per workflow that has tests, and a test result per test. A run that cannot be planned or saved,
-// or whose tests all failed to route, ends at once as a runner error. A paused owner, or a GitHub failure a retry may
-// mend, leaves it queued.
+// GitHub with the owner's credential, checks its author can push, takes the card's tests from it, reads
+// .gantt/workflows.yml at the run's head, and routes each of the card's tests. Then, if the run is still queued, it
+// saves in one transaction a queued workflow execution per workflow that has tests, and a test result per test. A
+// run that cannot be planned, or whose tests all failed to route, ends at once as a runner error. A paused owner, or
+// a GitHub failure a retry may mend, leaves it queued.
 func (a *Automation) plan(ctx context.Context, runID int64) error {
 	var p projects.Project
+	var taskID int64
 	var issue, pr int
 	var head string
+	var read time.Time // before the issue is read
 	err := a.DB.QueryRow(ctx, `
-		select p.id, p.github_repo_id, p.owner, p.name, t.issue_number, coalesce(r.pr_number, 0), coalesce(r.head_sha, '')
+		select p.id, p.github_repo_id, p.owner, p.name, t.id, t.issue_number, coalesce(r.pr_number, 0), coalesce(r.head_sha, ''),
+			clock_timestamp()
 		from test_runs r join tasks t on t.id = r.task_id join projects p on p.id = t.project_id where r.id = $1`, runID).
-		Scan(&p.ID, &p.RepoID, &p.Owner, &p.Name, &issue, &pr, &head)
+		Scan(&p.ID, &p.RepoID, &p.Owner, &p.Name, &taskID, &issue, &pr, &head, &read)
 	if err != nil {
 		return err
 	}
@@ -70,12 +74,27 @@ func (a *Automation) plan(ctx context.Context, runID int64) error {
 	if !trusted {
 		return a.finish(ctx, runID, "The issue was opened by someone without write access to the repository, so its tests do not run.")
 	}
-	tests, err := ParseTests(is.Body)
-	if errors.Is(err, ErrNoTests) {
-		return a.finish(ctx, runID, "The issue has no Tests section.")
-	}
-	if err != nil {
-		return a.finish(ctx, runID, err.Error())
+	var tests []tasktests.Test
+	var testsError *string
+	err = pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
+		// A card changed since the read, such as by a tests edit, is newer than the issue read here.
+		var changed bool
+		err := tx.QueryRow(ctx, `select updated_at > $2 from tasks where id = $1 for update`, taskID, read).Scan(&changed)
+		if err == nil && !changed {
+			_, err = projects.TakeTests(ctx, tx, taskID, is.Body)
+		}
+		if err == nil {
+			err = tx.QueryRow(ctx, `select tests, tests_error from tasks where id = $1`, taskID).Scan(&tests, &testsError)
+		}
+		return err
+	})
+	switch {
+	case err != nil:
+		return err
+	case testsError != nil: // the card's tests are not what the issue shows
+		return a.finish(ctx, runID, *testsError)
+	case len(tests) == 0:
+		return a.finish(ctx, runID, "The task has no tests.")
 	}
 	ws := DefaultWorkflows()
 	file, err := a.GitHub.WorkflowFile(ctx, token, p.RepoID, head)
@@ -130,20 +149,19 @@ func (a *Automation) plan(ctx context.Context, runID int64) error {
 			if id, ok := ids[r.workflow]; ok {
 				execution, status = &id, "pending"
 			}
+			kind := "llm" // a check, as results name it
+			if t.Kind == "script" {
+				kind = "script"
+			}
 			if _, err := tx.Exec(ctx, `
 				insert into test_results (run_id, execution_id, position, text, kind, command, pinned, probabilities, status, detail)
 				values ($1, $2, $3, $4, $5, nullif($6, ''), $7, $8, $9, $10)`,
-				runID, execution, t.Position, strings.TrimSuffix(t.Text+"\n"+t.Block, "\n"), t.Kind, t.Command, t.Pin != "",
-				r.probabilities, status, r.refusal); err != nil {
+				runID, execution, i+1, testText(t), kind, t.Command, t.Workflow != nil, r.probabilities, status, r.refusal); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && strings.HasPrefix(pgErr.Code, "22") {
-		// Text the database cannot store, such as a NUL in a test, fails every try, so the run ends instead.
-		return a.finish(ctx, runID, "The tests could not be saved: "+pgErr.Message+".")
-	}
 	if err != nil || executions > 0 {
 		return err
 	}
@@ -171,36 +189,36 @@ type route struct {
 // workflow when there is one, and otherwise the owner's decision model picks for every unpinned test in one call. A
 // pin naming no workflow, a top probability under 0.5, a refusal and a missing answer are each a runner error for
 // that test. The error is the decisions call failing.
-func (a *Automation) route(ctx context.Context, projectID int64, title string, ws []Workflow, tests []Test) ([]route, error) {
+func (a *Automation) route(ctx context.Context, projectID int64, title string, ws []Workflow, tests []tasktests.Test) ([]route, error) {
 	names := map[string]bool{}
 	for _, w := range ws {
 		names[w.Name] = true
 	}
 	routes := make([]route, len(tests))
-	var ask []Test // the tests the decision model picks for
+	var ask []int // the positions of the tests the decision model picks for
 	for i, t := range tests {
 		routes[i].probabilities = map[string]float64{}
 		switch {
-		case t.Pin != "" && names[t.Pin]:
-			routes[i].workflow = t.Pin
-		case t.Pin != "":
-			routes[i].refusal = fmt.Sprintf("Test %d is pinned to [%s], which names no workflow.", t.Position, t.Pin)
+		case t.Workflow != nil && names[*t.Workflow]:
+			routes[i].workflow = *t.Workflow
+		case t.Workflow != nil:
+			routes[i].refusal = fmt.Sprintf("Test %d is pinned to [%s], which names no workflow.", i+1, *t.Workflow)
 		case len(ws) == 1:
 			routes[i].workflow = ws[0].Name
 		default:
-			ask = append(ask, t)
+			ask = append(ask, i+1)
 		}
 	}
 	if len(ask) == 0 {
 		return routes, nil
 	}
-	answers, err := a.decide(ctx, projectID, title, ws, ask)
+	answers, err := a.decide(ctx, projectID, title, ws, tests, ask)
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range ask {
-		r := &routes[t.Position-1]
-		for _, p := range answers[question(t)].Probabilities {
+	for _, pos := range ask {
+		r := &routes[pos-1]
+		for _, p := range answers[question(pos)].Probabilities {
 			if names[p.Value] {
 				r.probabilities[p.Value] = p.Probability
 			}
@@ -217,14 +235,14 @@ func (a *Automation) route(ctx context.Context, projectID int64, title string, w
 			guesses = append(guesses, fmt.Sprintf("%s %.0f%%", name, 100*r.probabilities[name]))
 		}
 		r.refusal = fmt.Sprintf("Test %d matches no workflow well enough to run. Best guesses: %s. Pin it to one with [name].",
-			t.Position, cmp.Or(strings.Join(guesses, ", "), "none"))
+			pos, cmp.Or(strings.Join(guesses, ", "), "none"))
 	}
 	return routes, nil
 }
 
-// decide asks the owner's decision model, in one call, which of ws can run each of tests, and returns its answers
-// by question name.
-func (a *Automation) decide(ctx context.Context, projectID int64, title string, ws []Workflow, tests []Test) (map[string]llm.Answer, error) {
+// decide asks the owner's decision model, in one call, which of ws can run each of tests at the positions ask, and
+// returns its answers by question name.
+func (a *Automation) decide(ctx context.Context, projectID int64, title string, ws []Workflow, tests []tasktests.Test, ask []int) (map[string]llm.Answer, error) {
 	var baseURL, model string
 	var sealed []byte
 	err := a.DB.QueryRow(ctx, `
@@ -246,17 +264,22 @@ func (a *Automation) decide(ctx context.Context, projectID int64, title string, 
 		choices[i] = llm.Choice{Value: w.Name, Description: w.Description}
 	}
 	in.WriteString("\nTests:")
-	questions := make([]llm.Question, len(tests))
-	for i, t := range tests {
-		fmt.Fprintf(&in, "\n%d. %s", t.Position, t.Text)
-		if t.Block != "" {
-			in.WriteString("\n   " + strings.ReplaceAll(t.Block, "\n", "\n   "))
-		}
-		questions[i] = llm.Question{Name: question(t), Instructions: fmt.Sprintf("Which workflow can run test %d?", t.Position), Choices: choices}
+	questions := make([]llm.Question, len(ask))
+	for i, pos := range ask {
+		fmt.Fprintf(&in, "\n%d. %s", pos, strings.ReplaceAll(testText(tests[pos-1]), "\n", "\n   "))
+		questions[i] = llm.Question{Name: question(pos), Instructions: fmt.Sprintf("Which workflow can run test %d?", pos), Choices: choices}
 	}
 	c := &llm.Client{BaseURL: baseURL, Key: string(key), HTTP: a.LLM}
 	return c.Decide(ctx, model, in.String(), questions)
 }
 
-// question is the name of the decisions question about test t.
-func question(t Test) string { return fmt.Sprintf("test_%d", t.Position) }
+// question is the name of the decisions question about the test at position pos.
+func question(pos int) string { return fmt.Sprintf("test_%d", pos) }
+
+// testText is test t as the issue's Tests section shows it, past its bullet, checkbox and pin: its line, then any
+// block under it. Its result, its comment and the decision model read it.
+func testText(t tasktests.Test) string {
+	t.Workflow = nil
+	item := strings.TrimPrefix(tasktests.Render([]tasktests.Test{t}), "## Tests\n- [ ] ")
+	return strings.ReplaceAll(strings.TrimSuffix(item, "\n"), "\n  ", "\n")
+}

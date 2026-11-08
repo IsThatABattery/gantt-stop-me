@@ -152,10 +152,10 @@ func TestRunnerErrors(t *testing.T) {
 		start  func(f *fixture) // triggers the run; the default opens a ready pull request after twoTests
 		reason string           // the task's needs_attention
 	}{
-		{"no Tests section", func(f *fixture) {
+		{"no tests", func(f *fixture) {
 			f.tests(1, "Nothing to test here.")
 			f.ready()
-		}, "The issue has no Tests section."},
+		}, "The task has no tests."},
 		{"more than 64 tests", func(f *fixture) {
 			f.tests(1, "## Tests\n"+strings.Repeat("- [ ] `true`\n", 65))
 			f.ready()
@@ -171,7 +171,7 @@ func TestRunnerErrors(t *testing.T) {
 		{"a test the database cannot store", func(f *fixture) {
 			f.tests(1, "## Tests\n- [ ] `printf 'a\x00b'`\n")
 			f.ready()
-		}, "The tests could not be saved: invalid byte sequence for encoding \"UTF8\": 0x00."},
+		}, "Test 1 holds a NUL character."},
 		{"an issue by someone without write access", func(f *fixture) {
 			f.member("mallory", "triage")
 			f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Author = "mallory" })
@@ -253,7 +253,7 @@ func TestRunnerErrorComments(t *testing.T) {
 		f.tests(1, "Nothing to test here.")
 		f.ready()
 		f.work()
-		f.expectComments("**Tests could not finish: runner error** on a1.\n\nThe issue has no Tests section.\n\n" + f.link())
+		f.expectComments("**Tests could not finish: runner error** on a1.\n\nThe task has no tests.\n\n" + f.link())
 	})
 	t.Run("for each test", func(t *testing.T) {
 		f := withLLM(t)

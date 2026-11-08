@@ -49,6 +49,7 @@ func (b *Board) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/projects/{id}/tasks", b.Accounts.Require(b.createTask))
 	mux.HandleFunc("GET /api/projects/{id}/tasks/{taskID}", b.Accounts.Require(b.getTask))
 	mux.HandleFunc("PATCH /api/projects/{id}/tasks/{taskID}", b.Accounts.Require(b.editTask))
+	mux.HandleFunc("PUT /api/projects/{id}/tasks/{taskID}/tests", b.Accounts.Require(b.setTests))
 	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/move", b.Accounts.Require(b.move))
 }
 

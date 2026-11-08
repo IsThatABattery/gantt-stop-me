@@ -15,6 +15,7 @@ import (
 	"gantt-stop-me/api/internal/app"
 	"gantt-stop-me/api/internal/github/githubtest"
 	"gantt-stop-me/api/internal/llm/llmtest"
+	"gantt-stop-me/api/internal/tasktests"
 )
 
 // twoTests is an issue body with two scripts.
@@ -40,6 +41,13 @@ func withLLM(t *testing.T, configure ...func(*app.Config)) *fixture {
 // tests sets the body of issue number on GitHub.
 func (f *fixture) tests(number int, body string) {
 	f.repo.EditIssue(number, func(is *githubtest.Issue) { is.Body = body })
+}
+
+// setTests puts tests on the card of issue number as ada, through the endpoint, which writes them to the issue.
+func (f *fixture) setTests(number int, tests ...tasktests.Test) {
+	f.t.Helper()
+	f.Do("PUT", f.path(fmt.Sprintf("/tasks/%d/tests", f.taskID(number))), map[string]any{"tests": tests}, f.ada).
+		Expect(http.StatusOK, "")
 }
 
 // ready opens a ready pull request by ada closing issue 1, with head "a1", polls so it starts a test run, and returns
