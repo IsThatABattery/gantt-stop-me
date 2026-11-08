@@ -58,47 +58,66 @@ func (p *Projects) Check(w http.ResponseWriter, r *http.Request, need string) (P
 		return Project{}, "", false
 	}
 
-	err = p.DB.QueryRow(ctx, `
-		select permission from project_members
-		where project_id = $1 and user_id = $2 and checked_at > now() - interval '5 minutes'`, pr.ID, userID).Scan(&pr.Permission)
-	if errors.Is(err, pgx.ErrNoRows) {
-		var repo github.Repo
-		repo, err = p.GitHub.RepoByID(ctx, token, pr.RepoID)
-		if err == nil {
-			pr.Permission = permission(repo)
-		}
-		switch {
-		case hidden(err) || err == nil && pr.Permission == "":
-			if _, err := p.DB.Exec(ctx, `delete from project_members where project_id = $1 and user_id = $2`, pr.ID, userID); err != nil {
-				httpx.Internal(w, r, err)
-				return Project{}, "", false
-			}
-			notFound(w)
-			return Project{}, "", false
-		case err != nil:
-			github.Fail(w, r, err)
-			return Project{}, "", false
-		}
-		if repo.Owner.Login != pr.Owner || repo.Name != pr.Name {
-			// Renamed or transferred on GitHub: show the name GitHub has now, which task links use.
-			pr.Owner, pr.Name = repo.Owner.Login, repo.Name
-			if _, err := p.DB.Exec(ctx, `update projects set owner = $2, name = $3 where id = $1`, pr.ID, pr.Owner, pr.Name); err != nil {
-				httpx.Internal(w, r, err)
-				return Project{}, "", false
-			}
-		}
-		err = p.remember(ctx, pr.ID, userID, pr.Permission)
+	pr.Permission, err = p.Permission(ctx, &pr, userID, token)
+	if errors.As(err, new(gitHubError)) {
+		github.Fail(w, r, err)
+		return Project{}, "", false
 	}
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return Project{}, "", false
 	}
-	if rank[pr.Permission] < rank[need] {
+	if pr.Permission == "" {
+		notFound(w)
+		return Project{}, "", false
+	}
+	if !Allows(pr.Permission, need) {
 		httpx.Error(w, http.StatusForbidden, "forbidden", "This needs "+need+" access to the repository on GitHub.")
 		return Project{}, "", false
 	}
 	return pr, token, true
 }
+
+// Allows reports whether permission, as Permission returns it, meets need, Read or Write.
+func Allows(permission, need string) bool { return rank[permission] >= rank[need] }
+
+// Permission returns the user's permission on the project, "read", "write" or "admin", or "" when their GitHub
+// account cannot see its repository. It answers from a check under 5 minutes old, else asks GitHub with token and
+// remembers the answer, forgetting the user's access when GitHub hides the repository. A rename or transfer GitHub
+// reports updates pr and the stored project. A failed GitHub call returns its error wrapped; errors.As still finds a *github.Error.
+func (p *Projects) Permission(ctx context.Context, pr *Project, userID int64, token string) (string, error) {
+	var perm string
+	err := p.DB.QueryRow(ctx, `
+		select permission from project_members
+		where project_id = $1 and user_id = $2 and checked_at > now() - interval '5 minutes'`, pr.ID, userID).Scan(&perm)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return perm, err
+	}
+	repo, err := p.GitHub.RepoByID(ctx, token, pr.RepoID)
+	if err == nil {
+		perm = permission(repo)
+	}
+	switch {
+	case hidden(err) || err == nil && perm == "":
+		_, err := p.DB.Exec(ctx, `delete from project_members where project_id = $1 and user_id = $2`, pr.ID, userID)
+		return "", err
+	case err != nil:
+		return "", gitHubError{err}
+	}
+	if repo.Owner.Login != pr.Owner || repo.Name != pr.Name {
+		// Renamed or transferred on GitHub: show the name GitHub has now, which task links use.
+		pr.Owner, pr.Name = repo.Owner.Login, repo.Name
+		if _, err := p.DB.Exec(ctx, `update projects set owner = $2, name = $3 where id = $1`, pr.ID, pr.Owner, pr.Name); err != nil {
+			return "", err
+		}
+	}
+	return perm, p.remember(ctx, pr.ID, userID, perm)
+}
+
+// gitHubError marks Permission's failed GitHub call apart from a database error, so Check answers it with github.Fail.
+type gitHubError struct{ error }
+
+func (e gitHubError) Unwrap() error { return e.error }
 
 // token returns the user's GitHub credential, or answers 403 github_not_linked and returns false.
 func (p *Projects) token(w http.ResponseWriter, r *http.Request) (string, bool) {

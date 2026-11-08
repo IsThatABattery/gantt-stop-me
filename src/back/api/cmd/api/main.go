@@ -43,6 +43,7 @@ func main() {
 		GitHubClientID:           os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubClientSecret:       os.Getenv("GITHUB_CLIENT_SECRET"),
 		AllowPrivateProviderURLs: os.Getenv("ALLOW_PRIVATE_PROVIDER_URLS") == "true",
+		RunnerURL:                strings.TrimSuffix(os.Getenv("RUNNER_URL"), "/"),
 	}
 	srv := &http.Server{
 		Addr:              ":8080",
