@@ -129,7 +129,7 @@ Returns the repository's workflows file, `.gantt/workflows.yml`, on its default 
 | --- | --- |
 | `200` | the workflows file |
 | `401` | `unauthorized` |
-| `403` | `github_not_linked` |
+| `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
 | `502` | `github_error` |
 
@@ -616,6 +616,7 @@ Takes a task from automation for the caller to finish by hand. It cancels the ta
   "runStatus": "cancelled",
   "needsAttention": null,
   "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }],
+  "branch": "feature/12-draw-the-timeline",
   "body": "One bar per task, by week.",
   "labels": [{ "name": "board:testing", "color": "fbca04" }],
   "tests": [],
