@@ -79,6 +79,8 @@ export const labels = {
   needsAction: 'Needs action',
   docking: 'Docking',
   awaitingReview: 'Awaiting review',
+  assignedToYou: 'Assigned to you',
+  needsAttention: 'Needs attention',
   waitingOnYou: 'Waiting on you',
   unassigned: 'Unassigned',
   notScheduled: 'Not scheduled',

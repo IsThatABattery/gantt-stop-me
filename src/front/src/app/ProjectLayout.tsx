@@ -1,16 +1,27 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Link, Outlet, useParams } from 'react-router'
 import { buttonClass } from '../components/buttonClass'
 import { StatusMessage } from '../components/StatusMessage'
 import { useProject } from '../data/core'
 import type { Project } from '../data/api/types'
 import { errorCode, NotFoundError } from '../data/errors'
+import { keys } from '../data/keys'
 import { labels } from '../labels/labels'
 import { AppShell } from './AppShell'
 
 /** Shell for every /projects/:projectId page. Loads the project once, with its board. */
 export function ProjectLayout() {
   const { projectId = '' } = useParams()
-  const { data: project, error, isPending } = useProject(projectId)
+  const { data: project, error, isPending, dataUpdatedAt } = useProject(projectId)
+  const queryClient = useQueryClient()
+  // Each board load is a visit, so the rail reorders, and it follows a move, edit or sync, so assignments and
+  // stages may have changed. dataUpdatedAt moves only once the board answered, after the visit was recorded.
+  useEffect(() => {
+    if (!dataUpdatedAt) return
+    void queryClient.invalidateQueries({ queryKey: keys.projects })
+    void queryClient.invalidateQueries({ queryKey: keys.assigned })
+  }, [dataUpdatedAt, queryClient])
 
   return (
     <AppShell projectId={projectId}>

@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { fake } from '../test/fakeApi'
@@ -107,6 +107,8 @@ describe('project routes', () => {
   it('offers the board, planning and automation in the rail', async () => {
     renderApp('/projects/1')
     const rail = await screen.findByRole('navigation', { name: 'Primary' })
+    // The project's pages show once the missions list answered, so they don't jump into it.
+    await within(rail).findByRole('link', { name: 'Automation' })
     expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Add a mission', 'All missions', 'Mission control', 'Plan a feature', 'Automation', 'Settings'])
   })
 })

@@ -37,6 +37,21 @@ describe('board', () => {
     expect(card(15)).toHaveAccessibleName('#15: Flaky login test. Test error')
     expect(within(card(15)).getByText('The runner could not start the container.')).toBeInTheDocument()
   })
+
+  it('shows a rocket on the pad for a queued test and lifting off for a running one', async () => {
+    Object.assign(task(8), { runStatus: 'queued' })
+    Object.assign(task(9), { runStatus: 'running' })
+    await openBoard()
+    expect(within(card(13)).getByText('Test queued').querySelector('svg')).not.toHaveClass('motion-safe:animate-liftoff')
+    expect(within(card(14)).getByText('Testing').querySelector('svg')).toHaveClass('motion-safe:animate-liftoff')
+  })
+
+  it('shows only Landed on a closed card, keeping the run in its name', async () => {
+    await openBoard()
+    expect(within(card(17)).getByText('Landed')).toBeInTheDocument()
+    expect(within(card(17)).queryByText('Tests passed')).not.toBeInTheDocument()
+    expect(card(17)).toHaveAccessibleName(/Tests passed/)
+  })
 })
 
 describe('board keyboard', () => {

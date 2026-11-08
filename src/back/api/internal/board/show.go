@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -16,6 +17,11 @@ func (b *Board) show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	// Every project page loads the board, so this is the visit that orders the user's projects.
+	if err := b.Projects.Visited(ctx, p.ID, accounts.UserID(ctx)); err != nil {
+		httpx.Internal(w, r, err)
+		return
+	}
 	cols, err := columns(ctx, b.DB, p.ID)
 	if err != nil {
 		httpx.Internal(w, r, err)
