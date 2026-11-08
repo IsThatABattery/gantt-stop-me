@@ -59,4 +59,20 @@ describe('plans', () => {
     await userEvent.click(revise)
     await waitFor(() => expect(denied).toEqual({ feedback: 'Stream it, do not buffer.', outcome: 'revise' }))
   })
+
+  it('rejects every proposed task at once', async () => {
+    const denied: number[] = []
+    server.use(
+      http.get('/api/projects/1/plans/1', () => HttpResponse.json(plan('approved'))),
+      http.post('/api/projects/1/plans/1/proposals/:pid/deny', ({ params }) => {
+        denied.push(Number(params.pid))
+        return HttpResponse.json(plan('approved'))
+      }),
+    )
+    renderApp('/projects/1/plans/1')
+    await userEvent.click(await screen.findByRole('button', { name: 'Reject all' }))
+    await userEvent.type(screen.getByLabelText('Why reject all'), 'Out of scope.')
+    await userEvent.click(screen.getByRole('button', { name: 'Drop' }))
+    await waitFor(() => expect(denied).toEqual([1, 2]))
+  })
 })
