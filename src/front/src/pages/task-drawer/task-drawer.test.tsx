@@ -6,22 +6,6 @@ import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 import { server } from '../../test/server'
 
-const automationOn = () => {
-  fake.automation = {
-    enabled: true,
-    owner: { id: 1, login: 'ada' },
-    decisionProviderId: 1,
-    decisionModel: 'llama3',
-    decisionInstructions: '',
-    chatProviderId: 1,
-    chatModel: 'llama3',
-    chatInstructions: '',
-    pausedReason: null,
-    payloadUrl: 'https://gantt.example.com/api/github/webhook/1',
-    webhookSecretSet: false,
-  }
-}
-
 const passedRun = { id: 1, prNumber: 32, status: 'passed', reason: null, approvedBy: null, approvedAt: null }
 
 /** Task 11, in User Check, with a passed run waiting for the user's check. */
@@ -96,7 +80,6 @@ describe('payload drawer', () => {
 
   it('shows read-only members no write controls', async () => {
     fake.project.permission = 'read'
-    automationOn()
     waitingForCheck()
     const { drawer } = await openDrawer(11)
     expect(await within(drawer).findByRole('heading', { name: /Latest test run/ })).toBeInTheDocument()
@@ -118,7 +101,6 @@ describe('assignees', () => {
 
 describe('test runs', () => {
   it('starts a test run by hand', async () => {
-    automationOn()
     renderApp('/projects/1/tasks/7')
     await userEvent.click(await screen.findByRole('button', { name: 'Run tests' }))
     await waitFor(() => expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/api/projects/1/tasks/7/retest')).toBe(true))
@@ -133,14 +115,7 @@ describe('test runs', () => {
     )
   })
 
-  it('offers no test run while automation is off', async () => {
-    await openDrawer(7)
-    await waitFor(() => expect(fake.requests.some((r) => r.path === '/api/projects/1/automation')).toBe(true))
-    expect(screen.queryByRole('button', { name: 'Run tests' })).not.toBeInTheDocument()
-  })
-
   it('waits for the runs before offering a test run', async () => {
-    automationOn()
     let answer = () => {}
     const answered = new Promise<void>((resolve) => (answer = resolve))
     server.use(
@@ -151,7 +126,7 @@ describe('test runs', () => {
       http.get('/api/projects/1/runs/1', () => HttpResponse.json({ ...passedRun, status: 'running', executions: [], results: [] })),
     )
     await openDrawer(9)
-    await waitFor(() => expect(fake.requests.some((r) => r.path === '/api/projects/1/automation')).toBe(true))
+    expect(await screen.findByRole('heading', { name: 'Tests' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Run tests' })).not.toBeInTheDocument()
     answer()
     expect(await screen.findByRole('button', { name: 'Restart test run' })).toBeInTheDocument()
@@ -172,7 +147,6 @@ describe('test runs', () => {
   })
 
   it('shows the error of the last action only, under its own button', async () => {
-    automationOn()
     waitingForCheck()
     server.use(
       http.post('/api/projects/1/tasks/11/approve', () => HttpResponse.json({ error: { code: 'not_mergeable', message: 'Approve failed.' } }, { status: 409 })),
@@ -190,8 +164,21 @@ describe('test runs', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1)
   })
 
+  it('keeps a failed approve’s reason when the task leaves User Check', async () => {
+    waitingForCheck()
+    server.use(
+      http.post('/api/projects/1/tasks/11/approve', () => {
+        fake.tasks.find((t) => t.id === 11)!.columnId = 3 // the branch moved: back to Testing
+        return HttpResponse.json({ error: { code: 'head_moved', message: 'The branch moved; testing again.' } }, { status: 409 })
+      }),
+    )
+    await openDrawer(11)
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve, merge and close' }))
+    await waitFor(() => expect(screen.queryByText('Your check')).not.toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent('The branch moved; testing again.')
+  })
+
   it('asks before Esc throws away the feedback', async () => {
-    automationOn()
     waitingForCheck()
     const { router } = await openDrawer(11)
     await userEvent.type(await screen.findByRole('textbox', { name: 'What to change' }), 'Fix the export')

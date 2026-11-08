@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useProjectContext } from '../../app/projectContext'
 import { Button, Field, TextInput, Textarea } from '../../components/controls'
 import { Dialog } from '../../components/Dialog'
 import { StatusMessage } from '../../components/StatusMessage'
@@ -38,6 +39,7 @@ function PlanDialog({ children }: { children: ReactNode }) {
 export function PlansPage() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
+  const readOnly = useProjectContext().permission === 'read'
   const plans = usePlans(projectId)
   const start = useStartPlan(projectId)
   const [title, setTitle] = useState('')
@@ -91,7 +93,9 @@ export function PlansPage() {
           {
             id: 'new',
             label: 'New plan',
-            content: (
+            content: readOnly ? (
+              <StatusMessage title="You have read access only" body="Planning a feature needs write access to the repository on GitHub." />
+            ) : (
               <form onSubmit={submit} className="flex flex-col gap-3 pt-4">
                 <Field id="plan-title" label="Feature">
                   <TextInput id="plan-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={256} />
@@ -122,13 +126,15 @@ export function PlansPage() {
 /** One plan: answer the interviewer, approve the doc, then approve the proposed tasks. */
 export function PlanPage() {
   const { projectId = '', planId = '' } = useParams()
+  const readOnly = useProjectContext().permission === 'read'
   const { data: plan, error, isPending, refetch } = usePlan(projectId, planId)
   const act = usePlanAction(projectId, planId)
   const [answer, setAnswer] = useState('')
 
+  // Its own Dialog, so the loaded plan's opens afresh and focuses its first link rather than Close.
   if (!plan)
     return (
-      <PlanDialog>
+      <PlanDialog key="loading">
         {isPending ? (
           <StatusMessage title="Loading plan…" />
         ) : (
@@ -140,7 +146,7 @@ export function PlanPage() {
     )
 
   const send = (path: string, body?: unknown) => act.mutate({ path, body }, { onSuccess: () => setAnswer('') })
-  const busy = act.isPending || plan.pending !== null
+  const busy = readOnly || act.isPending || plan.pending !== null
   const messages = plan.messages ?? []
   const last = messages[messages.length - 1]
   const question = plan.status === 'briefing' && !plan.pending && last?.role === 'agent' ? last : null
@@ -156,7 +162,7 @@ export function PlanPage() {
       {plan.pending && <p className="m-0 text-ion">{pendingText[plan.pending]}</p>}
       {plan.error && (
         <p role="alert" className="m-0 wrap-anywhere text-critical">
-          {plan.error} <Button onClick={() => send('retry')}>Retry</Button>
+          {plan.error} <Button disabled={readOnly} onClick={() => send('retry')}>Retry</Button>
         </p>
       )}
       {act.error && (

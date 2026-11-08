@@ -4,7 +4,6 @@ import { Button, Checkbox, Textarea } from '../../components/controls'
 import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { TaskDetail } from '../../data/api/types'
 import { NotFoundError } from '../../data/errors'
-import { useAutomation } from '../../data/views/agentSettings'
 import { useApprove, useRequestChanges, useRetest, useRun, useRuns, type RunResult } from '../../data/views/runs'
 
 const resultTone: Partial<Record<RunResult['status'], Tone>> = { passed: 'good', failed: 'critical', error: 'critical', manual: 'warning' }
@@ -29,7 +28,6 @@ export function TestRuns({ projectId, task, inUserCheck, readOnly }: { projectId
   const runs = useRuns(projectId, taskId)
   const latest = runs.data?.[0]
   const run = useRun(projectId, latest?.id)
-  const automation = useAutomation(projectId)
   const approve = useApprove(projectId, taskId)
   const changes = useRequestChanges(projectId, taskId)
   const retest = useRetest(projectId, taskId)
@@ -38,9 +36,11 @@ export function TestRuns({ projectId, task, inUserCheck, readOnly }: { projectId
   const [feedback, setFeedback] = useState('')
   const manual = run.data?.results.filter((r) => r.status === 'manual') ?? []
   const base = `/api/projects/${projectId}/runs/${latest?.id}/results`
-  // Wait for the runs, so a running task never offers 'Run tests'. Retest answers 409
-  // while automation is off; a 404 (no runner) keeps the button.
-  const canRetest = !readOnly && !runs.isPending && !automation.isPending && automation.data?.enabled !== false
+  // Wait for the runs, so a running task never offers 'Run tests'.
+  const canRetest = !readOnly && !runs.isPending
+  const checking = !readOnly && inUserCheck && latest?.status === 'passed' && !latest.approvedAt
+  // A failed approve can refetch the task out of User Check, taking its section along; the reason still shows.
+  const lastError = approve.error ?? changes.error
 
   return (
     <>
@@ -118,7 +118,12 @@ export function TestRuns({ projectId, task, inUserCheck, readOnly }: { projectId
         </section>
       )}
 
-      {!readOnly && inUserCheck && latest?.status === 'passed' && !latest.approvedAt && (
+      {!checking && lastError && (
+        <p role="alert" className="m-0 text-sm wrap-anywhere text-critical">
+          {lastError.message}
+        </p>
+      )}
+      {checking && (
         <section className="flex flex-col gap-2 rounded-lg border border-ion p-4">
           <h2 className="eyebrow m-0">Your check</h2>
           {manual.map((r) => (

@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { keys } from '../../data/keys'
 import type { Plan, Proposal } from '../../data/views/plans'
+import { fake } from '../../test/fakeApi'
 import { server } from '../../test/server'
 import { renderApp } from '../../test/render'
 
@@ -129,5 +130,22 @@ describe('plans', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(router.state.location.search).toBe('?tab=done'))
     expect(approved).toBe(2)
+  })
+
+  it('opens a plan on its first link, not Close', async () => {
+    server.use(http.get('/api/projects/1/plans/1', () => HttpResponse.json(plan('needs_review'))))
+    renderApp('/projects/1/plans/1')
+    await waitFor(() => expect(screen.getByRole('link', { name: '← Plans in progress' })).toHaveFocus())
+  })
+
+  it('offers read-only members no new plan, nor actions on one', async () => {
+    fake.project.permission = 'read'
+    server.use(http.get('/api/projects/1/plans/1', () => HttpResponse.json(plan('needs_review'))))
+    const { router } = renderApp('/projects/1/plans')
+    expect(await screen.findByRole('heading', { name: 'You have read access only' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start interview' })).not.toBeInTheDocument()
+
+    await router.navigate('/projects/1/plans/1')
+    expect(await screen.findByRole('button', { name: 'Approve doc and propose tasks' })).toBeDisabled()
   })
 })

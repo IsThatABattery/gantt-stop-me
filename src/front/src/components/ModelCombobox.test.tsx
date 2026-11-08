@@ -32,4 +32,12 @@ describe('ModelCombobox', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Clear all' }))
     expect(screen.queryAllByRole('option', { selected: true })).toHaveLength(0)
   })
+
+  it('offers no Select all at the cap while only unchosen models are shown', async () => {
+    render(<Picker options={['llama3', 'qwen2', 'mistral']} max={2} />)
+    await userEvent.click(screen.getByRole('combobox', { name: 'Models' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    await userEvent.type(screen.getByRole('combobox', { name: 'Models' }), 'mis')
+    expect(screen.getByRole('button', { name: 'Select all' })).toBeDisabled()
+  })
 })

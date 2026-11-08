@@ -64,6 +64,15 @@ describe('GitHub', () => {
     expect(fake.github).toBeNull()
   })
 
+  it('cancels the unlink confirm with Esc', async () => {
+    await openSettings()
+    const s = within(section('GitHub'))
+    await userEvent.click(s.getByRole('button', { name: 'Unlink' }))
+    await userEvent.keyboard('{Escape}')
+    expect(s.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(s.getByRole('button', { name: 'Unlink' })).toHaveFocus()
+  })
+
   it('links a personal access token, showing a refused one', async () => {
     fake.github = null
     await openSettings()
@@ -79,6 +88,19 @@ describe('GitHub', () => {
     await userEvent.click(s.getByRole('button', { name: 'Link token' }))
     expect(await s.findByText('octo')).toBeInTheDocument()
     expect(fake.github).toEqual({ login: 'octo', kind: 'pat' })
+  })
+
+  it('says when the account fails to refresh after linking, and tries again', async () => {
+    fake.github = null
+    await openSettings()
+    const s = within(section('GitHub'))
+    failNext('GET /api/me', { status: 500, code: 'internal', message: 'boom' })
+    await userEvent.type(await s.findByLabelText('Or use a personal access token'), 'ghp_good')
+    await userEvent.click(s.getByRole('button', { name: 'Link token' }))
+    expect(await s.findByRole('alert')).toHaveTextContent("Couldn't refresh your account: boom")
+    await userEvent.click(s.getByRole('button', { name: 'Try again' }))
+    expect(await s.findByText('octo')).toBeInTheDocument()
+    expect(s.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('says how the OAuth link went when GitHub sends the user back, until linking another way', async () => {

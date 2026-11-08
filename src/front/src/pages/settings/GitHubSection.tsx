@@ -6,6 +6,7 @@ import { buttonClass } from '../../components/buttonClass'
 import { Icon } from '../../components/Icon'
 import type { Me } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
+import { useMe } from '../../data/session'
 import { GITHUB_OAUTH_URL, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
 import { labels, settingsLabels } from '../../labels/labels'
 import { Section } from './Section'
@@ -23,6 +24,8 @@ const returnNotes = {
 // it (docs/github.md). Every project needs it: the board reads and writes the
 // repository's issues with this credential.
 export function GitHubSection({ me }: { me: Me }) {
+  // Linking and unlinking refetch the user; if that fails, what shows here is out of date.
+  const refresh = useMe()
   const [params] = useSearchParams()
   const returned = params.get('github')
   // Only while it still holds: linking with a token or unlinking afterwards outdates it.
@@ -38,6 +41,12 @@ export function GitHubSection({ me }: { me: Me }) {
         <p role="status" className={`m-0 text-[13px] ${note.tone}`}>
           {note.text}
         </p>
+      )}
+      {refresh.error && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 text-[13px] text-critical">
+          <span className="min-w-0 wrap-anywhere">Couldn't refresh your account: {refresh.error.message}</span>
+          <Button onClick={() => refresh.refetch()}>Try again</Button>
+        </div>
       )}
       {me.github ? <Linked login={me.github.login} kind={me.github.kind} /> : <NotLinked />}
     </Section>
@@ -61,20 +70,28 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
         <span className="text-[13px] text-text-muted">with a {kindLabel[kind]}</span>
       </p>
       {confirming ? (
-        <div role="alertdialog" aria-label="Unlink GitHub" className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
-          <p className="m-0 flex-1 text-[13px]">
+        <div
+          role="alertdialog"
+          aria-label="Unlink GitHub"
+          onKeyDown={(e) => e.key === 'Escape' && confirm(false)}
+          className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4"
+        >
+          <p className="m-0 min-w-48 flex-1 text-[13px]">
             Unlinking removes your access to every {labels.project.toLowerCase()} until you link again.
           </p>
-          <Button id={`${id}-keep`} onClick={() => confirm(false)}>
-            Keep it linked
-          </Button>
-          <Button
-            onClick={() => unlink.mutate()}
-            disabled={unlink.isPending}
-            className="border-warning text-warning hover:border-warning hover:text-warning"
-          >
-            Unlink GitHub
-          </Button>
+          {/* One group for the buttons: where they don't fit beside the text, they go under it together. */}
+          <div className="flex flex-wrap gap-3">
+            <Button id={`${id}-keep`} onClick={() => confirm(false)}>
+              Keep it linked
+            </Button>
+            <Button
+              onClick={() => unlink.mutate()}
+              disabled={unlink.isPending}
+              className="border-warning text-warning hover:border-warning hover:text-warning"
+            >
+              Unlink GitHub
+            </Button>
+          </div>
         </div>
       ) : (
         <div>

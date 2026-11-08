@@ -118,7 +118,12 @@ function ProviderRow({ provider, onEdit }: { provider: Provider; onEdit: () => v
         </span>
       </div>
       {confirming && (
-        <div role="alertdialog" aria-labelledby={id} className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
+        <div
+          role="alertdialog"
+          aria-labelledby={id}
+          onKeyDown={(e) => e.key === 'Escape' && confirm(false)}
+          className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4"
+        >
           <p id={id} className="m-0 min-w-48 flex-1 text-[13px] wrap-anywhere">
             Remove {provider.name}? Its saved key is deleted too.
           </p>

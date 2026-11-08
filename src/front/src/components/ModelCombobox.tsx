@@ -29,7 +29,9 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const shown = query ? options.filter((m) => m.toLowerCase().includes(query.toLowerCase())) : options
-  const allShownChosen = shown.length > 0 && (shown.every((m) => selected.includes(m)) || (max !== undefined && selected.length >= max))
+  const atCap = max !== undefined && selected.length >= max
+  // At the cap Select all can add nothing: it clears what's shown and chosen instead, or is off when none of it is.
+  const allShownChosen = shown.length > 0 && (shown.every((m) => selected.includes(m)) || (atCap && shown.some((m) => selected.includes(m))))
 
   const close = () => {
     setOpen(false)
@@ -100,7 +102,8 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
               </span>
               <button
                 type="button"
-                className="cursor-pointer border-0 bg-transparent p-1 font-[inherit] text-xs text-ion hover:text-ion-hover"
+                className="cursor-pointer border-0 bg-transparent p-1 font-[inherit] text-xs text-ion hover:text-ion-hover disabled:cursor-not-allowed disabled:text-text-muted"
+                disabled={atCap && !allShownChosen}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onChange(allShownChosen ? selected.filter((m) => !shown.includes(m)) : [...selected, ...shown.filter((m) => !selected.includes(m))].slice(0, max))}
               >
