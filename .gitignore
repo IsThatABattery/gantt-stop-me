@@ -3,4 +3,4 @@
 __debug_bin*
 
 # Design doc kept local, out of the repo.
-AUTOMATION.md
+/AUTOMATION.md
