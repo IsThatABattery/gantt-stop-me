@@ -456,3 +456,37 @@ A merge stands even when GitHub then fails the move to Closed: the answer is sti
   "approvedAt": "2026-11-08T10:02:31Z"
 }
 ```
+
+## Request changes
+
+Sends a task in User Check back to its author: it posts the caller's feedback on the task's linked pull request with the caller's GitHub credential, moves the task to the end of In Progress, and turns the pull request back into a draft, as a failed test run does, so marking it ready for review again starts a new test run. The comment starts with `Changes requested by {login}:`. The linked pull request is the open one closing the task's issue that its latest test run tested, else the open one GitHub lists first. A failure to make it a draft is logged and changes nothing else. It answers the task as [Get task](board.md#get-task) does.
+
+`POST /api/projects/{id}/tasks/{taskID}/request-changes`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project, in User Check |
+| `feedback` | body | string | trimmed, 1 to 10000 characters |
+
+```json
+{ "feedback": "The bars overlap on narrow screens." }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | task, as [Get task](board.md#get-task) answers it |
+| `400` | `invalid_feedback`, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `not_in_user_check`, `no_pull_request` when no open pull request closes the issue |
+| `502` | `github_error` |
+
+A comment stands even when GitHub then fails the move: the answer is GitHub's error and the task stays in User Check, so a retry comments again.
+
