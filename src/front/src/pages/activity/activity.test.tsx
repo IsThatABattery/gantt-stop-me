@@ -67,7 +67,7 @@ describe.skip('mission log', () => {
   })
 
   it('shows an empty state for a mission with no activity', async () => {
-    renderApp('/projects/deep-field/activity')
+    renderApp('/projects/lunar-relay/activity')
     expect(await screen.findByText('No activity on this mission yet.')).toBeInTheDocument()
   })
 

@@ -26,7 +26,7 @@ describe.skip('mission select', () => {
   it('shows every mission, most recent first', async () => {
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
-    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay', 'Ground Station', 'Deep Field'])
+    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
   })
 
@@ -36,7 +36,7 @@ describe.skip('mission select', () => {
     await filter('Mine')
 
     expect(screen.getByRole('button', { name: 'Mine' })).toHaveAttribute('aria-pressed', 'true')
-    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay', 'Deep Field'])
+    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
   })
 
   it('stars a mission and shows it under Favorites', async () => {
@@ -59,10 +59,12 @@ describe.skip('mission select', () => {
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
     await filter('Mine')
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search missions' }), 'station')
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search missions' }), 'relay')
+    expect(await missionNames()).toEqual(['Lunar Relay'])
 
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search missions' }), ' nope')
     expect(await missionNames()).toEqual([])
-    expect(screen.getByText('No missions match “station”.')).toBeInTheDocument()
+    expect(screen.getByText('No missions match “relay nope”.')).toBeInTheDocument()
   })
 
   it('sorts by name and by launch window end', async () => {
@@ -71,20 +73,20 @@ describe.skip('mission select', () => {
     const sort = screen.getByRole('combobox', { name: 'Sort by' })
 
     await userEvent.selectOptions(sort, 'Name')
-    expect(await missionNames()).toEqual(['Deep Field', 'Ground Station', 'Lunar Relay', 'Orbital-Nav'])
+    expect(await missionNames()).toEqual(['Lunar Relay', 'Orbital-Nav'])
 
     await userEvent.selectOptions(sort, 'Launch window end')
-    expect(await missionNames()).toEqual(['Ground Station', 'Orbital-Nav', 'Lunar Relay', 'Deep Field'])
+    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
   })
 
   it('shows archived missions only under Archived', async () => {
-    db.projects.find((p) => p.id === 'ground-station')!.archived = true
+    db.projects.find((p) => p.id === 'lunar-relay')!.archived = true
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
-    expect(await missionNames()).not.toContain('Ground Station')
+    expect(await missionNames()).not.toContain('Lunar Relay')
 
     await filter('Archived')
-    expect(await missionNames()).toEqual(['Ground Station'])
+    expect(await missionNames()).toEqual(['Lunar Relay'])
   })
 
   it('Review now opens the mission that needs attention most', async () => {
