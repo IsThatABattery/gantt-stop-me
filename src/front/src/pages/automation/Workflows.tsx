@@ -10,7 +10,7 @@ const workflowBlock = (name: string) => `  ${name}:
     dockerfile: Dockerfile
 `
 
-/** The repository's workflows: where tests run. Saving commits .gantt/workflows.yml to the default branch. */
+/** The repository's workflows: where tests run. Saving opens a pull request that changes .gantt/workflows.yml. */
 export function Workflows({ projectId, readOnly }: { projectId: string; readOnly: boolean }) {
   const file = useWorkflows(projectId)
   const save = useSaveWorkflows(projectId)
@@ -64,14 +64,22 @@ export function Workflows({ projectId, readOnly }: { projectId: string; readOnly
       )}
       {!readOnly && (
         <div className="flex flex-wrap items-center justify-end gap-2.5">
-          {save.isSuccess && draft === null && <span className="mr-auto text-[13px] text-good">Committed to the default branch.</span>}
+          {save.data && draft === null && (
+            <span className="mr-auto text-[13px] text-good">
+              Opened{' '}
+              <a href={save.data.pullRequest.url} target="_blank" rel="noreferrer">
+                pull request #{save.data.pullRequest.number}
+              </a>{' '}
+              from <code>{save.data.branch}</code>. Runs use it once it merges.
+            </span>
+          )}
           <Button onClick={add}>Add a workflow</Button>
           <Button
             variant="primary"
             disabled={save.isPending || draft === null || draft === content}
             onClick={() => save.mutate({ content: text, sha }, { onSuccess: () => setDraft(null) })}
           >
-            Commit workflows
+            Open a pull request
           </Button>
         </div>
       )}

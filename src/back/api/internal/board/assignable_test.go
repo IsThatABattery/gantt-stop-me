@@ -11,7 +11,9 @@ func TestAssignable(t *testing.T) {
 	bob := f.reader()
 	res := f.Do("GET", f.path("/assignees"), nil, bob)
 	res.Expect(http.StatusOK, "")
-	var got struct{ Assignees []struct{ Login, AvatarURL string } }
+	var got struct {
+		Assignees []struct{ Login, AvatarURL string }
+	}
 	res.JSON(&got)
 	var logins []string
 	for _, a := range got.Assignees {

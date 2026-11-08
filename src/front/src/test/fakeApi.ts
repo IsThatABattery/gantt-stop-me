@@ -45,6 +45,7 @@ function fresh() {
     runStatus: null,
     needsAttention: null,
     assignees: [],
+    branch: null,
     body: '',
     labels: [],
     tests: [],
@@ -304,6 +305,7 @@ export const handlers = [
       runStatus: null,
       needsAttention: null,
       assignees: [],
+      branch: null,
       body: String(body.body ?? ''),
       labels: [{ name: 'board:backlog', color: 'ededed' }],
       tests: [],
@@ -332,6 +334,15 @@ export const handlers = [
     }
     if (body.body !== undefined) task.body = String(body.body)
     return HttpResponse.json(brief(task))
+  }),
+  route('get', '/projects/:id/tasks/:taskId/runs', ({ params }) => {
+    projectAccess(params.id)
+    findTask(params.taskId)
+    return HttpResponse.json({ runs: [] })
+  }),
+  route('post', '/projects/:id/tasks/:taskId/retest', ({ params }) => {
+    projectAccess(params.id)
+    return HttpResponse.json(findTask(params.taskId))
   }),
   route('get', '/projects/:id/assignees', ({ params }) => {
     projectAccess(params.id)
@@ -378,8 +389,7 @@ export const handlers = [
   route('put', '/projects/:id/workflows', ({ params, body }) => {
     projectAccess(params.id)
     if (!String(body.content).startsWith('workflows:')) return fail(400, 'invalid_workflows', 'workflows: is required')
-    fake.workflows = { content: String(body.content), sha: 'sha2', workflows: [{ name: 'app', description: '' }], error: null }
-    return HttpResponse.json(fake.workflows)
+    return HttpResponse.json({ branch: 'chore/gantt-workflows-1', pullRequest: { number: 33, url: 'https://github.com/ada/gantt/pull/33' } })
   }),
   route('get', '/projects/:id/automation', ({ params }) => {
     automationAccess(params.id, false)

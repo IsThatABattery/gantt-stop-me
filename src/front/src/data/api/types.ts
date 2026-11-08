@@ -54,6 +54,8 @@ export interface Task {
   needsAttention: string | null
   /** The issue's assignees, as last read from GitHub */
   assignees: GitHubUser[]
+  /** Made on GitHub when the task first moved to In Progress */
+  branch: string | null
 }
 
 export interface GitHubUser {

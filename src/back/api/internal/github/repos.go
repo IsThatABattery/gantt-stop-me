@@ -15,9 +15,10 @@ import (
 
 // Repo is a repository and the calling user's permissions on it.
 type Repo struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Owner struct {
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	DefaultBranch string `json:"default_branch"`
+	Owner         struct {
 		Login string `json:"login"`
 	} `json:"owner"`
 	Permissions struct {
@@ -243,12 +244,46 @@ func (c *Client) DefaultWorkflows(ctx context.Context, token string, repoID int6
 	return string(data), f.SHA, nil
 }
 
-// PutDefaultWorkflows commits content as the workflows file on the default branch with message, replacing the
-// blob sha, or creating the file when sha is "". A sha that is no longer the file's fails with *Error{Status: 409}, and
-// creating a file that exists with *Error{Status: 422}.
-// It returns the new blob's sha.
-func (c *Client) PutDefaultWorkflows(ctx context.Context, token string, repoID int64, content, sha, message string) (string, error) {
-	in := map[string]string{"message": message, "content": base64.StdEncoding.EncodeToString([]byte(content))}
+// CreateBranch creates branch name at the default branch's head, and returns the default branch's name. A branch
+// that exists already is left as it is, without an error.
+func (c *Client) CreateBranch(ctx context.Context, token string, repoID int64, name string) (string, error) {
+	repo, err := c.RepoByID(ctx, token, repoID)
+	if err != nil {
+		return "", err
+	}
+	var head struct {
+		Object struct {
+			SHA string `json:"sha"`
+		} `json:"object"`
+	}
+	if _, err := c.do(ctx, http.MethodGet, c.repo(repoID)+"/git/ref/heads/"+url.PathEscape(repo.DefaultBranch), token, nil, nil, &head); err != nil {
+		return "", err
+	}
+	_, err = c.do(ctx, http.MethodPost, c.repo(repoID)+"/git/refs", token, nil,
+		map[string]string{"ref": "refs/heads/" + name, "sha": head.Object.SHA}, nil)
+	var ghErr *Error
+	if errors.As(err, &ghErr) && ghErr.Status == http.StatusUnprocessableEntity { // "Reference already exists"
+		err = nil
+	}
+	return repo.DefaultBranch, err
+}
+
+// CreatePullRequest opens a pull request from branch head into base and returns its number and web URL.
+func (c *Client) CreatePullRequest(ctx context.Context, token string, repoID int64, title, body, head, base string) (int, string, error) {
+	var out struct {
+		Number  int    `json:"number"`
+		HTMLURL string `json:"html_url"`
+	}
+	_, err := c.do(ctx, http.MethodPost, c.repo(repoID)+"/pulls", token, nil,
+		map[string]string{"title": title, "body": body, "head": head, "base": base}, &out)
+	return out.Number, out.HTMLURL, err
+}
+
+// PutWorkflows commits content as the workflows file on branch with message, replacing the blob sha, or creating the
+// file when sha is "". A sha that is no longer the file's fails with *Error{Status: 409}, and creating a file that
+// exists with *Error{Status: 422}. It returns the new blob's sha.
+func (c *Client) PutWorkflows(ctx context.Context, token string, repoID int64, branch, content, sha, message string) (string, error) {
+	in := map[string]string{"message": message, "content": base64.StdEncoding.EncodeToString([]byte(content)), "branch": branch}
 	if sha != "" {
 		in["sha"] = sha
 	}

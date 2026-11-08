@@ -146,7 +146,7 @@ Returns the repository's workflows file, `.gantt/workflows.yml`, on its default 
 
 ## Save workflows
 
-Commits a workflows file to the repository's default branch with the caller's GitHub credential, once it parses.
+Commits a workflows file that parses to a new branch off the default branch, `chore/gantt-workflows-{unix time}`, and opens a pull request of it into the default branch, with the caller's GitHub credential. The default branch keeps its file until the pull request merges.
 
 `PUT /api/projects/{id}/workflows`
 
@@ -163,13 +163,13 @@ Commits a workflows file to the repository's default branch with the caller's Gi
 
 | Status | Body |
 | --- | --- |
-| `200` | the workflows file, as [Show workflows](#show-workflows) answers it |
+| `200` | `branch`, and `pullRequest` with its `number` and `url` |
 | `400` | `invalid_workflows`, whose message names the field and line, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
 | `409` | `workflows_changed`: the file changed on GitHub since it was loaded; nothing was saved |
-| `502` | `github_error`, also when branch protection refuses a direct commit |
+| `502` | `github_error` |
 
 ## Generate webhook secret
 
@@ -518,6 +518,33 @@ A merge stands even when GitHub then fails the move to Closed: the answer is sti
   "approvedAt": "2026-11-08T10:02:31Z"
 }
 ```
+
+## Retest task
+
+Starts a new test run of a task's linked pull request at its head, as a move into Testing does, cancelling the task's queued or running one. The card stays in its column: only a run of a task in Testing moves it.
+
+`POST /api/projects/{id}/tasks/{taskID}/retest`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the task, as [Get task](board.md#get-task) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `automation_off`, `taken_over` |
+| `502` | `github_error` |
+
+With no linked pull request, or more than one, the run ends at once as a runner error saying so, as from a move.
 
 ## Request changes
 

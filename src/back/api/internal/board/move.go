@@ -3,7 +3,10 @@ package board
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -76,6 +79,9 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err = b.place(ctx, tx, token, p, t, to, in.BeforeTaskID, true)
+	if err == nil && to.Key == "in-progress" && t.Branch == nil {
+		t.Branch = b.branch(ctx, tx, token, p, t)
+	}
 	if err == nil {
 		err = tx.Commit(ctx)
 	}
@@ -240,4 +246,37 @@ func (b *Board) relabel(ctx context.Context, token string, p projects.Project, t
 	}
 	is, err := gh.UpdateIssue(ctx, token, p.RepoID, t.IssueNumber, map[string]any{"state": state})
 	return state, projects.Labels(is), err
+}
+
+// branch makes the task's branch on GitHub, off the default branch's head, and records it. A failure leaves the task
+// without one, logged, rather than refusing the move: the branch is a convenience, the move is what was asked.
+func (b *Board) branch(ctx context.Context, tx pgx.Tx, token string, p projects.Project, t task) *string {
+	name := BranchName(t.IssueNumber, t.Title)
+	if _, err := b.GitHub.CreateBranch(ctx, token, p.RepoID, name); err != nil {
+		log.Printf("branch for task %d: %v", t.ID, err)
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `update tasks set branch = $2 where id = $1`, t.ID, name); err != nil {
+		log.Printf("branch for task %d: %v", t.ID, err)
+		return nil
+	}
+	return &name
+}
+
+var notSlug = regexp.MustCompile(`[^a-z0-9]+`)
+
+// BranchName is a task's branch: feature/, its issue number, and its title in at most 40 lowercase letters, digits
+// and hyphens, cut at a word's end.
+func BranchName(issue int, title string) string {
+	slug := strings.Trim(notSlug.ReplaceAllString(strings.ToLower(title), "-"), "-")
+	if len(slug) > 40 { // at a word's end
+		if slug = slug[:41]; strings.LastIndex(slug, "-") > 0 {
+			slug = slug[:strings.LastIndex(slug, "-")]
+		}
+		slug = strings.TrimRight(slug, "-")
+	}
+	if slug == "" {
+		return fmt.Sprintf("feature/%d", issue)
+	}
+	return fmt.Sprintf("feature/%d-%s", issue, slug)
 }

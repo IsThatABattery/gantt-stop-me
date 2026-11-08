@@ -52,6 +52,14 @@ export function TaskDrawerPage() {
       <DrawerHeader projectId={projectId} task={task} column={column?.key} />
       <div className="flex flex-col gap-4 px-6 py-5">
         <Assignees projectId={projectId} task={task} />
+        {task.branch && (
+          <section className="flex flex-col gap-1">
+            <h2 className="eyebrow m-0">Branch</h2>
+            <a href={`${task.url.replace(/\/issues\/\d+$/, '')}/tree/${task.branch}`} target="_blank" rel="noreferrer" className="font-mono text-sm break-all">
+              {task.branch}
+            </a>
+          </section>
+        )}
         {shown.length > 0 && (
           <section className="flex flex-col gap-2">
             <h2 className="eyebrow m-0">Labels</h2>

@@ -282,13 +282,13 @@ describe('project automation', () => {
 })
 
 describe('workflows', () => {
-  it('adds a workflow and commits the file', async () => {
+  it('adds a workflow and opens a pull request of the file', async () => {
     fake.automation = enabled
     renderApp('/projects/1/automation')
     await userEvent.click(await screen.findByRole('button', { name: 'Add a workflow' }))
     expect((screen.getByLabelText('Workflows file') as HTMLTextAreaElement).value).toContain('workflows:\n  workflow-2:')
-    await userEvent.click(screen.getByRole('button', { name: 'Commit workflows' }))
-    expect(await screen.findByText('Committed to the default branch.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Open a pull request' }))
+    expect(await screen.findByRole('link', { name: 'pull request #33' })).toHaveAttribute('href', 'https://github.com/ada/gantt/pull/33')
     expect(fake.requests.find((r) => r.method === 'PUT' && r.path === '/api/projects/1/workflows')?.body).toMatchObject({ sha: null })
   })
 })

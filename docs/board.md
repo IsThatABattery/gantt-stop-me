@@ -83,7 +83,7 @@ Returns the project's columns and tasks, syncing the tasks from the repository's
 | `404` | `not_found` |
 | `502` | `github_error` |
 
-Every task, here and wherever an endpoint answers one, has `runStatus`, its latest test run's status as [List test runs](automation.md#list-test-runs) gives it, `null` when it has none, `needsAttention`, why it waits in Testing after a runner error, `null` while clear, and `assignees`, its issue's assignees as each `login` and `avatarUrl`, as last read from GitHub like its title.
+Every task, here and wherever an endpoint answers one, has `runStatus`, its latest test run's status as [List test runs](automation.md#list-test-runs) gives it, `null` when it has none, `needsAttention`, why it waits in Testing after a runner error, `null` while clear, `assignees`, its issue's assignees as each `login` and `avatarUrl`, as last read from GitHub like its title, and `branch`, the branch made for it on GitHub when it first moved to In Progress, `null` until then.
 
 ```json
 {
@@ -391,7 +391,7 @@ The issue's section is read first. When it changed on GitHub since the task last
 
 ## Move task
 
-Puts a task in a column before another task or at the column's end, relabeling its issue on GitHub when the column changes and closing or reopening it when it enters or leaves Closed.
+Puts a task in a column before another task or at the column's end, relabeling its issue on GitHub when the column changes and closing or reopening it when it enters or leaves Closed. A task's first move into In Progress also makes its branch on GitHub off the default branch's head, `feature/{issue number}-{title}`, with the title in at most 40 lowercase letters, digits and hyphens; a branch of that name already there is kept. A failure to make it is logged and leaves `branch` `null`; the move still happens.
 
 `POST /api/projects/{id}/tasks/{taskID}/move`
 

@@ -182,9 +182,9 @@ func (f *Fake) serveDecisions(w http.ResponseWriter, r *http.Request) {
 
 func (f *Fake) serveChat(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Model   string            `json:"model"`
-		Input   []json.RawMessage `json:"input"`
-		Tools   []struct {
+		Model string            `json:"model"`
+		Input []json.RawMessage `json:"input"`
+		Tools []struct {
 			Type string `json:"type"`
 			llm.Tool
 		} `json:"tools"`

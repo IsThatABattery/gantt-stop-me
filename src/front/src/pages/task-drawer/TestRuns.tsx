@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Checkbox, Textarea } from '../../components/controls'
 import type { TaskDetail } from '../../data/api/types'
-import { useApprove, useRequestChanges, useRun, useRuns } from '../../data/views/runs'
+import { useApprove, useRequestChanges, useRetest, useRun, useRuns } from '../../data/views/runs'
 
 /** The card's tests, its latest test run with the decision model's picks, and the approver's controls in User Check. */
 export function TestRuns({ projectId, task, inUserCheck }: { projectId: string; task: TaskDetail; inUserCheck: boolean }) {
@@ -11,6 +11,8 @@ export function TestRuns({ projectId, task, inUserCheck }: { projectId: string; 
   const run = useRun(projectId, latest?.id)
   const approve = useApprove(projectId, taskId)
   const changes = useRequestChanges(projectId, taskId)
+  const retest = useRetest(projectId, taskId)
+  const running = latest?.status === 'queued' || latest?.status === 'running'
   const [checked, setChecked] = useState<number[]>([])
   const [feedback, setFeedback] = useState('')
   const manual = run.data?.results.filter((r) => r.status === 'manual') ?? []
@@ -33,6 +35,17 @@ export function TestRuns({ projectId, task, inUserCheck }: { projectId: string; 
           </ul>
         )}
       </section>
+
+      <div className="flex items-center gap-3">
+        <Button className="min-h-9 px-3 text-sm" disabled={retest.isPending} onClick={() => retest.mutate(undefined)}>
+          {latest ? (running ? 'Restart test run' : 'Retest') : 'Run tests'}
+        </Button>
+        {retest.error && (
+          <span role="alert" className="text-[13px] text-critical">
+            {retest.error.message}
+          </span>
+        )}
+      </div>
 
       {latest && (
         <section className="flex flex-col gap-2">

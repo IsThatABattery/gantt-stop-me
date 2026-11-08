@@ -57,6 +57,9 @@ const after = (projectId: string, taskId: string) => [keys.board(projectId), key
 export const useApprove = (projectId: string, taskId: string) =>
   useApiMutation((checked: number[]) => api<Run>('POST', `/projects/${projectId}/tasks/${taskId}/approve`, { checked }), after(projectId, taskId))
 
+export const useRetest = (projectId: string, taskId: string) =>
+  useApiMutation(() => api('POST', `/projects/${projectId}/tasks/${taskId}/retest`), after(projectId, taskId))
+
 export const useRequestChanges = (projectId: string, taskId: string) =>
   useApiMutation(
     (feedback: string) => api('POST', `/projects/${projectId}/tasks/${taskId}/request-changes`, { feedback }),

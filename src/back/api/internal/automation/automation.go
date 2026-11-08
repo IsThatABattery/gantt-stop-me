@@ -59,6 +59,7 @@ func (a *Automation) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{id}/runs/{runID}/results/{resultID}/video", a.Accounts.Require(a.video))
 	mux.HandleFunc("POST /api/projects/{id}/runs/{runID}/cancel", a.Accounts.Require(a.cancelRun))
 	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/approve", a.Accounts.Require(a.approve))
+	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/retest", a.Accounts.Require(a.retest))
 	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/request-changes", a.Accounts.Require(a.requestChanges))
 	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/takeover", a.Accounts.Require(a.takeOver))
 	mux.HandleFunc("DELETE /api/projects/{id}/tasks/{taskID}/takeover", a.Accounts.Require(a.giveBack))

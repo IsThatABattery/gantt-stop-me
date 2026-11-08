@@ -59,3 +59,20 @@ describe('assignees', () => {
     expect(fake.tasks.find((t) => t.id === 7)?.assignees.map((a) => a.login)).toEqual(['bob'])
   })
 })
+
+describe('test runs', () => {
+  it('starts a test run by hand', async () => {
+    renderApp('/projects/1/tasks/7')
+    await userEvent.click(await screen.findByRole('button', { name: 'Run tests' }))
+    await waitFor(() => expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/api/projects/1/tasks/7/retest')).toBe(true))
+  })
+
+  it('links the branch made for the task', async () => {
+    fake.tasks.find((t) => t.id === 7)!.branch = 'feature/12-draw-the-timeline'
+    renderApp('/projects/1/tasks/7')
+    expect(await screen.findByRole('link', { name: 'feature/12-draw-the-timeline' })).toHaveAttribute(
+      'href',
+      'https://github.com/ada/gantt/tree/feature/12-draw-the-timeline',
+    )
+  })
+})

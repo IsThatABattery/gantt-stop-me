@@ -2,7 +2,9 @@ package automation
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
@@ -54,8 +56,8 @@ func (a *Automation) showWorkflows(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, newWorkflowsFile(content, sha))
 }
 
-// saveWorkflows answers PUT /api/projects/{id}/workflows: it commits a workflows file that parses to the default
-// branch with the caller's GitHub credential.
+// saveWorkflows answers PUT /api/projects/{id}/workflows: it commits a workflows file that parses to a new branch off
+// the default branch, and opens a pull request of it, with the caller's GitHub credential.
 func (a *Automation) saveWorkflows(w http.ResponseWriter, r *http.Request) {
 	p, token, ok := a.Projects.Check(w, r, projects.Write)
 	if !ok {
@@ -76,7 +78,12 @@ func (a *Automation) saveWorkflows(w http.ResponseWriter, r *http.Request) {
 	if in.SHA != nil {
 		sha = *in.SHA
 	}
-	sha, err := a.GitHub.PutDefaultWorkflows(r.Context(), token, p.RepoID, in.Content, sha, "Update "+github.WorkflowsPath)
+	// On its own branch, with a pull request, so the change is reviewed and tested like any other.
+	branch := fmt.Sprintf("chore/gantt-workflows-%d", time.Now().Unix())
+	base, err := a.GitHub.CreateBranch(r.Context(), token, p.RepoID, branch)
+	if err == nil {
+		_, err = a.GitHub.PutWorkflows(r.Context(), token, p.RepoID, branch, in.Content, sha, "Update "+github.WorkflowsPath)
+	}
 	var ghErr *github.Error
 	// 409: sha is no longer the file's. 422 without a sha: the file appeared since it was loaded.
 	if errors.As(err, &ghErr) && (ghErr.Status == http.StatusConflict || ghErr.Status == http.StatusUnprocessableEntity && in.SHA == nil) {
@@ -87,5 +94,12 @@ func (a *Automation) saveWorkflows(w http.ResponseWriter, r *http.Request) {
 		github.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, newWorkflowsFile(in.Content, sha))
+	number, url, err := a.GitHub.CreatePullRequest(r.Context(), token, p.RepoID, "Update "+github.WorkflowsPath,
+		"Changes the workflows that test runs build, from the board's Automation page.", branch, base)
+	if err != nil {
+		github.Fail(w, r, err)
+		return
+	}
+	// The default branch keeps its file until the pull request merges.
+	httpx.JSON(w, http.StatusOK, map[string]any{"branch": branch, "pullRequest": map[string]any{"number": number, "url": url}})
 }
