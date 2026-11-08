@@ -107,8 +107,8 @@ func (p *Planning) claim(ctx context.Context, after int64, busy []int64) (pgx.Tx
 	return tx, pl, nil
 }
 
-// turn runs the agent of plan pl's job on it, whose row tx holds, with its creator's planning model, and saves what
-// it did in tx: the interviewer for a question or the draft, else the task agent. A failed turn records why and drops
+// turn runs the agent of plan pl's job on it, whose row tx holds, with its creator's model and instructions for that
+// agent, and saves what it did in tx: the interviewer for a question or the draft, else the task agent. A failed turn records why and drops
 // the job, for a person to retry.
 func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 	defer tx.Rollback(context.WithoutCancel(ctx))
@@ -117,20 +117,27 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 		return err
 	}
 	var pr projects.Project
-	var baseURL, model string
+	var baseURL, model, instructions string
 	var sealed []byte
 	var review bool
+	tasks, name := *pl.Pending == "generate" || *pl.Pending == "revise", "interviewer"
+	if tasks {
+		name = "task agent"
+	}
 	err = tx.QueryRow(ctx, `
-		select pr.id, pr.github_repo_id, pr.owner, pr.name, pv.base_url, pv.key_enc, ps.model, ps.review
+		select pr.id, pr.github_repo_id, pr.owner, pr.name, pv.base_url, pv.key_enc, ps.review,
+			case when $2 then ps.task_model else ps.model end,
+			case when $2 then ps.task_instructions else ps.interviewer_instructions end
 		from feature_plans fp join projects pr on pr.id = fp.project_id
-		join planning_settings ps on ps.user_id = fp.created_by join providers pv on pv.id = ps.provider_id
-		where fp.id = $1`, pl.ID).Scan(&pr.ID, &pr.RepoID, &pr.Owner, &pr.Name, &baseURL, &sealed, &model, &review)
+		join planning_settings ps on ps.user_id = fp.created_by
+		join providers pv on pv.id = case when $2 then ps.task_provider_id else ps.provider_id end
+		where fp.id = $1`, pl.ID, tasks).Scan(&pr.ID, &pr.RepoID, &pr.Owner, &pr.Name, &baseURL, &sealed, &review, &model, &instructions)
 	var failure string // why the turn failed, for people to read
 	var doc []section
 	var question *message
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		failure = "The plan's creator has no planning model. They pick one in Settings, then someone retries."
+		failure = "The plan's creator has no " + name + " model. They pick one in Settings, then someone retries."
 	case err != nil:
 		return err
 	default:
@@ -153,11 +160,11 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 			break
 		}
 		c := &llm.Client{BaseURL: baseURL, Key: string(key), HTTP: p.LLM}
-		if *pl.Pending == "generate" || *pl.Pending == "revise" {
-			return p.tasks(ctx, tx, c, model, token, pr, pl, review)
+		if tasks {
+			return p.tasks(ctx, tx, c, model, instructions, token, pr, pl, review)
 		}
 		tctx, cancel := context.WithTimeout(ctx, turnTimeout)
-		doc, question, err = interview(tctx, c, model, pr.Owner+"/"+pr.Name, pl, msgs)
+		doc, question, err = interview(tctx, c, model, instructions, pr.Owner+"/"+pr.Name, pl, msgs)
 		cancel()
 		if err != nil {
 			failure = "The agent's turn failed: " + strings.TrimPrefix(err.Error(), "llm: ") + "."

@@ -2,7 +2,7 @@
 
 A member describes a feature, and an interviewer agent asks them about it one question at a time while it writes a plan doc. The member then reviews the doc, unless their settings turn review off. Once the doc is approved, a task agent turns it into proposed tasks with tests, which members review one by one, and each approved one becomes a task in Backlog.
 
-The agent works in the API's planner worker, not in requests, because its LLM calls can outlast a request. A request records what the person did, sets the plan's `pending` job, and answers at once. The worker takes each plan with a job every 2 seconds and does one agent turn with the planning model of the user who started the plan, one turn at a time for each such user. Load the plan again until `pending` is `null`. A turn that fails sets `error` and clears `pending`, and [Retry](#retry-the-agents-turn) gives the job back. A turn also fails, without calling the model, when the user who started the plan has no planning model, their provider key cannot be read, or their GitHub account can no longer see the repository, or, for `generate`, which creates tasks with it, can no longer push to it. While a turn runs on a plan, every change to it answers `409 agent_busy` at once instead of waiting.
+The agent works in the API's planner worker, not in requests, because its LLM calls can outlast a request. A request records what the person did, sets the plan's `pending` job, and answers at once. The worker takes each plan with a job every 2 seconds and does one agent turn with the model and instructions the user who started the plan picked for that agent: the interviewer's for `ask` and `draft`, the task agent's for `generate` and `revise`, one turn at a time for each such user. Load the plan again until `pending` is `null`. A turn that fails sets `error` and clears `pending`, and [Retry](#retry-the-agents-turn) gives the job back. A turn also fails, without calling the model, when the user who started the plan has no model for that agent, their provider key cannot be read, or their GitHub account can no longer see the repository, or, for `generate`, which creates tasks with it, can no longer push to it. While a turn runs on a plan, every change to it answers `409 agent_busy` at once instead of waiting.
 
 A plan's `status` is `briefing` (the interview), `needs_review`, `approved`, `done` or `discarded`. `pending` is the agent's next job: `ask` (update the doc and ask the next question, or finish), `draft` (write the doc from what it has and finish), `generate` (turn the doc into proposed tasks), or `revise` (rewrite the proposal sent back), and `null` while the plan waits on a person.
 
@@ -14,7 +14,7 @@ A proposal's task is an issue labeled `board:backlog`, at the end of Backlog. It
 
 ## Show planning settings
 
-Returns the caller's planning model and whether they review plan docs.
+Returns whether the caller reviews plan docs, and the model and own instructions of each planning agent: the interviewer and the task agent.
 
 `GET /api/me/planning`
 
@@ -28,11 +28,15 @@ Returns the caller's planning model and whether they review plan docs.
 
 | Status | Body |
 | --- | --- |
-| `200` | the settings; `providerId` and `model` are `null` and `review` is `true` until saved |
+| `200` | the settings; until saved, `review` is `true` and each agent is `{ "providerId": null, "model": null, "instructions": "" }` |
 | `401` | `unauthorized` |
 
 ```json
-{ "providerId": 2, "model": "gpt-5", "review": true }
+{
+  "review": true,
+  "interviewer": { "providerId": 2, "model": "gpt-5", "instructions": "" },
+  "taskAgent": { "providerId": 2, "model": "gpt-5", "instructions": "Keep every task under a day of work." }
+}
 ```
 
 ## Save planning settings
@@ -46,12 +50,19 @@ Replaces the caller's planning settings. The agents of every plan the caller sta
 | Name | In | Type | Rules |
 | --- | --- | --- | --- |
 | `session` | cookie | string | required |
-| `providerId` | body | integer or null | one of the caller's providers; `null` with `model` picks no model, so the caller can delete the provider |
-| `model` | body | string or null | one of that provider's chosen `models`; it should support tool calling |
 | `review` | body | boolean | optional, default `true`; `false` approves plan docs without review |
+| `interviewer` | body | object | optional; left out, it has no model and no instructions |
+| `taskAgent` | body | object | optional; left out, it has no model and no instructions |
+| `….providerId` | body | integer or null | one of the caller's providers; `null` with `model` picks no model, so the caller can delete the provider |
+| `….model` | body | string or null | one of that provider's chosen `models`; it should support tool calling |
+| `….instructions` | body | string | optional, default `""`; at most 4000 characters, trimmed; added to the agent's prompt after its own rules, which win where they conflict |
 
 ```json
-{ "providerId": 2, "model": "gpt-5", "review": true }
+{
+  "review": true,
+  "interviewer": { "providerId": 2, "model": "gpt-5" },
+  "taskAgent": { "providerId": 2, "model": "gpt-5", "instructions": "Keep every task under a day of work." }
+}
 ```
 
 **Output**
@@ -59,7 +70,7 @@ Replaces the caller's planning settings. The agents of every plan the caller sta
 | Status | Body |
 | --- | --- |
 | `200` | the settings, as [Show planning settings](#show-planning-settings) answers them |
-| `400` | `invalid_provider`, `invalid_model`, `bad_request` |
+| `400` | `invalid_provider`, `invalid_model`, `invalid_instructions`, `bad_request` |
 | `401` | `unauthorized` |
 
 ## Start a plan
@@ -90,7 +101,7 @@ Starts a plan in `briefing` with `pending: "ask"`, for the agent's first questio
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
-| `409` | `planning_not_set_up`: the caller has no planning model |
+| `409` | `planning_not_set_up`: the caller has no interviewer model |
 | `502` | `github_error` |
 
 ## List plans

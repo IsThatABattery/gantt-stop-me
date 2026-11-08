@@ -12,7 +12,7 @@ import (
 
 func TestReviewOffApprovesTheDoc(t *testing.T) {
 	f := setup(t)
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": f.provider, "model": llmtest.ChatModel, "review": false}, f.ada).
+	f.Do("PUT", "/api/me/planning", agents(f.provider, llmtest.ChatModel, false), f.ada).
 		Expect(http.StatusOK, "")
 	pl := f.start("Exports", "Let admins export the board as CSV.")
 	f.llm.Reply(reply(ask("Who exports?")))
@@ -72,7 +72,7 @@ func TestASlowProviderDelaysOnlyItsCreatorsPlans(t *testing.T) {
 		res.Expect(http.StatusCreated, "")
 		var pv struct{ ID int64 }
 		res.JSON(&pv)
-		f.Do("PUT", "/api/me/planning", map[string]any{"providerId": pv.ID, "model": llmtest.ChatModel}, session).Expect(http.StatusOK, "")
+		f.Do("PUT", "/api/me/planning", agents(pv.ID, llmtest.ChatModel, true), session).Expect(http.StatusOK, "")
 	}
 	bob := f.member("bob", "push")
 	plansWith(bob, srv.URL+"/slow/v1")

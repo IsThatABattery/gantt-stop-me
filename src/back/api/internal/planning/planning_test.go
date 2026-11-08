@@ -37,8 +37,14 @@ func setup(t *testing.T) *fixture {
 	f.repo.Grant(f.token, "push")
 	f.project = env.AddProject(f.ada, "octo", "hello")
 	f.provider = f.addProvider(f.ada)
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": f.provider, "model": llmtest.ChatModel}, f.ada).Expect(http.StatusOK, "")
+	f.Do("PUT", "/api/me/planning", agents(f.provider, llmtest.ChatModel, true), f.ada).Expect(http.StatusOK, "")
 	return f
+}
+
+// agents is a PUT /api/me/planning body giving both agents provider and model, nil for none.
+func agents(provider, model any, review bool) map[string]any {
+	a := map[string]any{"providerId": provider, "model": model}
+	return map[string]any{"review": review, "interviewer": a, "taskAgent": a}
 }
 
 // member signs up login@example.com, links the GitHub account login and grants it role on the repository.

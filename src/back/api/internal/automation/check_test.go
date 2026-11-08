@@ -187,7 +187,19 @@ func TestLLMCheckRunnerErrors(t *testing.T) {
 }
 
 func TestLLMCheckFirstMessage(t *testing.T) {
+	for _, c := range []struct{ instructions, extra string }{
+		{"", ""},
+		{"Use curl.", "\n\nExtra instructions from the project's automation owner. Follow them where they don't conflict " +
+			"with the rules above:\n\nUse curl."},
+	} {
+		t.Run(c.instructions, func(t *testing.T) { testLLMCheckFirstMessage(t, c.instructions, c.extra) })
+	}
+}
+
+// testLLMCheckFirstMessage checks the first message with the owner's instructions, which add extra after the rules.
+func testLLMCheckFirstMessage(t *testing.T, instructions, extra string) {
 	f := withLLM(t)
+	f.exec(`update project_automation set chat_instructions = $1`, instructions)
 	body := "Sign-up must refuse empty emails.\n\n" + oneCheck
 	f.tests(1, body)
 	f.repo.AddFile("a1", ".gantt/workflows.yml", "workflows:\n  frontend:\n    description: React UI\n    port: 80\n"+
@@ -202,7 +214,7 @@ func TestLLMCheckFirstMessage(t *testing.T) {
 		"The test to verify:\n\nSigning up with an empty email answers 400\n1. POST /api/auth/signup with no email.\n\n" +
 		"Workflow: frontend\nApp: http://app:80\nSidecars: db, api\n\n" +
 		"Verify the test with the tools, then call report once. Use unverifiable only for what no tool can check, " +
-		"such as how something looks to a person, and then say in the reason what a person should check."
+		"such as how something looks to a person, and then say in the reason what a person should check." + extra
 	if len(chats) != 1 || len(chats[0].Messages) != 1 || chats[0].Messages[0].Role != "user" || chats[0].Messages[0].Content != want {
 		t.Fatalf("first message = %+v, want %q", chats[0].Messages, want)
 	}

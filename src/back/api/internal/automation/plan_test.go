@@ -205,3 +205,18 @@ func TestRoutingAsksTheDecisionModel(t *testing.T) {
 		t.Fatalf("prepared workflows = %v", specs)
 	}
 }
+
+// The owner's own instructions follow each question's.
+func TestRoutingWithTheOwnersInstructions(t *testing.T) {
+	f := withLLM(t)
+	f.exec(`update project_automation set decision_instructions = 'Prefer backend.'`)
+	f.tests(1, "## Tests\n- [ ] `go test ./...`\n")
+	f.repo.AddFile("a1", ".gantt/workflows.yml", twoWorkflows)
+	f.ready()
+	f.work()
+	want := "Which workflow can run test 1?\n\nExtra instructions from the project's automation owner. Follow them where " +
+		"they don't conflict with the rules above:\n\nPrefer backend."
+	if got := f.llm.Decisions(); len(got) != 1 || len(got[0].Questions) != 1 || got[0].Questions[0].Instructions != want {
+		t.Fatalf("decisions requests = %+v", got)
+	}
+}
