@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"gantt-stop-me/api/internal/automation"
@@ -158,6 +159,42 @@ func TestTakeoverUnpauses(t *testing.T) {
 	}
 }
 
+func TestOwnerTokenChangeDuringTheCheck(t *testing.T) {
+	// during runs SQL while GitHub checks ada, then has GitHub reject her credential.
+	during := func(f *fixture, sql string, args ...any) *automation.Automation {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, err := f.DB.Exec(r.Context(), sql, args...); err != nil {
+				f.t.Error(err)
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		f.t.Cleanup(srv.Close)
+		a := f.automation()
+		a.Projects.GitHub = &github.Client{API: srv.URL, HTTP: srv.Client()}
+		f.expire()
+		return a
+	}
+	t.Run("taken over", func(t *testing.T) {
+		f := on(t)
+		_, carolID, carolToken := f.member("carol", "push")
+		a := during(f, `update project_automation set owner_id = $1`, carolID)
+		_, err := a.OwnerToken(context.Background(), f.project)
+		if err == nil || errors.Is(err, automation.ErrPaused) || errors.Is(err, automation.ErrOff) || f.pausedReason() != nil {
+			t.Fatalf("OwnerToken err = %v, paused_reason %v; want a temporary error and carol's automation running", err, f.pausedReason())
+		}
+		if token, err := f.automation().OwnerToken(context.Background(), f.project); err != nil || token != carolToken {
+			t.Fatalf("next OwnerToken = %q, %v, want carol's token", token, err)
+		}
+	})
+	t.Run("turned off", func(t *testing.T) {
+		f := on(t)
+		a := during(f, `delete from project_automation`)
+		if _, err := a.OwnerToken(context.Background(), f.project); !errors.Is(err, automation.ErrOff) {
+			t.Fatalf("OwnerToken err = %v, want ErrOff", err)
+		}
+	})
+}
+
 func TestPauseIfRejected(t *testing.T) {
 	ctx := context.Background()
 	rejected := &github.Error{Status: http.StatusUnauthorized}
@@ -179,6 +216,12 @@ func TestPauseIfRejected(t *testing.T) {
 			t.Fatalf("PauseIfRejected = %v, want ErrPaused", err)
 		}
 		f.expectPaused("GitHub no longer accepts ada's credential.")
+	})
+	t.Run("automation off", func(t *testing.T) {
+		f := setup(t)
+		if err := f.automation().PauseIfRejected(ctx, f.project, f.token, rejected); !errors.Is(err, automation.ErrOff) {
+			t.Fatalf("PauseIfRejected = %v, want ErrOff", err)
+		}
 	})
 	t.Run("a credential the owner replaced", func(t *testing.T) {
 		f := on(t)
