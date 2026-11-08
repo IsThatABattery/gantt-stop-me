@@ -108,8 +108,9 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 // maxAssignees is GitHub's limit on an issue's assignees.
 const maxAssignees = 10
 
-// login is a GitHub login: letters, digits and single hyphens, not at either end, at most 39 characters.
-var login = regexp.MustCompile(`^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$`)
+// login is a GitHub login, at most 39 characters: letters, digits and hyphens, and underscores for an Enterprise Managed
+// User's handle_shortcode and older logins. GitHub itself drops a login it cannot assign.
+var login = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$`)
 
 // validAssignees checks a task's new assignees, or answers 400 invalid_assignees and returns false.
 func validAssignees(w http.ResponseWriter, logins []string) ([]string, bool) {
