@@ -2,6 +2,7 @@ package projects
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"gantt-stop-me/api/internal/accounts"
@@ -18,7 +19,7 @@ func (p *Projects) list(w http.ResponseWriter, r *http.Request) {
 }
 
 // Opened returns the projects the user has added or opened and their GitHub account still sees, most recently
-// visited first, or answers the request itself and returns false.
+// visited first, leaving out any GitHub fails to check, or answers the request itself and returns false.
 //
 // shortcut: each project whose cached permission is over 5 minutes old is checked on GitHub one after another, so
 // dozens of stale projects make a slow answer; check them in parallel when users open that many.
@@ -57,8 +58,13 @@ func (p *Projects) Opened(w http.ResponseWriter, r *http.Request) ([]Project, bo
 	for _, pr := range opened {
 		pr.Permission, err = p.Permission(ctx, &pr, userID, token)
 		if errors.As(err, new(gitHubError)) {
-			github.Fail(w, r, err)
-			return nil, false
+			if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
+				github.Fail(w, r, err)
+				return nil, false
+			}
+			// One project GitHub cannot check now, such as on a 5xx or a blocked repository, leaves the others listed.
+			log.Printf("%s %s: check project %d: %v", r.Method, r.URL.Path, pr.ID, err)
+			continue
 		}
 		if err != nil {
 			httpx.Internal(w, r, err)

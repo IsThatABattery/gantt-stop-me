@@ -52,9 +52,8 @@ Returns the projects the caller has added or opened, most recently visited first
 | `200` | `projects`, each as [Add project](#add-project) answers it; `[]` for none |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
-| `502` | `github_error` |
 
-A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. Unlinking GitHub forgets every project. Linking it again keeps them, and checks each on GitHub again with the new credential.
+A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. When GitHub fails that check for another reason, such as an outage, the project is left out of this answer only. A credential GitHub no longer accepts answers `github_not_linked`. Unlinking GitHub forgets every project. Linking it again keeps them, and checks each on GitHub again with the new credential.
 
 ```json
 { "projects": [{ "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }] }
@@ -79,7 +78,6 @@ Returns the open tasks assigned to the caller's GitHub account, grouped by proje
 | `200` | `projects`, each a `project` as [Add project](#add-project) answers it and its `tasks` in board order; `[]` for none |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
-| `502` | `github_error` |
 
 Each task is as [Show board](#show-board) gives it, with `column`, the `key` and `name` of the column it is in. Assignees are as the project's last sync read them, so an assignment made on GitHub shows once someone opens that project's board.
 

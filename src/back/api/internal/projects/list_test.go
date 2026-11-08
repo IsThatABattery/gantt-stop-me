@@ -1,6 +1,7 @@
 package projects_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -80,4 +81,30 @@ func TestListProjectsAfterRelinking(t *testing.T) {
 	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 0 {
 		t.Fatalf("after linking another account, ada's projects = %+v", got)
 	}
+}
+
+func TestListProjectsLeavesOutAFailedCheck(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	token := env.LinkGitHub(ada, "ada-gh")
+	env.GitHub.AddRepo("octo", "hello").Grant(token, "push")
+	env.AddProject(ada, "octo", "hello")
+	env.GitHub.AddRepo("octo", "other").Grant(token, "push")
+	other := env.AddProject(ada, "octo", "other")
+	// Only other's check is stale, and GitHub fails to answer it.
+	if _, err := env.DB.Exec(context.Background(),
+		`update project_members set checked_at = now() - interval '6 minutes' where project_id = $1`, other); err != nil {
+		t.Fatal(err)
+	}
+	env.GitHub.Fail("GET /repositories/{id}", http.StatusBadGateway)
+	res := env.Do("GET", "/api/projects", nil, ada)
+	res.Expect(http.StatusOK, "")
+	if got := listed(t, res); len(got) != 1 || got[0].Name != "hello" {
+		t.Fatalf("ada's projects = %+v, want hello", got)
+	}
+	env.Do("GET", "/api/me/tasks", nil, ada).Expect(http.StatusOK, "")
+
+	// A credential GitHub no longer accepts still fails the list.
+	env.GitHub.Fail("GET /repositories/{id}", http.StatusUnauthorized)
+	env.Do("GET", "/api/projects", nil, ada).Expect(http.StatusForbidden, "github_not_linked")
 }
