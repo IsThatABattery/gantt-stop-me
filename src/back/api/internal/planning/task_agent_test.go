@@ -170,7 +170,10 @@ func TestGenerateAnswersInvalidProposals(t *testing.T) {
 			task("No name", nil, tasktests.Test{Kind: "script", Command: "make"}),
 			task("No tests", nil),
 			task("Too soon", []int{1}, script("make")),
-			call("propose_task", map[string]any{"title": "Own tests", "description": "## Tests\n- [ ] `true`", "tests": []tasktests.Test{script("make")}}),
+			call("propose_task", map[string]any{"title": "No criteria", "description": "Build it.", "acceptanceCriteria": []string{},
+				"tests": []tasktests.Test{script("make")}}),
+			call("propose_task", map[string]any{"title": "Own tests", "description": "## Tests\n- [ ] `true`", "acceptanceCriteria": []string{"It works"},
+				"tests": []tasktests.Test{script("make")}}),
 			task("Two\nlines", nil, script("make")),
 			ask("Which?"),
 		),
@@ -182,6 +185,7 @@ func TestGenerateAnswersInvalidProposals(t *testing.T) {
 		"Nothing was proposed: Test 1 needs a name.",
 		"Nothing was proposed: A task needs at least one test.",
 		"Nothing was proposed: A task can depend only on tasks before it, by number, and 1 is not one.",
+		"Nothing was proposed: A task needs at least one acceptance criterion.",
 		"Nothing was proposed: The description and acceptance criteria must leave the Tests section to the tests: give them no Tests heading, and close every code fence.",
 		"Nothing was proposed: A title needs 1 to 256 characters, on one line.",
 		"There is no tool named ask.",
@@ -302,6 +306,57 @@ func TestReviewOffKeepsTheTasksItCreated(t *testing.T) {
 	f.expectTask(pl.Proposals[2], 3, "ada", "Build Docs.\n\n## Acceptance criteria\n- [ ] Docs works\n\n## Tests\n- [ ] `make`\n")
 	if n := f.tasks(); n != 3 {
 		t.Fatalf("%d tasks, want one per proposal", n)
+	}
+}
+
+// A database failure while the worker records a task keeps the proposals and the tasks recorded before it, so a
+// retry creates only the rest, without asking the agent again.
+func TestReviewOffKeepsTheTasksItRecorded(t *testing.T) {
+	f := setup(t)
+	pl := f.noReview()
+	ctx := context.Background()
+	_, err := f.DB.Exec(ctx, `
+		create function refuse_second() returns trigger language plpgsql as $$ begin
+			if new.position = 2 and new.task_id is not null then raise exception 'disk full'; end if; return new; end $$;
+		create trigger refuse_second before update on plan_proposals for each row execute function refuse_second()`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pl = f.generate(pl, task("Endpoint", nil, script("make")), task("Button", []int{1}, script("make")), task("Docs", nil, script("make")))
+	if pl.Pending != nil || pl.Error == nil || len(pl.Proposals) != 3 || pl.Proposals[0].TaskID == nil || pl.Proposals[1].TaskID != nil {
+		t.Fatalf("plan %+v, want the proposals and the first task kept, and the error recorded", pl)
+	}
+
+	if _, err := f.DB.Exec(ctx, `drop trigger refuse_second on plan_proposals`); err != nil {
+		t.Fatal(err)
+	}
+	chats := len(f.llm.Chats())
+	f.act(pl.ID, "retry", nil).Expect(http.StatusOK, "")
+	f.work()
+	if pl = f.plan(pl.ID); pl.Status != "done" || len(f.llm.Chats()) != chats {
+		t.Fatalf("plan %+v after %d chat requests, want it done without any", pl, len(f.llm.Chats())-chats)
+	}
+	if n := f.tasks(); n != 3 {
+		t.Fatalf("%d tasks, want one per proposal", n)
+	}
+}
+
+// Generating creates tasks with the creator's GitHub token, so it needs them to push to the repository still.
+func TestGenerateNeedsTheCreatorToPush(t *testing.T) {
+	f := setup(t)
+	pl := f.noReview()
+	f.repo.Grant(f.token, "pull") // only counts once the cached permission expires
+	if _, err := f.DB.Exec(context.Background(), `update project_members set checked_at = now() - interval '5 minutes 1 second'`); err != nil {
+		t.Fatal(err)
+	}
+	chats := len(f.llm.Chats())
+	f.generate(pl, task("Export", nil, script("make")))
+	const want = "The plan's creator can no longer push to the repository on GitHub, which creating its tasks needs. Once they can, someone retries."
+	if pl = f.plan(pl.ID); pl.Pending != nil || orNull(pl.Error) != want || len(pl.Proposals) != 0 {
+		t.Fatalf("plan %+v", pl)
+	}
+	if n := len(f.llm.Chats()); n != chats || f.tasks() != 0 {
+		t.Fatalf("%d chat requests and %d tasks, want none", n-chats, f.tasks())
 	}
 }
 

@@ -46,7 +46,9 @@ func (p *Planning) Run(ctx context.Context) {
 
 // startAll starts an agent turn, in a goroutine of turns, for each plan with a job, in id order. A plan whose
 // creator has a turn running waits for a later pass, so a slow provider delays only its own user's plans, and turns
-// hold at most half the database pool, one connection each and a second while one creates a task.
+// hold at most half the database pool, one connection each and a second briefly.
+// shortcut: a turn creating tasks lets go of its plan's row between them, and only running, in this process, keeps
+// another turn off the plan meanwhile; claim jobs outside the pool before running more than one api instance.
 // shortcut: that many creators whose providers hang still hold up everyone else's turns, by up to turnTimeout each;
 // free the connection during LLM calls if that bites.
 func (p *Planning) startAll(ctx context.Context, turns *sync.WaitGroup) {
@@ -137,9 +139,14 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 			failure = "The plan's creator's provider key cannot be read. They enter it again in Settings, then someone retries."
 			break
 		}
-		// The creator's provider reads the plan, so they must still be able to see it.
+		// The creator's provider reads the plan, so they must still be able to see it, and generating creates tasks
+		// with their token, as board routes do with write access.
+		need := projects.Read
+		if *pl.Pending == "generate" {
+			need = projects.Write
+		}
 		var token string
-		if token, failure, err = p.access(ctx, &pr, pl.createdBy); err != nil {
+		if token, failure, err = p.access(ctx, &pr, pl.createdBy, need); err != nil {
 			return err
 		}
 		if failure != "" {
@@ -194,11 +201,14 @@ func fail(ctx context.Context, tx pgx.Tx, id int64, failure string) error {
 	return tx.Commit(ctx)
 }
 
-// access returns the plan's creator's GitHub token while their GitHub account still sees the project's repository,
-// checked as project routes check people, and else why they can no longer have their provider read its plans. Other
+// access returns the plan's creator's GitHub token while their GitHub account still has need, Read or Write, on the
+// project's repository, checked as project routes check people, and else why the job cannot run as them. Other
 // errors are temporary.
-func (p *Planning) access(ctx context.Context, pr *projects.Project, creator int64) (token, failure string, err error) {
-	const lost = "The plan's creator can no longer see the repository on GitHub. Once they can, someone retries."
+func (p *Planning) access(ctx context.Context, pr *projects.Project, creator int64, need string) (token, failure string, err error) {
+	lost := "The plan's creator can no longer see the repository on GitHub. Once they can, someone retries."
+	if need == projects.Write {
+		lost = "The plan's creator can no longer push to the repository on GitHub, which creating its tasks needs. Once they can, someone retries."
+	}
 	token, err = github.Token(ctx, p.DB, p.Secrets, creator)
 	if errors.Is(err, github.ErrNotLinked) {
 		return "", lost, nil
@@ -213,7 +223,7 @@ func (p *Planning) access(ctx context.Context, pr *projects.Project, creator int
 	if err != nil {
 		return "", "", err
 	}
-	if !projects.Allows(perm, projects.Read) {
+	if !projects.Allows(perm, need) {
 		return "", lost, nil
 	}
 	return token, "", nil

@@ -37,6 +37,7 @@ func TestEditProposal(t *testing.T) {
 		{"title": "Two\nlines"},
 		{"description": "```\nunclosed"},
 		{"acceptanceCriteria": []string{"Works", ""}},
+		{"acceptanceCriteria": []string{}},
 		{"tests": []tasktests.Test{}},
 		{"tests": []tasktests.Test{{Name: "Builds", Kind: "script"}}},
 		{"dependsOn": []int{2}},

@@ -56,9 +56,9 @@ func proposalID(r *http.Request) int64 {
 	return id
 }
 
-// reviewing returns plan pl's proposal in the {proposalID} path value, for a person to act on: it must wait for
-// review, and pl must be approved and wait on a person.
-func reviewing(ctx context.Context, tx pgx.Tx, r *http.Request, pl plan) (proposal, error) {
+// reviewing returns plan pl's proposal in the {proposalID} path value, for a person to act on: it must be in one of
+// statuses, and pl must be approved and wait on a person.
+func reviewing(ctx context.Context, tx pgx.Tx, r *http.Request, pl plan, statuses ...string) (proposal, error) {
 	rows, _ := tx.Query(ctx, `select `+proposalColumns+` from plan_proposals where id = $1 and plan_id = $2`, proposalID(r), pl.ID)
 	pp, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[proposal])
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -70,7 +70,7 @@ func reviewing(ctx context.Context, tx pgx.Tx, r *http.Request, pl plan) (propos
 	if err := waiting(pl, "approved"); err != nil {
 		return proposal{}, err
 	}
-	if pp.Status != "needs_review" {
+	if !slices.Contains(statuses, pp.Status) {
 		return proposal{}, &refusal{http.StatusConflict, "wrong_status",
 			fmt.Sprintf("This cannot be done to a proposal that is %s.", strings.ReplaceAll(pp.Status, "_", " "))}
 	}
@@ -81,8 +81,8 @@ func reviewing(ctx context.Context, tx pgx.Tx, r *http.Request, pl plan) (propos
 func invalid(why string) error { return &refusal{http.StatusBadRequest, "invalid_proposal", why} }
 
 // tidy trims pp's text and puts its tests as GitHub reads them back, or refuses it with invalid: it needs a title of
-// 1 to 256 characters on one line, a description, acceptance criteria of one line each, at least one valid test,
-// and dependencies on earlier proposals only.
+// 1 to 256 characters on one line, a description, at least one acceptance criterion of one line each, at least one
+// valid test, and dependencies on earlier proposals only.
 func tidy(pp *proposal) error {
 	var ok bool
 	if pp.Title, ok = text(pp.Title, 256); !ok || strings.ContainsAny(pp.Title, "\r\n") {
@@ -98,7 +98,9 @@ func tidy(pp *proposal) error {
 		}
 		criteria = append(criteria, c)
 	}
-	pp.AcceptanceCriteria = criteria
+	if pp.AcceptanceCriteria = criteria; len(criteria) == 0 {
+		return invalid("A task needs at least one acceptance criterion.")
+	}
 	for _, s := range []*string{&pp.Source, &pp.AgentNote} {
 		if *s = strings.TrimSpace(*s); utf8.RuneCountInString(*s) > maxText || strings.ContainsRune(*s, 0) {
 			return invalid(fmt.Sprintf("A source and a note can have at most %d characters each.", maxText))
@@ -141,12 +143,9 @@ func body(ctx context.Context, tx pgx.Tx, planID int64, pp proposal) (string, er
 		return "", err
 	}
 	var b strings.Builder
-	b.WriteString(pp.Description + "\n")
-	if len(pp.AcceptanceCriteria) > 0 {
-		b.WriteString("\n## Acceptance criteria\n")
-		for _, c := range pp.AcceptanceCriteria {
-			b.WriteString("- [ ] " + c + "\n")
-		}
+	b.WriteString(pp.Description + "\n\n## Acceptance criteria\n")
+	for _, c := range pp.AcceptanceCriteria {
+		b.WriteString("- [ ] " + c + "\n")
 	}
 	if len(refs) > 0 {
 		b.WriteString("\n")
@@ -184,14 +183,19 @@ func write(ctx context.Context, tx pgx.Tx, planID int64, pp proposal) error {
 }
 
 // createTask creates proposal pp's task in project pr with token, at the end of Backlog, and records it on pp as
-// approved, or approved_edited after a person's edit, in tx, which holds the row of pp's plan planID. The card takes
-// the issue's tests, which are pp's. ctx must outlive the person's request, since a task GitHub has must be recorded.
+// approved, or approved_edited after a person's edit, in tx, which holds the row of pp's plan planID. It takes the
+// project's lock, so call it under projects.Serialize, and commit tx only when it succeeds: the task and its record
+// commit together, with no second connection. The card takes the issue's tests, which are pp's. ctx must outlive the
+// person's request, since a task GitHub has must be recorded.
 func (p *Planning) createTask(ctx context.Context, tx pgx.Tx, token string, pr projects.Project, planID int64, pp proposal) error {
+	if err := projects.Lock(ctx, tx, pr.ID); err != nil {
+		return err
+	}
 	b, err := body(ctx, tx, planID, pp)
 	if err != nil {
 		return err
 	}
-	id, err := p.Board.CreateTask(ctx, token, pr, pp.Title, b)
+	id, err := p.Board.CreateTask(ctx, tx, token, pr, pp.Title, b)
 	if err != nil {
 		return err
 	}
@@ -201,10 +205,10 @@ func (p *Planning) createTask(ctx context.Context, tx pgx.Tx, token string, pr p
 }
 
 // settle makes plan id done once its tasks are settled: it is approved with no job, has proposals, and each one
-// not dropped has its task.
+// not dropped has its task. A failed turn's error no longer matters then.
 func settle(ctx context.Context, tx pgx.Tx, id int64) error {
 	_, err := tx.Exec(ctx, `
-		update feature_plans fp set status = 'done'
+		update feature_plans fp set status = 'done', error = null
 		where id = $1 and status = 'approved' and pending is null and exists (select from plan_proposals where plan_id = fp.id)
 			and not exists (select from plan_proposals where plan_id = fp.id and status <> 'dropped' and task_id is null)`, id)
 	return err

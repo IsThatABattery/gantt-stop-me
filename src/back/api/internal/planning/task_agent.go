@@ -53,8 +53,10 @@ var (
 // tasks runs the task agent's job on plan pl, whose row tx holds, with the creator's model through c, and saves what
 // it did: on generate, the plan's proposals, then the task of each approved one, which they are with review off,
 // created with token, the creator's, in dependency order; on revise, the first proposal sent back, rewritten and
-// waiting for review again. A generate job whose proposals the agent made already only creates their tasks. A failed
-// turn records why and drops the job, keeping the tasks it created.
+// waiting for review again. A generate job whose proposals the agent made already only creates their tasks. The
+// proposals are committed before any task is made, and each task with its proposal's record, one transaction and
+// connection at a time, so an API that dies meanwhile only creates the missing tasks on its next start. A failed turn
+// records why and drops the job, keeping the tasks it created.
 func (p *Planning) tasks(ctx context.Context, tx pgx.Tx, c *llm.Client, model, token string, pr projects.Project, pl plan, review bool) error {
 	all, err := proposals(ctx, tx, pl.ID)
 	if err != nil {
@@ -75,44 +77,90 @@ func (p *Planning) tasks(ctx context.Context, tx pgx.Tx, c *llm.Client, model, t
 		}
 	}
 	wctx := context.WithoutCancel(ctx) // a task GitHub has must be recorded
-	var pending *string
-	if failure == "" && !revise {
-		if all, err = proposals(ctx, tx, pl.ID); err != nil {
+	switch {
+	case failure != "":
+		return fail(wctx, tx, pl.ID, failure)
+	case revise:
+		return end(wctx, tx, pl.ID)
+	}
+	if err := tx.Commit(wctx); err != nil { // the proposals; the job stays until their tasks are made
+		return err
+	}
+	if all, err = proposals(wctx, p.DB, pl.ID); err != nil {
+		return err
+	}
+	for _, pp := range all {
+		if pp.Status != "approved" || pp.TaskID != nil {
+			continue
+		}
+		if ctx.Err() != nil { // shutting down: the job stays, and the next start creates the rest
+			return ctx.Err()
+		}
+		unlock, err := projects.Serialize(ctx, pr.ID)
+		if err != nil {
 			return err
 		}
-		for _, pp := range all {
-			if pp.Status != "approved" || pp.TaskID != nil {
-				continue
+		tx, err = p.generating(wctx, pl.ID)
+		if tx != nil {
+			if err = p.createTask(wctx, tx, token, pr, pl.ID, pp); err == nil {
+				err = tx.Commit(wctx)
 			}
-			if ctx.Err() != nil { // shutting down: the rest wait for the next start
-				pending = new("generate")
-				break
+			tx.Rollback(wctx)
+		}
+		unlock()
+		if tx == nil { // the job is gone, as once the plan is discarded, or the database failed
+			return err
+		}
+		if err != nil {
+			log.Printf("planner: create the task of proposal %d: %v", pp.ID, err)
+			why := err.Error() // GitHub's, such as "github: HTTP 422"
+			if ref := (*refusal)(nil); errors.As(err, &ref) {
+				why = strings.TrimSuffix(ref.message, ".")
 			}
-			if err := p.createTask(wctx, tx, token, pr, pl.ID, pp); err != nil {
-				log.Printf("planner: create the task of proposal %d: %v", pp.ID, err)
-				why := err.Error() // GitHub's, such as "github: HTTP 422"
-				if ref := (*refusal)(nil); errors.As(err, &ref) {
-					why = strings.TrimSuffix(ref.message, ".")
-				}
-				failure = fmt.Sprintf("The task of proposal %d could not be created: %s.", pp.Position, why)
-				break
-			}
+			failure = fmt.Sprintf("The task of proposal %d could not be created: %s.", pp.Position, why)
+			break
 		}
 	}
+	if tx, err = p.generating(wctx, pl.ID); tx == nil {
+		return err
+	}
+	defer tx.Rollback(wctx)
 	if failure != "" {
 		return fail(wctx, tx, pl.ID, failure)
 	}
-	_, err = tx.Exec(wctx, `
-		update feature_plans fp set error = null, version = version + 1, updated_at = now(), pending = coalesce($2,
-			case when exists (select from plan_proposals where plan_id = fp.id and status = 'sent_back') then 'revise' end)
-		where id = $1`, pl.ID, pending)
+	return end(wctx, tx, pl.ID)
+}
+
+// generating begins a transaction holding plan id's row while its job is still generate, else returns a nil one.
+func (p *Planning) generating(ctx context.Context, id int64) (pgx.Tx, error) {
+	tx, err := p.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.QueryRow(ctx, `select from feature_plans where id = $1 and pending = 'generate' for update`, id).Scan(); err != nil {
+		tx.Rollback(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = nil
+		}
+		return nil, err
+	}
+	return tx, nil
+}
+
+// end records that plan id's turn succeeded, in tx, which holds its row: it clears the error, takes the next proposal
+// sent back for revision, if any, makes the plan done once its tasks are settled, and commits.
+func end(ctx context.Context, tx pgx.Tx, id int64) error {
+	_, err := tx.Exec(ctx, `
+		update feature_plans fp set error = null, version = version + 1, updated_at = now(), pending =
+			case when exists (select from plan_proposals where plan_id = fp.id and status = 'sent_back') then 'revise' end
+		where id = $1`, id)
 	if err == nil {
-		err = settle(wctx, tx, pl.ID)
+		err = settle(ctx, tx, id)
 	}
 	if err != nil {
 		return err
 	}
-	return tx.Commit(wctx)
+	return tx.Commit(ctx)
 }
 
 // propose runs the task agent on plan pl, whose proposals are all, with model through c, and saves its proposals in

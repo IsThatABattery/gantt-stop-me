@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -44,5 +45,22 @@ func TestApproveProposalWhenGitHubFails(t *testing.T) {
 	}
 	if n := f.tasks(); n != 0 {
 		t.Fatalf("%d tasks", n)
+	}
+}
+
+// An approval creates its task in the plan's transaction, so it never holds a connection while it waits for another:
+// approvals that did could take every connection and wait forever. Without a second free one, it still answers.
+func TestApproveProposalHoldsOneConnection(t *testing.T) {
+	f := setup(t)
+	pl := f.generate(f.approved(), task("Export", nil, script("make")))
+	for range f.DB.Config().MaxConns - 1 {
+		c, err := f.DB.Acquire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Release()
+	}
+	if got := decode(t, f.review(f.ada, pl, 1, "approve", nil), http.StatusOK); got.Status != "done" {
+		t.Fatalf("plan %+v, want it done", got)
 	}
 }

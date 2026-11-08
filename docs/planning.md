@@ -2,13 +2,13 @@
 
 A member describes a feature, and an interviewer agent asks them about it one question at a time while it writes a plan doc. The member then reviews the doc, unless their settings turn review off. Once the doc is approved, a task agent turns it into proposed tasks with tests, which members review one by one, and each approved one becomes a task in Backlog.
 
-The agent works in the API's planner worker, not in requests, because its LLM calls can outlast a request. A request records what the person did, sets the plan's `pending` job, and answers at once. The worker takes each plan with a job every 2 seconds and does one agent turn with the planning model of the user who started the plan, one turn at a time for each such user. Load the plan again until `pending` is `null`. A turn that fails sets `error` and clears `pending`, and [Retry](#retry-the-agents-turn) gives the job back. A turn also fails, without calling the model, when the user who started the plan has no planning model, their provider key cannot be read, or their GitHub account can no longer see the repository. While a turn runs on a plan, every change to it answers `409 agent_busy` at once instead of waiting.
+The agent works in the API's planner worker, not in requests, because its LLM calls can outlast a request. A request records what the person did, sets the plan's `pending` job, and answers at once. The worker takes each plan with a job every 2 seconds and does one agent turn with the planning model of the user who started the plan, one turn at a time for each such user. Load the plan again until `pending` is `null`. A turn that fails sets `error` and clears `pending`, and [Retry](#retry-the-agents-turn) gives the job back. A turn also fails, without calling the model, when the user who started the plan has no planning model, their provider key cannot be read, or their GitHub account can no longer see the repository, or, for `generate`, which creates tasks with it, can no longer push to it. While a turn runs on a plan, every change to it answers `409 agent_busy` at once instead of waiting.
 
 A plan's `status` is `briefing` (the interview), `needs_review`, `approved`, `done` or `discarded`. `pending` is the agent's next job: `ask` (update the doc and ask the next question, or finish), `draft` (write the doc from what it has and finish), `generate` (turn the doc into proposed tasks), or `revise` (rewrite the proposal sent back), and `null` while the plan waits on a person.
 
 When the interview ends, because the agent finished, the member asked for the draft, or it asked 12 questions, the agent writes its last doc pass. With the creator's `review` on, the plan goes to `needs_review`. With it off, it goes straight to `approved` with `pending: "generate"`.
 
-On `generate`, the task agent proposes up to 30 tasks, each small enough for one pull request, with a description, acceptance criteria, tests, the earlier proposals it depends on, and the doc section it came from. A proposal the API refuses, such as one with invalid tests, is answered back to the agent with why, so it can fix it. A turn that proposes nothing fails. With the creator's `review` on, the proposals wait in `needs_review` for [Approve a proposal](#approve-a-proposal), [Edit a proposal](#edit-a-proposal) and [Deny a proposal](#deny-a-proposal). With it off, the worker approves every proposal and creates its task at once, in dependency order, with the creator's GitHub token.
+On `generate`, the task agent proposes up to 30 tasks, each small enough for one pull request, with a description, acceptance criteria, tests, the earlier proposals it depends on, and the doc section it came from. A proposal the API refuses, such as one with invalid tests, is answered back to the agent with why, so it can fix it. A turn that proposes nothing fails. With the creator's `review` on, the proposals wait in `needs_review` for [Approve a proposal](#approve-a-proposal), [Edit a proposal](#edit-a-proposal) and [Deny a proposal](#deny-a-proposal). With it off, the worker approves every proposal and creates its task at once, in dependency order, with the creator's GitHub token. The proposals are saved before any task is made, and each task with its proposal, so a restart or a failed creation keeps both, and the next `generate` only creates the missing tasks.
 
 A proposal's task is an issue labeled `board:backlog`, at the end of Backlog. Its body is the description, an `## Acceptance criteria` checklist, a `Depends on #N` line for each proposal it depends on that has its task (`Depends on` and that proposal's title while it has none, and no line for a dropped one), and the proposal's tests as a `## Tests` section. The card's [tests](board.md#get-task) are the proposal's. The plan becomes `done` once no job is pending and every proposal not dropped has its task.
 
@@ -144,7 +144,7 @@ Returns one plan with its doc, its interview and its proposed tasks.
 
 `messages` is the interview in order: the agent's questions, with `options` (0 to 4 suggested answers), and the person's answers, with `skipped` true for a question skipped instead. `answered` counts the questions answered or skipped. `expectedQuestions` is roughly how many questions the interview takes: those asked, plus one per topic not yet touched, at most 12, and those asked once it is over. `feedback` is a denial's, until the agent's next turn takes it, else `null`. `error` says why the agent's last turn failed, `null` once one succeeds. `version` changes with every change to the plan.
 
-`proposals` are the task agent's proposed tasks, by `position` (from 1, in the order it proposed them), `[]` until it proposes any. A proposal's `status` is `needs_review`, `approved`, `approved_edited` (approved after a person's [edit](#edit-a-proposal)), `sent_back` (for the agent to revise) or `dropped`. `acceptanceCriteria` are one-line texts. `tests` are as a card's [tests](board.md#get-task). `dependsOn` holds the `position`s of the earlier proposals it needs. `source` is the doc section it came from, and `agentNote` what the agent wants a reviewer to know, `""` for none. `feedback` is a denial's: a revision takes it, and a dropped proposal keeps it. `taskId` is its task's `id` once it is approved, else `null`.
+`proposals` are the task agent's proposed tasks, by `position` (from 1, in the order it proposed them), `[]` until it proposes any. A proposal's `status` is `needs_review`, `approved`, `approved_edited` (approved after a person's [edit](#edit-a-proposal)), `sent_back` (for the agent to revise) or `dropped`. `acceptanceCriteria` are one-line texts. `tests` are as a card's [tests](board.md#get-task). `dependsOn` holds the `position`s of the earlier proposals it needs. `source` is the doc section it came from, and `agentNote` what the agent wants a reviewer to know, `""` for none. `feedback` is a denial's: a revision takes it, and a dropped proposal keeps it. `taskId` is its task's `id` once that is created, else `null`. With review off, an `approved` proposal has none until its task is made, as when GitHub refused it.
 
 ```json
 {
@@ -394,7 +394,7 @@ Changes a proposal in `needs_review` of an `approved` plan as a person wrote it,
 | `proposalID` | path | integer | a proposal's `id` in the plan |
 | `title` | body | string | optional; 1 to 256 characters on one line, trimmed |
 | `description` | body | string | optional; 1 to 10000 characters, trimmed; no `## Tests` heading or unclosed code fence of its own |
-| `acceptanceCriteria` | body | array of strings | optional; each 1 to 10000 characters on one line, trimmed |
+| `acceptanceCriteria` | body | array of strings | optional; at least one, each 1 to 10000 characters on one line, trimmed |
 | `tests` | body | array | optional; at least one test, as [Set tests](board.md#set-tests) takes them |
 | `dependsOn` | body | array of integers | optional; `position`s of earlier proposals |
 | `version` | body | integer | the plan's `version` as loaded |
@@ -446,7 +446,7 @@ Approves a proposal in `needs_review` of an `approved` plan and creates its task
 
 ## Deny a proposal
 
-Turns down a proposal in `needs_review` of an `approved` plan with feedback. `revise` makes it `sent_back` with `pending: "revise"`: the agent's next turn rewrites it from the feedback, in its place, and returns it to `needs_review`. `drop` makes it `dropped`.
+Turns down a proposal in `needs_review` of an `approved` plan with feedback. `revise` makes it `sent_back` with `pending: "revise"`: the agent's next turn rewrites it from the feedback, in its place, and returns it to `needs_review`. `drop` makes it `dropped`. A `sent_back` proposal whose revision failed can be denied again, with new feedback or to drop it.
 
 `POST /api/projects/{id}/plans/{planID}/proposals/{proposalID}/deny`
 
@@ -474,7 +474,7 @@ Turns down a proposal in `needs_review` of an `approved` plan with feedback. `re
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
-| `409` | `wrong_status` outside `approved` or for a proposal not in `needs_review`, `agent_busy` while `pending` is set |
+| `409` | `wrong_status` outside `approved` or for a proposal not in `needs_review` or `sent_back`, `agent_busy` while `pending` is set |
 | `502` | `github_error` |
 
 ## Discard a plan

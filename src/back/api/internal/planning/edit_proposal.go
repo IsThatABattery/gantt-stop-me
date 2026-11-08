@@ -30,7 +30,7 @@ func (p *Planning) editProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
-		pp, err := reviewing(ctx, tx, r, pl)
+		pp, err := reviewing(ctx, tx, r, pl, "needs_review")
 		if err != nil {
 			return err
 		}

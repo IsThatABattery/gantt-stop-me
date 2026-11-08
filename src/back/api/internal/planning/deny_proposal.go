@@ -11,7 +11,8 @@ import (
 )
 
 // denyProposal turns down a proposal waiting for review with the reviewer's feedback: revise sends it back, for the
-// agent to rewrite it with the feedback, and drop drops it. Once no proposal waits, the plan is done.
+// agent to rewrite it with the feedback, and drop drops it. Once no proposal waits, the plan is done. A proposal sent
+// back whose revision failed can be denied again, so a revision that keeps failing is not a dead end.
 func (p *Planning) denyProposal(w http.ResponseWriter, r *http.Request) {
 	pr, _, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
@@ -35,7 +36,7 @@ func (p *Planning) denyProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
-		pp, err := reviewing(ctx, tx, r, pl)
+		pp, err := reviewing(ctx, tx, r, pl, "needs_review", "sent_back")
 		if err != nil {
 			return err
 		}

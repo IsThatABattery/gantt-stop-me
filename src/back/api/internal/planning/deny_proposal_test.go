@@ -74,6 +74,21 @@ func TestDenyProposal(t *testing.T) {
 	}
 }
 
+// A proposal whose revision failed can still be dropped, and the failure no longer matters once the plan is done.
+func TestDropAProposalWhoseRevisionFailed(t *testing.T) {
+	f := setup(t)
+	pl := f.generate(f.approved(), task("Export", nil, script("make")))
+	f.review(f.ada, pl, 1, "deny", map[string]string{"feedback": "Smaller.", "outcome": "revise"}).Expect(http.StatusOK, "")
+	f.work() // the fake answers 500 with no reply scripted
+	if got := f.plan(pl.ID); got.Error == nil || got.Pending != nil || got.Proposals[0].Status != "sent_back" {
+		t.Fatalf("plan after a failed revision %+v", got)
+	}
+	got := decode(t, f.review(f.ada, pl, 1, "deny", map[string]string{"feedback": "Not needed.", "outcome": "drop"}), http.StatusOK)
+	if got.Status != "done" || got.Error != nil || got.Proposals[0].Status != "dropped" {
+		t.Fatalf("plan %+v, want it done with the proposal dropped", got)
+	}
+}
+
 // Dropping every proposal leaves nothing to wait for.
 func TestDropEveryProposal(t *testing.T) {
 	f := setup(t)
