@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// CallTimeout bounds one decisions or chat completions call, which a model may think about for a while.
+// CallTimeout bounds one decisions or responses call, which a model may think about for a while.
 const CallTimeout = 120 * time.Second
 
 // HTTPClient returns a client for user-supplied provider URLs, called from inside our network, that gives up after

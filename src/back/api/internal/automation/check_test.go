@@ -21,7 +21,7 @@ import (
 )
 
 // noChat is the runner error of an LLM check whose chat call failed, as the fake LLM fails one it has no reply for.
-const noChat = "The LLM check could not finish: POST /chat/completions answered HTTP 500."
+const noChat = "The LLM check could not finish: POST /responses answered HTTP 500."
 
 // oneCheck is an issue body with one LLM check.
 const oneCheck = "## Tests\n- [ ] Signing up with an empty email answers 400\n  1. POST /api/auth/signup with no email.\n"

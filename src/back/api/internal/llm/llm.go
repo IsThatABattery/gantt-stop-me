@@ -1,5 +1,5 @@
 // Package llm calls the automation owner's LLM providers, OpenAI-compatible endpoints at base URLs users enter:
-// the Decisions API that routes tests, and the Chat Completions tool-calling loop that runs LLM checks.
+// the Decisions API that routes tests, and the Responses tool-calling loop that the planning agents and LLM checks run.
 package llm
 
 import (
@@ -60,6 +60,9 @@ func (c *Client) post(ctx context.Context, path string, in, out any) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode/100 != 2 {
+		// The answer says why, such as a rate limit or no quota for a 429, so the log keeps its start.
+		why, _ := io.ReadAll(io.LimitReader(res.Body, 1024))
+		log.Printf("llm: POST %s%s answered HTTP %d: %s", c.BaseURL, path, res.StatusCode, why)
 		return fmt.Errorf("llm: POST %s answered HTTP %d", path, res.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(res.Body, maxAnswer+1))

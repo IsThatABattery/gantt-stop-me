@@ -7,9 +7,10 @@ import (
 	"fmt"
 )
 
-// Message is one Chat Completions message: one the caller starts the conversation with, or one the loop sends back.
+// Message is one message the caller starts the conversation with, sent as a Responses input message. ToolCalls and
+// ToolCallID are only for llmtest, which reads the conversation back as messages.
 type Message struct {
-	Role       string     `json:"role"` // "system", "user", "assistant" or "tool"
+	Role       string     `json:"role"` // "system" or "user"; llmtest also reads "assistant" and "tool"
 	Content    string     `json:"content"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // the assistant's
 	ToolCallID string     `json:"tool_call_id,omitempty"` // the call a "tool" message answers
@@ -50,32 +51,37 @@ type Handler func(ctx context.Context, name, arguments string) (answer string, d
 // It names no tool, since each caller's tools differ.
 const nudge = "Answer by calling one of the tools."
 
-// assistant is a model's message as it came, sent back as it came: content stays null when it was, which
-// some providers require beside tool calls.
-type assistant struct {
-	Role      string     `json:"role"`
-	Content   *string    `json:"content"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+// outputItem is the part of a Responses output item the loop reads. The item itself goes back to the model as it
+// came, so reasoning and messages keep every field.
+type outputItem struct {
+	Type      string `json:"type"` // "function_call", "message", "reasoning", ...
+	CallID    string `json:"call_id"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
-// Chat runs the tool-calling loop over POST {BaseURL}/chat/completions: it sends model the messages and the tools,
-// carries out the tool calls the model asks for one at a time with handle, and sends back their answers, until a
-// call is done. It returns every call carried out, in order, also with an error.
+// Chat runs the tool-calling loop over POST {BaseURL}/responses: it sends model the messages and the tools,
+// carries out the function calls the model asks for one at a time with handle, and sends back their outputs, until
+// a call is done. It returns every call carried out, in order, also with an error.
 //
-// It fails when the provider does, once maxCalls calls are carried out with none done, counting each call in a
-// message, and when the model answers without calling a tool a second time; the first time, it is nudged to call one.
+// Nothing is stored at the provider: each request sends the whole conversation, with reasoning as encrypted content.
+//
+// It fails when the provider does, once maxCalls calls are carried out with none done, counting each call in an
+// answer, and when the model answers without calling a tool a second time; the first time, it is nudged to call one.
 func (c *Client) Chat(ctx context.Context, model string, messages []Message, tools []Tool, maxCalls int, handle Handler) ([]Step, error) {
 	type function struct {
-		Type     string `json:"type"`
-		Function Tool   `json:"function"`
+		Type string `json:"type"`
+		Tool
 	}
 	in := struct {
-		Model    string     `json:"model"`
-		Messages []any      `json:"messages"`
-		Tools    []function `json:"tools,omitempty"`
-	}{Model: model}
+		Model   string     `json:"model"`
+		Input   []any      `json:"input"`
+		Tools   []function `json:"tools,omitempty"`
+		Store   bool       `json:"store"`
+		Include []string   `json:"include"`
+	}{Model: model, Include: []string{"reasoning.encrypted_content"}}
 	for _, m := range messages {
-		in.Messages = append(in.Messages, m)
+		in.Input = append(in.Input, m)
 	}
 	for _, t := range tools {
 		in.Tools = append(in.Tools, function{"function", t})
@@ -84,43 +90,43 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, too
 	nudged := false
 	for {
 		var out struct {
-			Choices []struct {
-				Message assistant `json:"message"`
-			} `json:"choices"`
+			Output []json.RawMessage `json:"output"`
 		}
-		if err := c.post(ctx, "/chat/completions", in, &out); err != nil {
+		if err := c.post(ctx, "/responses", in, &out); err != nil {
 			return steps, err
 		}
-		if len(out.Choices) == 0 {
-			return steps, errors.New("llm: POST /chat/completions answered no choices")
+		var calls []outputItem
+		for _, raw := range out.Output {
+			var item outputItem
+			if json.Unmarshal(raw, &item) != nil {
+				return steps, errors.New("llm: POST /responses answered a malformed output item")
+			}
+			in.Input = append(in.Input, raw)
+			if item.Type == "function_call" {
+				calls = append(calls, item)
+			}
 		}
-		m := out.Choices[0].Message
-		m.Role = "assistant"
-		if len(m.ToolCalls) == 0 {
+		if len(calls) == 0 {
 			if nudged {
 				return steps, errors.New("llm: the model twice answered without calling a tool")
 			}
 			nudged = true
-			if m.Content == nil {
-				m.Content = new(string) // an assistant message needs content or tool calls
-			}
-			in.Messages = append(in.Messages, m, Message{Role: "user", Content: nudge})
+			in.Input = append(in.Input, Message{Role: "user", Content: nudge})
 			continue
 		}
-		in.Messages = append(in.Messages, m)
-		for _, call := range m.ToolCalls {
-			answer, done, err := handle(ctx, call.Function.Name, call.Function.Arguments)
+		for _, call := range calls {
+			answer, done, err := handle(ctx, call.Name, call.Arguments)
 			if err != nil {
 				return steps, err
 			}
-			steps = append(steps, Step{call.Function.Name, call.Function.Arguments, answer})
+			steps = append(steps, Step{call.Name, call.Arguments, answer})
 			if done {
 				return steps, nil
 			}
 			if len(steps) >= maxCalls {
 				return steps, fmt.Errorf("llm: no report after %d tool calls", maxCalls)
 			}
-			in.Messages = append(in.Messages, Message{Role: "tool", Content: answer, ToolCallID: call.ID})
+			in.Input = append(in.Input, map[string]string{"type": "function_call_output", "call_id": call.CallID, "output": answer})
 		}
 	}
 }
