@@ -5,7 +5,7 @@ export function LogoMark({ size = 28 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--color-ion)" strokeWidth="1.6" aria-hidden="true">
       <g transform="rotate(-25 12 12)">
         <path d="M1.5 12A10.5 3.4 0 0 1 22.5 12" />
-        <circle cx="12" cy="12" r="6" fill="#0D1830" />
+        <circle cx="12" cy="12" r="6" fill="var(--color-surface-sunken)" />
         <path d="M1.5 12A10.5 3.4 0 0 0 22.5 12" />
       </g>
     </svg>
