@@ -132,6 +132,8 @@ func (a *Automation) trigger(ctx context.Context, tx pgx.Tx, p projects.Project,
 		return false, err
 	}
 	if v.gone {
+		// shortcut: the refused mark goes with the record, so a refused pull request closed and reopened is commented
+		// on again; keep refused numbers apart from the records if authors cycle them.
 		_, err := tx.Exec(ctx, `delete from pull_requests where project_id = $1 and number = $2`, p.ID, v.pr.Number)
 		return true, err
 	}

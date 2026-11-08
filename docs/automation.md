@@ -163,4 +163,4 @@ What a pull request's change does, whether the webhook or the poller sees it fir
 | New head commit while ready | Nothing. |
 | Closed, merged, or gone from the open list | Its record is deleted. |
 
-Only a pull request from a branch of the repository, by an author with write access or above, runs. Any other that would start a run gets one comment saying why it was not tested, and nothing else happens. A run started while more than one open, ready pull request closes the issue ends at once as a runner error, and the task needs attention.
+Only a pull request from a branch of the repository, by an author with write access or above, runs. Any other that would start a run gets one comment saying why it was not tested, once while it stays open, and nothing else happens. A run started while more than one open, ready pull request that may run closes the issue ends at once as a runner error, and the task needs attention.
