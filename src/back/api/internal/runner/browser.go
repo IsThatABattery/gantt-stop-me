@@ -2,6 +2,7 @@ package runner
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 
@@ -20,6 +21,8 @@ func (s *Server) startBrowser(w http.ResponseWriter, r *http.Request, e *executi
 	var log tail
 	addr := s.addr(e, "browser")
 	if addr == "" {
+		// A launch cut short, such as by a dropped request, can leave the container behind under its name.
+		docker(r.Context(), io.Discard, "rm", "--force", s.container(e.id, "browser"))
 		var err error
 		if addr, err = s.launch(r.Context(), &log, e, "browser", s.browserRun(e.id)); err != nil {
 			fmt.Fprintln(&log, err)

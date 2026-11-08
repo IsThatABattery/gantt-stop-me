@@ -44,6 +44,8 @@ services:
     build:
       context: src/back/api
       target: runner
+    # An init reaps the docker-buildx process a cancelled build leaves behind, which the runner does not.
+    init: true
     environment:
       RUNNER_TOKEN: *runner-token
       RUN_PREFIX: ${RUN_PREFIX:-gantt}

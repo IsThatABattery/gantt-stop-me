@@ -62,7 +62,8 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request, e *execution) {
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
-			DisableKeepAlives: true,
+			DisableKeepAlives:      true,
+			MaxResponseHeaderBytes: keep, // the app's headers go back to the API like its body
 			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
 				return (&net.Dialer{}).DialContext(ctx, network, addr)
 			},
@@ -75,10 +76,7 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request, e *execution) {
 		return
 	}
 	defer res.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(res.Body, keep))
-	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, "unreachable", err.Error())
-		return
-	}
+	// A body cut short, or still streaming at the time limit, answers with what arrived: the status is real.
+	body, _ := io.ReadAll(io.LimitReader(res.Body, keep))
 	httpx.JSON(w, http.StatusOK, HTTPResponse{Status: res.StatusCode, Headers: res.Header, Body: string(body)})
 }

@@ -16,6 +16,8 @@ func TestValidate(t *testing.T) {
 		{"workflow with capitals", func(s *Spec) { s.Workflow = "Web" }, "workflow"},
 		{"workflow of one letter", func(s *Spec) { s.Workflow = "w" }, "workflow"},
 		{"workflow with a slash", func(s *Spec) { s.Workflow = "web/../x" }, "workflow"},
+		{"workflow ending in -", func(s *Spec) { s.Workflow = "web-" }, "workflow"}, // gantt-p3-web- is no image name
+		{"workflow of 33 characters", func(s *Spec) { s.Workflow = strings.Repeat("w", 33) }, "workflow"},
 		{"context outside", func(s *Spec) { s.Context = "../other" }, "context"},
 		{"absolute context", func(s *Spec) { s.Context = "/etc" }, "context"},
 		{"empty context", func(s *Spec) { s.Context = "" }, "context"},
@@ -31,6 +33,7 @@ func TestValidate(t *testing.T) {
 		{"service named app", func(s *Spec) { s.Services[0].Name = "app" }, "reserved"},
 		{"service named browser", func(s *Spec) { s.Services[0].Name = "browser" }, "reserved"},
 		{"service with a bad name", func(s *Spec) { s.Services[0].Name = "db_1" }, "name"},
+		{"service ending in -", func(s *Spec) { s.Services[1].Name = "api-" }, "name"},
 		{"two services of one name", func(s *Spec) { s.Services[1].Name = "db" }, "twice"},
 		{"image that is a flag", func(s *Spec) { s.Services[0].Image = "--privileged" }, "image"},
 		{"image with a flag after it", func(s *Spec) { s.Services[0].Image = "postgres:18 --privileged" }, "image"},
@@ -49,5 +52,13 @@ func TestValidate(t *testing.T) {
 	}
 	if got := hostileSpec().validate(); got != "" {
 		t.Errorf("validate() of a good spec = %q", got)
+	}
+}
+
+func TestValidPrefix(t *testing.T) {
+	for p, want := range map[string]bool{"gantt": true, "gantt-dev": true, "g2": true, "": false, "Gantt": false, "gantt-": false, "gantt_x": false} {
+		if got := ValidPrefix(p); got != want {
+			t.Errorf("ValidPrefix(%q) = %v, want %v", p, got, want)
+		}
 	}
 }

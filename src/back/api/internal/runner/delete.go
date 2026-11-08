@@ -14,6 +14,10 @@ func (s *Server) deleteExecution(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A repeat waits for the first, so two never remove the same containers at once, which docker fails.
+	// shortcut: one removal at a time across executions, key the lock by id if removals queue behind each other.
+	s.deleting.Lock()
+	defer s.deleting.Unlock()
 	s.mu.Lock()
 	e := s.execs[id]
 	delete(s.execs, id)
@@ -41,6 +45,8 @@ func (s *Server) deleteAll(w http.ResponseWriter, r *http.Request) {
 // DeleteAll stops every execution's requests and removes every container and network labelled with the prefix,
 // including those of an earlier runner. main calls it on start.
 func (s *Server) DeleteAll(ctx context.Context) error {
+	s.deleting.Lock()
+	defer s.deleting.Unlock()
 	s.mu.Lock()
 	execs := s.execs
 	s.execs = nil

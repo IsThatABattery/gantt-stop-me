@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"testing/iotest"
+	"time"
 )
 
 // newRunner serves a runner whose checkouts go to a temporary directory, and returns a client for it.
@@ -60,6 +63,54 @@ func TestPrepareWantsTheSpecFirst(t *testing.T) {
 	err := c.send(context.Background(), "POST", c.path(3, ""), mw.FormDataContentType(), &body, nil)
 	if e := (*Error)(nil); !errors.As(err, &e) || e.Status != 400 || !strings.Contains(e.Message, "spec") {
 		t.Errorf("source before spec = %v, want 400", err)
+	}
+}
+
+func TestDeleteStopsAnUpload(t *testing.T) {
+	s, c := newRunner(t)
+	ctx := context.Background()
+	source, stall := io.Pipe()
+	defer stall.Close() // so a failing test does not leave the handler reading
+	// A gzip header, then nothing more.
+	go stall.Write(tarball(t, file("r/Dockerfile", "FROM scratch"))[:20])
+	prepared := make(chan error, 1)
+	go func() {
+		_, err := c.Prepare(ctx, 5, hostileSpec(), source)
+		prepared <- err
+	}()
+	registered := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.execs[5] != nil
+	}
+	for start := time.Now(); !registered(); time.Sleep(10 * time.Millisecond) {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("the prepare never started")
+		}
+	}
+	deleted := make(chan struct{})
+	go func() {
+		c.Delete(ctx, 5) // its removal needs Docker, which api-test lacks; only how long it waits matters here
+		close(deleted)
+	}()
+	select {
+	case <-deleted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("DELETE waited for the upload to finish")
+	}
+	stall.Close()
+	if err := <-prepared; err == nil {
+		t.Error("Prepare() succeeded through DELETE")
+	}
+}
+
+func TestPrepareSourceFailure(t *testing.T) {
+	_, c := newRunner(t)
+	broken := io.MultiReader(bytes.NewReader(tarball(t, file("r/Dockerfile", "FROM scratch"))[:20]),
+		iotest.ErrReader(errors.New("download broke")))
+	_, err := c.Prepare(context.Background(), 6, hostileSpec(), broken)
+	if se := (*SourceError)(nil); !errors.As(err, &se) || !strings.Contains(err.Error(), "download broke") {
+		t.Errorf("Prepare() with a broken source = %#v, want *SourceError", err)
 	}
 }
 

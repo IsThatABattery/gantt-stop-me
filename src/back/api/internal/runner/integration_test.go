@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http/httptest"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -29,18 +29,26 @@ func TestDocker(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.DeleteAll(context.WithoutCancel(ctx)) })
-	srv := httptest.NewServer(s.Handler())
+	// Served the way main serves it, on the addresses it has before it joins an execution network.
+	ls, err := Listen("8081")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: s.Handler()}
+	for _, l := range ls {
+		go srv.Serve(l)
+	}
 	defer srv.Close()
-	c := &Client{URL: srv.URL, Token: "t", HTTPClient: srv.Client()}
+	c := &Client{URL: "http://127.0.0.1:8081", Token: "t", HTTPClient: http.DefaultClient}
 
-	port := 80
+	port, dbPort := 80, 5432
 	spec := Spec{
 		Project: 1, Workflow: "smoke", Context: ".", Dockerfile: "Dockerfile",
 		Env:   map[string]string{"GREETING": "hi from env"},
 		Cache: []string{"/cache"},
 		Port:  &port,
 		Services: []Service{{Name: "db", Image: "postgres:18", Env: map[string]string{"POSTGRES_PASSWORD": "test"},
-			Health: "pg_isready -h localhost -U postgres"}},
+			Health: "pg_isready -h localhost -U postgres", Port: &dbPort}},
 	}
 	source := tarball(t,
 		dir("owner-repo-abc123/"),
@@ -64,12 +72,25 @@ func TestDocker(t *testing.T) {
 	if code, out, err := c.Command(ctx, 1, "wget -T 3 -q -O- http://example.com/"); err != nil || code == 0 {
 		t.Errorf("a command reached the internet: %d %q, %v", code, out, err)
 	}
+	if code, out, err := c.Command(ctx, 1, "cp /bin/busybox /tmp/true && /tmp/true"); err != nil || code != 0 {
+		t.Errorf("a binary in /tmp did not run: %d %q, %v", code, out, err)
+	}
+	if self, err := s.address(ctx, 1, s.Self); err != nil {
+		t.Error(err)
+	} else if code, out, err := c.Command(ctx, 1, "wget -T 3 -q -O- http://"+self+":8081/health"); err != nil || code == 0 {
+		t.Errorf("a command reached the runner's API: %d %q, %v", code, out, err)
+	}
 
 	res, err := c.HTTP(ctx, 1, HTTPRequest{URL: "http://app/"})
 	if err != nil || res.Status != 200 || res.Body != "hello from app\n" {
 		t.Errorf("GET http://app/ = %+v, %v", res, err)
 	}
 
+	// A container a launch cut short left under the browser's name must not stop it starting.
+	if _, err := dockerOutput(ctx, "create", "--name="+s.container(1, "browser"),
+		"--label=gantt.prefix="+s.Prefix, "--label=gantt.execution=1", "busybox:1.37"); err != nil {
+		t.Fatal(err)
+	}
 	for range 2 { // safe to repeat
 		if err := c.Browser(ctx, 1); err != nil {
 			if f := (*Failure)(nil); errors.As(err, &f) {
@@ -78,15 +99,16 @@ func TestDocker(t *testing.T) {
 			t.Fatalf("Browser: %v", err)
 		}
 	}
-	_, _, session, err := c.MCP(ctx, 1, "", []byte(`{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params":
-		{"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "runner-test", "version": "1"}}}`))
+	const version = "2025-06-18"
+	_, _, session, err := c.MCP(ctx, 1, "", "", []byte(`{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params":
+		{"protocolVersion": "`+version+`", "capabilities": {}, "clientInfo": {"name": "runner-test", "version": "1"}}}`))
 	if err != nil || session == "" {
 		t.Fatalf("initialize = session %q, %v", session, err)
 	}
-	if _, _, _, err := c.MCP(ctx, 1, session, []byte(`{"jsonrpc": "2.0", "method": "notifications/initialized"}`)); err != nil {
+	if _, _, _, err := c.MCP(ctx, 1, session, version, []byte(`{"jsonrpc": "2.0", "method": "notifications/initialized"}`)); err != nil {
 		t.Fatalf("notifications/initialized: %v", err)
 	}
-	answer, contentType, _, err := c.MCP(ctx, 1, session, []byte(`{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}`))
+	answer, contentType, _, err := c.MCP(ctx, 1, session, version, []byte(`{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}`))
 	if err != nil {
 		t.Fatalf("tools/list: %v", err)
 	}
@@ -113,6 +135,27 @@ func TestDocker(t *testing.T) {
 		t.Errorf("tools/list = %v, want browser_navigate among them", names)
 	}
 
+	// Another project cannot build on this one's test image, which stays on the daemon.
+	other := Spec{Project: 2, Workflow: "smoke", Context: ".", Dockerfile: "Dockerfile"}
+	_, err = c.Prepare(ctx, 2, other, bytes.NewReader(tarball(t, file("r/Dockerfile", "FROM "+s.testImage(spec)+"\n"))))
+	if f := (*Failure)(nil); !errors.As(err, &f) || f.Stage != "build" {
+		t.Errorf("a build FROM another project's image = %v, want a build failure", err)
+	}
+	// An app that exits at once fails the start without waiting out the limit, its own output in the log.
+	crash := Spec{Project: 1, Workflow: "crash", Context: ".", Dockerfile: "Dockerfile", Port: &port}
+	start := time.Now()
+	_, err = c.Prepare(ctx, 3, crash, bytes.NewReader(tarball(t, file("r/Dockerfile", "FROM busybox:1.37\nCMD echo \"app $((6*7)) died\"; exit 1\n"))))
+	if f := (*Failure)(nil); !errors.As(err, &f) || f.Stage != "start" || !strings.Contains(f.Log, "app 42 died") {
+		t.Errorf("an app that exits at once = %v, want a start failure with its output", err)
+	} else if took := time.Since(start); took > limit/2 {
+		t.Errorf("an app that exits at once took %s to fail", took)
+	}
+	for _, id := range []int64{2, 3} {
+		if err := c.Delete(ctx, id); err != nil {
+			t.Errorf("Delete(%d): %v", id, err)
+		}
+	}
+
 	// DELETE stops a command still running.
 	ran := make(chan error, 1)
 	go func() {
@@ -125,8 +168,12 @@ func TestDocker(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	for range 2 { // safe to repeat
-		if err := c.Delete(ctx, 1); err != nil {
+	deleted := make(chan error, 2)
+	for range 2 { // safe to repeat, even at once
+		go func() { deleted <- c.Delete(ctx, 1) }()
+	}
+	for range 2 {
+		if err := <-deleted; err != nil {
 			t.Fatalf("Delete: %v", err)
 		}
 	}

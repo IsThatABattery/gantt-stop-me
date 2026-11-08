@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -15,8 +16,9 @@ import (
 
 // Client is the API's client for the runner, with one method per runner endpoint.
 //
-// An error is *Failure when the runner reports a failed build or start, *Error for any other answer outside 2xx,
-// and otherwise a transport failure, such as the runner restarting mid-request.
+// An error is *Failure when the runner reports a failed build or start, *Error for any other answer outside 2xx
+// or one too large to read, *SourceError when Prepare could not read its source, and otherwise a transport failure,
+// such as the runner restarting mid-request.
 type Client struct {
 	URL        string // RUNNER_URL, such as http://runner:8081
 	Token      string // RUNNER_TOKEN
@@ -42,24 +44,48 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("runner: HTTP %d %s: %s", e.Status, e.Code, e.Message)
 }
 
+// SourceError is a failure reading the source given to Prepare, such as a broken download. The runner did not
+// fail, and it may still hold the execution with a cut-off source: DELETE it before preparing it again.
+type SourceError struct{ Err error }
+
+func (e *SourceError) Error() string { return "runner: read source: " + e.Err.Error() }
+func (e *SourceError) Unwrap() error { return e.Err }
+
 // Prepare sends the spec and streams source, a GitHub .tar.gz, to the runner, which builds the images and starts
 // the sidecars and the app. It returns the runner's log once they are ready.
 func (c *Client) Prepare(ctx context.Context, id int64, spec Spec, source io.Reader) (string, error) {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	done := make(chan struct{})
+	var werr error
 	go func() {
-		pw.CloseWithError(writeParts(mw, spec, source))
+		werr = writeParts(mw, spec, source)
+		pw.CloseWithError(werr)
 		close(done)
 	}()
-	// Closing the reader stops the writer if the runner answers before reading everything,
-	// and waiting for it means nothing reads source once Prepare returns.
-	defer func() { pr.Close(); <-done }()
 	var out struct {
 		Log string `json:"log"`
 	}
 	err := c.send(ctx, http.MethodPost, c.path(id, ""), mw.FormDataContentType(), pr, &out)
+	// Closing the reader stops the writer if the runner answers before reading everything,
+	// and waiting for it means nothing reads source once Prepare returns.
+	pr.Close()
+	<-done
+	if se := (*SourceError)(nil); errors.As(werr, &se) {
+		return "", se
+	}
 	return out.Log, err
+}
+
+// sourceReader marks the errors of reading the source, so Prepare tells them from the runner's.
+type sourceReader struct{ r io.Reader }
+
+func (s sourceReader) Read(p []byte) (int, error) {
+	n, err := s.r.Read(p)
+	if err != nil && err != io.EOF {
+		err = &SourceError{err}
+	}
+	return n, err
 }
 
 // writeParts writes the spec part, then the source part, so the runner checks the spec before the tarball streams in.
@@ -74,7 +100,7 @@ func writeParts(mw *multipart.Writer, spec Spec, source io.Reader) error {
 	if part, err = mw.CreateFormFile("source", "source.tar.gz"); err != nil {
 		return err
 	}
-	if _, err := io.Copy(part, source); err != nil {
+	if _, err := io.Copy(part, sourceReader{source}); err != nil {
 		return err
 	}
 	return mw.Close()
@@ -104,10 +130,10 @@ func (c *Client) Browser(ctx context.Context, id int64) error {
 	return c.send(ctx, http.MethodPost, c.path(id, "/browser"), "", nil, nil)
 }
 
-// MCP sends one JSON-RPC message to the browser's MCP endpoint within sessionID ("" before initialize),
-// and returns the answer, its Content-Type (application/json or text/event-stream) and the session id.
-// An answer outside 2xx is *Error, with the answer still returned.
-func (c *Client) MCP(ctx context.Context, id int64, sessionID string, body []byte) ([]byte, string, string, error) {
+// MCP sends one JSON-RPC message to the browser's MCP endpoint within sessionID, under the protocol version
+// initialize agreed (both "" for initialize itself), and returns the answer, its Content-Type (application/json
+// or text/event-stream) and the session id. An answer outside 2xx is *Error, with the answer still returned.
+func (c *Client) MCP(ctx context.Context, id int64, sessionID, protocolVersion string, body []byte) ([]byte, string, string, error) {
 	req, err := c.request(ctx, http.MethodPost, c.path(id, "/mcp"), "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, "", "", err
@@ -116,12 +142,15 @@ func (c *Client) MCP(ctx context.Context, id int64, sessionID string, body []byt
 	if sessionID != "" {
 		req.Header.Set("Mcp-Session-Id", sessionID)
 	}
+	if protocolVersion != "" {
+		req.Header.Set("Mcp-Protocol-Version", protocolVersion)
+	}
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, "", "", err
 	}
 	defer res.Body.Close()
-	answer, err := io.ReadAll(res.Body)
+	answer, err := readAnswer(res)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -179,7 +208,7 @@ func (c *Client) send(ctx context.Context, method, url, contentType string, body
 		return err
 	}
 	defer res.Body.Close()
-	data, err := io.ReadAll(res.Body)
+	data, err := readAnswer(res)
 	if err != nil {
 		return err
 	}
@@ -193,6 +222,19 @@ func (c *Client) send(ctx context.Context, method, url, contentType string, body
 		return fmt.Errorf("runner: decode %s %s: %w", method, req.URL.Path, err)
 	}
 	return nil
+}
+
+// maxAnswer is the most of one runner answer the client reads. MCP answers carry page content the PR controls;
+// every other answer is far smaller.
+const maxAnswer = 16 << 20
+
+// readAnswer reads res's body. One over maxAnswer is *Error with code too_large.
+func readAnswer(res *http.Response) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(res.Body, maxAnswer+1))
+	if err == nil && len(data) > maxAnswer {
+		err = &Error{Status: res.StatusCode, Code: "too_large", Message: fmt.Sprintf("the answer is over %d MiB", maxAnswer>>20)}
+	}
+	return data, err
 }
 
 // answerError is the error for a runner answer outside 2xx: *Failure for a 422 with a stage, else *Error.

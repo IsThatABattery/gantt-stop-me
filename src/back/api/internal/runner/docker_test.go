@@ -28,7 +28,7 @@ var fixedFlags = []string{
 	"--security-opt=no-new-privileges",
 	"--cap-drop=NET_RAW", "--cap-drop=MKNOD",
 	"--memory=4g", "--cpus=2", "--pids-limit=1024",
-	"--tmpfs=/tmp",
+	"--tmpfs=/tmp:exec",
 	"--label=gantt.prefix=gantt", "--label=gantt.execution=7",
 }
 

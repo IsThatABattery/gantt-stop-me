@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"os/exec"
 	"strconv"
@@ -62,7 +63,7 @@ func (s *Server) run(id int64, extra []string, image string, args ...string) []s
 		"--security-opt=no-new-privileges",
 		"--cap-drop=NET_RAW", "--cap-drop=MKNOD",
 		"--memory=4g", "--cpus=2", "--pids-limit=1024",
-		"--tmpfs=/tmp",
+		"--tmpfs=/tmp:exec", // a bare --tmpfs is noexec, which breaks go test and anything else that runs from /tmp
 		"--label=gantt.prefix=" + s.Prefix,
 		"--label=gantt.execution=" + strconv.FormatInt(id, 10),
 	}
@@ -119,7 +120,8 @@ func (s *Server) browserRun(id int64) []string {
 func (s *Server) address(ctx context.Context, id int64, container string) (string, error) {
 	addr, err := dockerOutput(ctx, "inspect", "--format",
 		`{{(index .NetworkSettings.Networks "`+s.network(id)+`").IPAddress}}`, container)
-	if err == nil && addr == "" {
+	// An exited container has none: Docker 29 prints "invalid IP" for it, older versions "".
+	if ip, perr := netip.ParseAddr(addr); err == nil && (perr != nil || !ip.Is4()) {
 		err = fmt.Errorf("%s has no address on %s", container, s.network(id))
 	}
 	return addr, err

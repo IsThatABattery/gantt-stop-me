@@ -35,12 +35,19 @@ type Service struct {
 
 var (
 	// name is a workflow or sidecar name, which also becomes part of image, container and volume names.
-	name = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	// It ends in a letter or digit, as an image name's last part must, the same rule as the API's parser.
+	name = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}[a-z0-9]$`)
 	// image is a registry reference. It cannot start with "-", so docker never reads it as a flag.
 	image = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/:@-]{0,254}$`)
 	// cachePath has no commas, "=" or quotes, so it cannot add fields to the --mount value it goes into.
 	cachePath = regexp.MustCompile(`^(/[a-zA-Z0-9._@+-]+)+$`)
 )
+
+// nameRule says what name accepts.
+const nameRule = "2 to 32 lowercase letters, digits or -, starting with a letter and ending in a letter or digit"
+
+// ValidPrefix reports whether p can be RUN_PREFIX. It starts every name the runner makes, so it follows the name rule.
+func ValidPrefix(p string) bool { return name.MatchString(p) }
 
 // validate re-checks what the runner's safety depends on, whoever produced the spec. It returns the problem, or "".
 func (s Spec) validate() string {
@@ -48,7 +55,7 @@ func (s Spec) validate() string {
 		return "project must be a positive id"
 	}
 	if !name.MatchString(s.Workflow) {
-		return "workflow must be 2 to 32 lowercase letters, digits or -, starting with a letter"
+		return "workflow must be " + nameRule
 	}
 	if msg := buildPaths("", s.Context, s.Dockerfile); msg != "" {
 		return msg
@@ -65,7 +72,7 @@ func (s Spec) validate() string {
 	for _, svc := range s.Services {
 		switch {
 		case !name.MatchString(svc.Name):
-			return fmt.Sprintf("service %q: name must be 2 to 32 lowercase letters, digits or -, starting with a letter", svc.Name)
+			return fmt.Sprintf("service %q: name must be %s", svc.Name, nameRule)
 		case svc.Name == "app" || svc.Name == "browser":
 			return fmt.Sprintf("service %q: the name is reserved", svc.Name)
 		case seen[svc.Name]:

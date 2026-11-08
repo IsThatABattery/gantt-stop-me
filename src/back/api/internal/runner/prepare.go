@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"gantt-stop-me/api/internal/httpx"
 )
@@ -75,7 +76,11 @@ func (s *Server) prepare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.RemoveAll(dir) // the images hold everything the containers need
-	if err := extract(source, dir); err != nil {
+	// A body read does not watch ctx, so DELETE ends a slow or stalled upload by ending the connection's reads.
+	stopRead := context.AfterFunc(ctx, func() { http.NewResponseController(w).SetReadDeadline(time.Now()) })
+	err = extract(source, dir)
+	stopRead()
+	if err != nil {
 		fmt.Fprintln(&log, err)
 		fail(w, "build", &log)
 		return
@@ -100,12 +105,13 @@ func step(ctx context.Context, log io.Writer, args ...string) error {
 }
 
 // build builds the test image and each sidecar that has a build, then pulls the sidecar images.
-// It passes no --allow entitlements, secrets or SSH agent.
+// It passes no --allow entitlements, secrets or SSH agent. --pull resolves every base image from its registry,
+// so a Dockerfile cannot build FROM another project's test image, which the daemon keeps under a guessable tag.
 func (s *Server) build(ctx context.Context, log io.Writer, dir string, spec Spec) error {
 	// Join cleans ".." away before docker sees the paths, so they only descend, and extract made sure every
 	// symlink they pass through resolves inside dir.
 	image := func(tag, context, dockerfile, target string) error {
-		args := []string{"build", "--tag=" + tag, "--file=" + filepath.Join(dir, context, dockerfile)}
+		args := []string{"build", "--pull", "--tag=" + tag, "--file=" + filepath.Join(dir, context, dockerfile)}
 		if target != "" {
 			args = append(args, "--target="+target)
 		}
@@ -149,14 +155,10 @@ func (s *Server) start(ctx context.Context, log io.Writer, e *execution) error {
 		if err != nil {
 			return err
 		}
-		check := func(context.Context) bool { return true } // running counts as healthy
-		switch {
-		case svc.Health != "":
-			check = func(ctx context.Context) bool {
-				return docker(ctx, io.Discard, "exec", name, "sh", "-c", svc.Health) == nil
-			}
-		case svc.Port != nil:
-			check = accepts(joinPort(addr, *svc.Port))
+		// Healthy once health passes and port accepts, each when set: with neither, running counts as healthy.
+		check := func(ctx context.Context) bool {
+			return (svc.Health == "" || docker(ctx, io.Discard, "exec", name, "sh", "-c", svc.Health) == nil) &&
+				(svc.Port == nil || accepts(joinPort(addr, *svc.Port))(ctx))
 		}
 		if !ready(ctx, check) {
 			s.logs(ctx, log, name)
@@ -181,8 +183,10 @@ func (s *Server) launch(ctx context.Context, log io.Writer, e *execution, host s
 	if err := step(ctx, log, run...); err != nil {
 		return "", err
 	}
-	addr, err := s.address(ctx, e.id, s.container(e.id, host))
+	name := s.container(e.id, host)
+	addr, err := s.address(ctx, e.id, name)
 	if err != nil {
+		s.logs(ctx, log, name) // most often it has already exited, and its output says why
 		return "", err
 	}
 	s.setAddr(e, host, addr)

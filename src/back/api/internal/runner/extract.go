@@ -30,6 +30,7 @@ func extract(r io.Reader, dir string) error {
 	tr := tar.NewReader(&capped{r: gz, left: maxSource})
 	links := map[string]string{} // symlink -> its target, as written
 	files := map[string]bool{}   // regular files, the only entries a hardlink may name
+	var size int64               // of the files, which a sparse entry makes far larger than the stream carrying it
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -60,6 +61,9 @@ func extract(r io.Reader, dir string) error {
 		case hdr.Typeflag == tar.TypeDir:
 			err = root.MkdirAll(p, 0o755)
 		case hdr.Typeflag == tar.TypeReg:
+			if size += hdr.Size; size > maxSource {
+				return fmt.Errorf("%s: %w", hdr.Name, overLimit())
+			}
 			err = writeFile(root, p, hdr.FileInfo().Mode().Perm(), tr)
 			files[p] = true
 		case hdr.Typeflag == tar.TypeSymlink:
@@ -167,10 +171,16 @@ type capped struct {
 	left int64
 }
 
+// Read fails every read after the one that went over, since io.ReadFull, which archive/tar reads headers with,
+// drops an error that comes with a full read.
 func (c *capped) Read(p []byte) (int, error) {
-	n, err := c.r.Read(p)
-	if c.left -= int64(n); c.left < 0 {
-		return n, fmt.Errorf("source is over %d MiB uncompressed", maxSource>>20)
+	if c.left < 0 {
+		return 0, overLimit()
 	}
+	n, err := c.r.Read(p)
+	c.left -= int64(n)
 	return n, err
 }
+
+// overLimit is the error for a source past maxSource.
+func overLimit() error { return fmt.Errorf("source is over %d MiB uncompressed", maxSource>>20) }

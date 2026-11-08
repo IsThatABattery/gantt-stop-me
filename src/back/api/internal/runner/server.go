@@ -21,8 +21,32 @@ type Server struct {
 	Work   string // where source checkouts go: /work, a tmpfs, in the runner container
 	Self   string // the runner's own container, joined to every execution network
 
-	mu    sync.Mutex
-	execs map[int64]*execution
+	mu       sync.Mutex
+	execs    map[int64]*execution
+	deleting sync.Mutex // held by each DELETE, from stopping requests to the end of the removal
+}
+
+// Listen listens on port at each IPv4 address the runner has now. main calls it before the runner joins any
+// execution network, so test containers, which share those networks, cannot reach the API, whatever token they hold.
+func Listen(port string) ([]net.Listener, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+	var ls []net.Listener
+	for _, a := range addrs {
+		if ip, ok := a.(*net.IPNet); ok && ip.IP.To4() != nil {
+			l, err := net.Listen("tcp", net.JoinHostPort(ip.IP.String(), port))
+			if err != nil {
+				for _, l := range ls {
+					l.Close()
+				}
+				return nil, err
+			}
+			ls = append(ls, l)
+		}
+	}
+	return ls, nil
 }
 
 // execution is one prepared or preparing workflow execution.

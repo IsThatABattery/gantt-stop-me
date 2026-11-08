@@ -29,6 +29,14 @@ func TestRequest(t *testing.T) {
 			http.Redirect(w, r, "/elsewhere", http.StatusFound)
 		case "/big":
 			io.WriteString(w, strings.Repeat("x", 100<<10))
+		case "/big-headers":
+			w.Header().Set("X-Big", strings.Repeat("x", 100<<10))
+		case "/cut": // promises more than it sends, then hangs up
+			w.Header().Set("Content-Length", "100")
+			w.WriteHeader(http.StatusAccepted)
+			io.WriteString(w, "partial")
+			w.(http.Flusher).Flush()
+			panic(http.ErrAbortHandler)
 		default:
 			body, _ := io.ReadAll(r.Body)
 			w.Header().Set("X-Host", r.Host)
@@ -61,6 +69,13 @@ func TestRequest(t *testing.T) {
 	}
 	if res, err := c.HTTP(ctx, 1, HTTPRequest{URL: "http://app:" + port + "/big"}); err != nil || len(res.Body) != 64<<10 {
 		t.Errorf("a 100 KB body came back as %d bytes, %v; want 64 KB", len(res.Body), err)
+	}
+	if res, err := c.HTTP(ctx, 1, HTTPRequest{URL: "http://app:" + port + "/cut"}); err != nil || res.Status != http.StatusAccepted || res.Body != "partial" {
+		t.Errorf("a body cut short = %+v, %v; want its status and what arrived", res, err)
+	}
+	_, err = c.HTTP(ctx, 1, HTTPRequest{URL: "http://app:" + port + "/big-headers"})
+	if e := (*Error)(nil); !errors.As(err, &e) || e.Code != "unreachable" {
+		t.Errorf("100 KB of headers = %v, want them refused", err)
 	}
 
 	for _, c2 := range []struct{ url, code string }{

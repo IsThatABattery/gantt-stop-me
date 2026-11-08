@@ -4,8 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -57,6 +60,48 @@ func tarball(t testing.TB, entries ...entry) []byte {
 		err = gz.Close()
 	}
 	if err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// sparse is a .tar.gz holding one PAX sparse file of size bytes, all of it a hole. tar.Writer drops GNU.sparse
+// records, so the two headers are written by hand.
+func sparse(t testing.TB, name string, size int64) []byte {
+	t.Helper()
+	header := func(name string, typ byte, size int) []byte {
+		h := make([]byte, 512)
+		copy(h, name)
+		copy(h[100:], "0000644\x00")
+		copy(h[124:], fmt.Sprintf("%011o\x00", size))
+		h[156] = typ
+		copy(h[257:], "ustar\x0000")
+		copy(h[148:], "        ") // the checksum counts its own field as spaces
+		sum := 0
+		for _, b := range h {
+			sum += int(b)
+		}
+		copy(h[148:], fmt.Sprintf("%06o\x00 ", sum))
+		return h
+	}
+	// Version 0.1 keeps the map in the records, here no data at all.
+	var records string
+	for _, kv := range []string{"GNU.sparse.major=0", "GNU.sparse.minor=1", "GNU.sparse.numblocks=0",
+		fmt.Sprintf("GNU.sparse.realsize=%d", size)} {
+		rec := " " + kv + "\n"
+		n := len(rec) + 2 // a record starts with its own length, two digits for these
+		records += strconv.Itoa(n) + rec
+	}
+	var raw bytes.Buffer
+	raw.Write(header("PaxHeaders/x", tar.TypeXHeader, len(records)))
+	raw.WriteString(records)
+	raw.Write(make([]byte, 512-len(records)%512))
+	raw.Write(header(name, tar.TypeReg, 0))
+	raw.Write(make([]byte, 1024)) // the end of the archive
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	gz.Write(raw.Bytes())
+	if err := gz.Close(); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
@@ -121,14 +166,25 @@ func TestExtractRefuses(t *testing.T) {
 		})
 	}
 
-	t.Run("over the size limit", func(t *testing.T) {
-		defer func(n int64) { maxSource = n }(maxSource)
-		maxSource = 64 << 10
-		err := extract(bytes.NewReader(tarball(t, file("r/big", strings.Repeat("x", 100<<10)))), t.TempDir())
-		if err == nil || !strings.Contains(err.Error(), "r/big: source is over") {
-			t.Errorf("extract() = %v, want r/big over the limit", err)
-		}
-	})
+	over := map[string]struct {
+		source []byte
+		want   string
+	}{
+		"a file over the size limit": {tarball(t, file("r/big", strings.Repeat("x", 100<<10))), "r/big: source is over"},
+		// Every header counts too, though the files are empty.
+		"entries over the size limit": {tarball(t, slices.Repeat([]entry{file("r/empty", "")}, 200)...), "source is over"},
+		// A few hundred bytes that archive/tar reads back as 1 MiB of zeros.
+		"a sparse file over the size limit": {sparse(t, "r/zeros", 1<<20), "r/zeros: source is over"},
+	}
+	for name, c := range over {
+		t.Run(name, func(t *testing.T) {
+			defer func(n int64) { maxSource = n }(maxSource)
+			maxSource = 64 << 10
+			if err := extract(bytes.NewReader(c.source), t.TempDir()); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("extract() = %v, want %q", err, c.want)
+			}
+		})
+	}
 	t.Run("not gzip", func(t *testing.T) {
 		if err := extract(strings.NewReader("plain"), t.TempDir()); err == nil || !strings.Contains(err.Error(), ".tar.gz") {
 			t.Errorf("extract() = %v, want not a .tar.gz", err)
