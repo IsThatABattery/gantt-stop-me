@@ -119,7 +119,7 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
 /** In place of the editors while the user has no providers to pick from. */
 export function NoProviders() {
   return (
-    <p className="m-0 rounded-control border border-dashed border-line-strong px-4 py-3 text-[13px] text-text-muted-strong">
+    <p className="m-0 text-[13px] text-text-muted-strong">
       You have no LLM providers yet. <Link to="/settings#providers">Add a provider</Link> to choose the agents' models.
     </p>
   )

@@ -1,5 +1,7 @@
 import {
   closestCorners,
+  pointerWithin,
+  type CollisionDetection,
   DndContext,
   DragOverlay,
   MouseSensor,
@@ -131,6 +133,13 @@ function BoardView({ board }: { board: Board }) {
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
   )
+
+  // What's under the pointer wins: closestCorners alone lets nearby cards beat an empty column, whose corners are
+  // far away, so a card could never be dropped into one.
+  const collision: CollisionDetection = (args) => {
+    const hits = pointerWithin(args)
+    return hits.length ? hits : closestCorners(args)
+  }
 
   const containerOf = (id: string, l: Layout): ColumnKey | undefined =>
     isColumnId(id) ? (id.slice('column:'.length) as ColumnKey) : COLUMN_ORDER.find((k) => l[k].includes(id))
@@ -269,7 +278,7 @@ function BoardView({ board }: { board: Board }) {
         </p>
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={collision}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
