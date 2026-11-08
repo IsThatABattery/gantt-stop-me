@@ -139,6 +139,10 @@ func (b *browser) startVideo(ctx context.Context, name string) error {
 
 // stopVideo stops the recording startVideo started as name and returns it, as WebM, from the runner, which then
 // deletes it.
+// shortcut: the browser records each open page apart, the first as name and the others as name-1, name-2 and so on,
+// and saves nothing for a page closed before the stop; only name is fetched, so a check that works in a second tab
+// keeps the first tab's recording, or none, and the others stay on the browser's tmpfs until the execution ends.
+// Fetch every file browser_stop_video lists if checks come to use several tabs.
 func (b *browser) stopVideo(ctx context.Context, name string) ([]byte, error) {
 	if err := b.record(ctx, "browser_stop_video", map[string]any{}); err != nil {
 		return nil, err

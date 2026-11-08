@@ -363,6 +363,8 @@ Returns an LLM check's recording of the browser, when it used the browser, also 
 
 A finished run's issue comment links each test's video and screenshot, when it has them, after its line. GitHub's API cannot upload attachments, so the comment links to them rather than embedding them, and opening a link needs an account on the app with read access to the project, as the comment's link to the run does.
 
+The browser makes the recording in its own container, which the PR's pages reach, so code under test can alter it. The check's `transcript` is the authoritative record of what the check did.
+
 ## Cancel test run
 
 Cancels a queued or running test run and its workflow executions, and skips its unfinished tests. A running execution stays `running` until it has stopped and the runner has removed it, within a few seconds, so nothing starts beside it meanwhile. The reason names the caller. The task stays where it is and can be moved out of Testing again. A cancelled run gets no issue comment.

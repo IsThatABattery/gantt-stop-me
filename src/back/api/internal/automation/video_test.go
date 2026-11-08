@@ -56,6 +56,23 @@ func TestVideo(t *testing.T) {
 		t.Fatalf("a Range request got %d %q, want 206 with the rest of the WebM", ranged.StatusCode, body)
 	}
 
+	// A recording longer than one read comes out whole, and a range in its middle exactly.
+	long := bytes.Repeat([]byte("0123456789abcdef"), 10000)
+	f.exec(`update test_results set video = $1 where id = $2`, long, ids[1])
+	if res := f.Do("GET", video(run, ids[1]), nil, reader); !bytes.Equal(res.Body, long) {
+		t.Fatalf("got %d bytes, want the %d stored", len(res.Body), len(long))
+	}
+	req.Header.Set("Range", "bytes=40000-99999")
+	ranged, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ranged.Body.Close()
+	body, _ = io.ReadAll(ranged.Body)
+	if ranged.StatusCode != http.StatusPartialContent || !bytes.Equal(body, long[40000:100000]) {
+		t.Fatalf("bytes=40000-99999 got %d with %d bytes, want 206 with those 60000", ranged.StatusCode, len(body))
+	}
+
 	f.Do("GET", video(run, ids[0]), nil, reader).Expect(http.StatusNotFound, "not_found")   // a script has none
 	f.Do("GET", video(run+1, ids[1]), nil, reader).Expect(http.StatusNotFound, "not_found") // another run's
 	stranger := f.SignUp("eve@example.com", "correct horse")
