@@ -2,6 +2,7 @@ import { Link, Outlet, useParams } from 'react-router'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useBoard } from '../../data/views/board'
 import { labels, runStatusLabels } from '../../labels/labels'
+import { useProjectContext } from '../../app/projectContext'
 
 const lower = (s: string) => s.toLowerCase()
 
@@ -54,7 +55,8 @@ export function HangarPage() {
           </>
         )}
       </div>
-      <Outlet />
+      {/* Pass the project on, for the drawer's read-only checks. */}
+      <Outlet context={useProjectContext()} />
     </>
   )
 }
