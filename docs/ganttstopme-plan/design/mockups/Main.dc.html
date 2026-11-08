@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mission control board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#070B16}
+a{color:#3FD5E8}a:hover{color:#8BE9F4}
+.stars{background-image:radial-gradient(1px 1px at 20px 30px,rgba(230,236,247,.18) 50%,transparent 51%),radial-gradient(1px 1px at 140px 90px,rgba(230,236,247,.12) 50%,transparent 51%),radial-gradient(1px 1px at 260px 20px,rgba(230,236,247,.15) 50%,transparent 51%);background-size:300px 120px}
+</style>
+</helmet>
+<div class="stars" style="min-height: 960px; background-color: #070B16; color: #E6ECF7; font-family: Inter, system-ui, sans-serif; font-size: 14px; display: flex; flex-wrap: wrap">
+
+<nav aria-label="Primary" style="flex: 1 1 200px; box-sizing: border-box; padding: 24px 16px; border-right: 1px solid #1C2640; background: rgba(10,15,28,.85); display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 24px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3FD5E8" stroke-width="1.6" aria-hidden="true"><g transform="rotate(-25 12 12)"><path d="M1.5 12A10.5 3.4 0 0 1 22.5 12"></path><circle cx="12" cy="12" r="6" fill="#0D1830"></circle><path d="M1.5 12A10.5 3.4 0 0 0 22.5 12"></path></g></svg>
+<span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px; letter-spacing: .01em">GanttStopMe</span>
+</div>
+<a href="Home.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; margin-bottom: 8px; border-radius: 8px; border: 1px solid #24304A; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>All missions</a>
+<a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; background: #13203A; color: #E6ECF7; text-decoration: none; font-weight: 500">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3FD5E8" stroke-width="1.75" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"></rect><rect x="10" y="4" width="5" height="11" rx="1.5"></rect><rect x="17" y="4" width="4" height="7" rx="1.5"></rect></svg>Mission control</a>
+<a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M3 10l9-6 9 6v10H3z"></path><path d="M9 20v-6h6v6"></path></svg>Hangar</a>
+<a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M12 3c3 2 5 6 5 10l-2 3H9l-2-3c0-4 2-8 5-10z"></path><circle cx="12" cy="10" r="1.6"></circle><path d="M9 19l-1 2M15 19l1 2"></path></svg>Launch windows</a>
+<a href="ProbeConsole.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="11" r="7"></circle><rect x="7.5" y="8.5" width="9" height="5.5" rx="2.75"></rect><path d="M9 20h6"></path></svg>Astronauts</a>
+<a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg>Mission log</a>
+<a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M4 19h16M7 16V9M12 16V5M17 16v-4"></path></svg>Debrief</a>
+<a href="Settings.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none; margin-top: auto">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg>Settings</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 20px 28px; border-bottom: 1px solid #1C2640; background: rgba(10,15,28,.7)">
+<div style="flex: 1 1 320px; min-width: 0">
+<div style="font-family: Inter, system-ui, sans-serif; font-size: 12px; font-weight: 500; letter-spacing: .04em; color: #9AA7BF">MISSION · ORBITAL-NAV · LAUNCH WINDOW 14</div>
+<h1 style="margin: 6px 0 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 24px">Ship the astronaut approval flow end to end</h1>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 8px 14px; border: 1px solid #24304A; border-radius: 10px; background: #0F1626">
+<span style="font-size: 12px; color: #9AA7BF">T-minus</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 500">3d 06h</span>
+<svg width="96" height="32" viewBox="0 0 96 32" role="img" aria-label="Burndown trending slightly behind ideal"><path d="M2 4L94 28" stroke="#24304A" stroke-width="1.5" stroke-dasharray="3 3" fill="none"></path><path d="M2 4L18 7L34 9L50 15L66 17L78 20" stroke="#3FD5E8" stroke-width="2" fill="none"></path></svg>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap">
+<button type="button" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #FBBF24; background: rgba(251,191,36,.08); color: #E6ECF7; font: inherit; cursor: pointer">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #FBBF24">2</span>Awaiting approval</button>
+<button type="button" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #F87171; background: rgba(248,113,113,.08); color: #E6ECF7; font: inherit; cursor: pointer">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #F87171">1</span>Comms down</button>
+<button type="button" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #A78BFA; background: rgba(167,139,250,.08); color: #E6ECF7; font: inherit; cursor: pointer">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #A78BFA">4</span>Astronauts active</button>
+</div>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; flex: 1 1 auto; min-height: 0">
+
+<section aria-label="Board" style="flex: 999 1 640px; min-width: 0; overflow-x: auto; padding: 24px 28px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 16px">
+<label for="objective-filter" style="font-size: 13px; color: #9AA7BF">Objective</label>
+<select id="objective-filter" style="min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid #24304A; background: #0F1626; color: #E6ECF7; font: inherit"><option>All objectives</option><option>Auth service</option><option>Backlog and priorities</option><option>Board interactions</option><option>Build tooling</option><option>Realtime sync</option><option>Sprint telemetry</option><option>Theming</option></select>
+<a href="ObjectiveEditor.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; text-decoration: none">Manage objectives</a>
+<a href="NewObjective.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #3FD5E8; background: rgba(63,213,232,.08); color: #E6ECF7; text-decoration: none">New objective</a>
+<a href="NewPayload.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #3FD5E8; background: rgba(63,213,232,.08); color: #E6ECF7; text-decoration: none">New payload</a>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(216px, 1fr)); gap: 16px; min-width: 1120px">
+<sc-for list="{{columns}}" as="col" hint-placeholder-count="5">
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 12px; background: rgba(15,22,38,.6); border: 1px solid #1C2640; min-height: 640px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 4px 4px 8px">
+<div>
+<div style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 15px">{{col.name}}</div>
+<div style="font-size: 12px; color: #9AA7BF">{{col.plain}}</div>
+</div>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9AA7BF">{{col.count}}</span>
+</div>
+<sc-for list="{{col.cards}}" as="card" hint-placeholder-count="2">
+<a href="PayloadDetail.dc.html" style="display: block; text-decoration: none; color: #E6ECF7; border-radius: 10px; background: #0F1626; border: 1px solid {{card.border}}; overflow: hidden; opacity: {{card.opacity}}">
+<div style="height: 3px; background: {{card.phaseColor}}"></div>
+<div style="padding: 12px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9AA7BF">{{card.id}}</span>
+<span style="font-size: 12px; color: #9AA7BF">{{card.phase}}</span>
+</div>
+<div style="font-size: 14px; line-height: 1.4; font-weight: 500">{{card.title}}</div>
+<div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #AAB6CC">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle></svg>{{card.objective}}</div>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<sc-if value="{{card.isAstronaut}}" hint-placeholder-val="{{ false }}">
+<span style="display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px 0 4px; border-radius: 8px; border: 1px solid #A78BFA; color: #C4B5FD; font-size: 12px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="11" r="7"></circle><rect x="7.5" y="8.5" width="9" height="5.5" rx="2.75"></rect><path d="M9 20h6"></path></svg>{{card.owner}}</span>
+</sc-if>
+<sc-if value="{{card.isOperator}}" hint-placeholder-val="{{ true }}">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #24304A; font-size: 11px; font-weight: 600">{{card.owner}}</span>
+</sc-if>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9AA7BF">{{card.est}}</span>
+<span style="margin-left: auto; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid {{card.chipColor}}; color: {{card.chipColor}}">{{card.chip}}</span>
+</div>
+</div>
+</a>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const C = { line: '#24304A', violet: '#A78BFA', amber: '#FBBF24', red: '#F87171', green: '#4ADE80', ion: '#3FD5E8', quiet: '#9AA7BF' };
+    const phases = { Core: '#3FD5E8', Telemetry: '#A78BFA', Comms: '#FBBF24' };
+    const objs = { 'PAY-41': 'Backlog and priorities', 'PAY-53': 'Backlog and priorities', 'PAY-47': 'Auth service', 'PAY-49': 'Board interactions', 'PAY-38': 'Board interactions', 'PAY-39': 'Board interactions', 'PAY-46': 'Sprint telemetry', 'PAY-51': 'Sprint telemetry', 'PAY-42': 'Theming', 'PAY-44': 'Realtime sync', 'PAY-45': 'Realtime sync', 'PAY-43': 'Build tooling' };
+    const card = (id, title, phase, owner, isAstronaut, est, chip, chipColor, border, dim) => ({
+      id, title, phase, objective: objs[id], phaseColor: phases[phase], owner, isAstronaut, isOperator: !isAstronaut, est,
+      chip, chipColor, border: border || C.line, opacity: dim ? 0.6 : 1
+    });
+    const columns = [
+      { name: 'Hangar', plain: 'Backlog', cards: [
+        card('PAY-51', 'Add loop-closure metrics to telemetry panel', 'Telemetry', 'TV', false, '3 pt', 'Queued', C.quiet),
+        card('PAY-53', 'Migration for payload priority field', 'Core', 'MK', false, '2 pt', 'Queued', C.quiet),
+        card('PAY-47', 'Split auth middleware into its own service', 'Core', 'Astronaut-2', true, '5 pt', 'Ready', C.ion),
+        card('PAY-49', 'Keyboard shortcuts for board navigation', 'Core', 'JL', false, '3 pt', 'Ready', C.ion)
+      ]},
+      { name: 'In orbit', plain: 'In Progress', cards: [
+        card('PAY-44', 'Generate API client from OpenAPI spec', 'Comms', 'Astronaut-1', true, '3/5', 'Working', C.violet, C.violet),
+        card('PAY-45', 'Fix flaky websocket reconnect test', 'Comms', 'Astronaut-3', true, '1/3', 'Hail', C.amber, C.amber),
+        card('PAY-46', 'Sprint capacity gauge', 'Telemetry', 'TV', false, '2/4', 'Working', C.ion)
+      ]},
+      { name: 'Static fire', plain: 'Testing', cards: [
+        card('PAY-43', 'Upgrade build to Node 22', 'Core', 'Astronaut-4', true, 'PR #207', 'Comms down', C.red, C.red)
+      ]},
+      { name: 'Docking', plain: 'User Check', cards: [
+        card('PAY-41', 'Pagination for backlog endpoint', 'Core', 'Astronaut-1', true, 'PR #212', 'Approve?', C.amber, C.amber),
+        card('PAY-42', 'Dark and daylight theme tokens', 'Telemetry', 'JL', false, 'PR #209', 'In review', C.amber)
+      ]},
+      { name: 'Landed', plain: 'Closed', cards: [
+        card('PAY-38', 'Drag cards between columns', 'Core', 'MK', false, '5 pt', 'Landed', C.green, null, true),
+        card('PAY-39', 'Seed demo mission data', 'Telemetry', 'Astronaut-2', true, '2 pt', 'Landed', C.green, null, true)
+      ]}
+    ].map(c => ({ ...c, count: String(c.cards.length) }));
+    return { columns };
+  }
+}
+</script>
+</body>
+</html>

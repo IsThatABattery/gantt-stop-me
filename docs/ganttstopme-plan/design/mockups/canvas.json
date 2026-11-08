@@ -1,0 +1,265 @@
+{
+  "attachments": {},
+  "boards": {
+    "Home.dc.html": {
+      "expand": "fill",
+      "h": 1040,
+      "page": "views",
+      "title": "1 · Mission select",
+      "w": 1440,
+      "x": -41,
+      "y": 0
+    },
+    "Login.dc.html": {
+      "expand": "fill",
+      "h": 900,
+      "page": "views",
+      "title": "2 · Login",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 960,
+      "page": "views",
+      "title": "3 · Board",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "NewObjective.dc.html": {
+      "h": 700,
+      "page": "supporting",
+      "title": "New · Objective",
+      "w": 560,
+      "x": 4720,
+      "y": 0
+    },
+    "NewPayload.dc.html": {
+      "h": 820,
+      "page": "supporting",
+      "title": "New · Payload",
+      "w": 560,
+      "x": 4720,
+      "y": 820
+    },
+    "ObjectiveEditor.dc.html": {
+      "expand": "fill",
+      "h": 1000,
+      "page": "supporting",
+      "title": "Edit · Objective",
+      "w": 1440,
+      "x": 3200,
+      "y": 0
+    },
+    "PayloadDetail.dc.html": {
+      "h": 960,
+      "page": "supporting",
+      "title": "Payload detail · Drawer",
+      "w": 560,
+      "x": 0,
+      "y": 0
+    },
+    "PayloadEditor.dc.html": {
+      "expand": "fill",
+      "h": 1000,
+      "page": "supporting",
+      "title": "Edit · Payload",
+      "w": 1440,
+      "x": 3200,
+      "y": 1120
+    },
+    "PlanBriefing.dc.html": {
+      "expand": "fill",
+      "h": 960,
+      "page": "planner",
+      "title": "1 · Briefing",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "PlanDoc.dc.html": {
+      "expand": "fill",
+      "h": 1500,
+      "page": "planner",
+      "title": "2 · Review doc",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "PlanDocDeny.dc.html": {
+      "expand": "fill",
+      "h": 1500,
+      "page": "planner",
+      "title": "2b · Deny doc",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "PlanDone.dc.html": {
+      "expand": "fill",
+      "h": 860,
+      "page": "planner",
+      "title": "4 · Done",
+      "w": 1440,
+      "x": 7600,
+      "y": 0
+    },
+    "PlanPayloads.dc.html": {
+      "expand": "fill",
+      "h": 1100,
+      "page": "planner",
+      "title": "3 · Review payloads",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "PlanPayloadsDeny.dc.html": {
+      "expand": "fill",
+      "h": 1400,
+      "page": "planner",
+      "title": "3b · Deny payload",
+      "w": 1440,
+      "x": 6080,
+      "y": 0
+    },
+    "ProbeConsole.dc.html": {
+      "expand": "fill",
+      "h": 900,
+      "page": "supporting",
+      "title": "Astronaut console",
+      "w": 1440,
+      "x": 640,
+      "y": 0
+    },
+    "Settings.dc.html": {
+      "expand": "fill",
+      "h": 1040,
+      "page": "views",
+      "title": "4 · Settings",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "StyleTile.dc.html": {
+      "h": 900,
+      "page": "supporting",
+      "title": "Style tile",
+      "w": 960,
+      "x": 2160,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-07T15:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "page": "views",
+    "view": "canvas"
+  },
+  "noteOrder": [
+    "shape-mq87or",
+    "shape-t9t6g7",
+    "shape-r453s9",
+    "shape-v4xi2e",
+    "shape-wbgtvm",
+    "shape-jh1maz"
+  ],
+  "notes": {
+    "shape-jh1maz": {
+      "css": {
+        "stroke-width": "4px"
+      },
+      "d": "M0 10.2 C43.4 55.1 118.3 109.3 189.1 109.3 C206.1 109.3 222.8 106.2 238.9 99.1 C261.5 89.1 300 21.9 320.2 0",
+      "h": 109.3,
+      "kind": "pen",
+      "w": 320.2,
+      "x": 610.3,
+      "y": -1157.1
+    },
+    "shape-mq87or": {
+      "d": "M252.5 0.4 C220.4 0.4 188.2 0 156 0 C136.1 0 116.3 0.1 96.4 0.6 C29.2 2.2 0 8.2 0 66.7 C0 72.2 0.3 78.2 0.8 84.8 C1.9 99 3.1 118.6 11 131.2 C29.6 160.8 74 173.8 114.9 173.8 C137 173.8 158 170 173.3 163 C196.3 152.3 210.2 135.2 224.8 115.6 C241.1 93.5 254.2 69.6 254.2 46 C254.2 32.2 249.7 18.5 238.8 5.4",
+      "h": 173.8,
+      "kind": "pen",
+      "w": 254.2,
+      "x": 1481.3,
+      "y": -1072.6
+    },
+    "shape-r453s9": {
+      "d": "M2.7 500.2 C2.7 461.3 0 420.5 0 380 C0 339.8 2.6 299.9 13.2 262.4 C16.3 251.2 28.8 217.8 34.5 206.1 C53.5 166.7 85.3 132 112.4 97.9 C146.7 54.7 193.2 0 239.9 0 C264.4 0 289 15 311.9 54.6 C325.1 77.6 327.6 105.8 327.6 133.6 C327.6 149.8 326.7 165.8 326.7 180.5 C326.7 267.7 286 444 241.7 524.1",
+      "h": 524.1,
+      "kind": "pen",
+      "w": 327.6,
+      "x": 1580.1,
+      "y": -1561.1
+    },
+    "shape-t9t6g7": {
+      "d": "M172.6 11.1 C149.7 7.3 113.9 0 81.4 0 C59.9 0 39.9 3.2 26 12.7 C8.1 24.8 10.3 49.4 7.9 68.8 C5.4 89.7 0 114.3 0 137.3 C0 163.1 6.8 187 32.1 201.4 C46.1 209.4 60.3 212.9 74.2 212.9 C138.8 212.9 196.9 136.2 198.9 75.3 C198.9 74.3 198.9 73.3 198.9 72.2 C198.9 47.9 189.4 30.2 178.5 8.9",
+      "h": 212.9,
+      "kind": "pen",
+      "w": 198.9,
+      "x": 1713.6,
+      "y": -1049
+    },
+    "shape-v4xi2e": {
+      "css": {
+        "stroke-width": "4px"
+      },
+      "d": "M0 0 C12.4 24.9 18.6 44.7 25.4 71.2 C17.4 49.7 13.9 32.7 10.2 10.2",
+      "h": 71.2,
+      "kind": "pen",
+      "w": 25.4,
+      "x": 666.2,
+      "y": -1355.3
+    },
+    "shape-wbgtvm": {
+      "css": {
+        "stroke-width": "4px"
+      },
+      "d": "M0 0 C9.8 43.4 16.6 68.6 45.7 101.6",
+      "h": 101.6,
+      "kind": "pen",
+      "w": 45.7,
+      "x": 788.2,
+      "y": -1360.4
+    }
+  },
+  "order": [
+    "PayloadDetail.dc.html",
+    "ProbeConsole.dc.html",
+    "StyleTile.dc.html",
+    "Home.dc.html",
+    "Login.dc.html",
+    "Main.dc.html",
+    "Settings.dc.html",
+    "ObjectiveEditor.dc.html",
+    "NewObjective.dc.html",
+    "PayloadEditor.dc.html",
+    "NewPayload.dc.html",
+    "PlanBriefing.dc.html",
+    "PlanDoc.dc.html",
+    "PlanDocDeny.dc.html",
+    "PlanPayloads.dc.html",
+    "PlanPayloadsDeny.dc.html",
+    "PlanDone.dc.html"
+  ],
+  "pages": [
+    {
+      "id": "views",
+      "name": "Main views"
+    },
+    {
+      "id": "supporting",
+      "name": "Supporting screens"
+    },
+    {
+      "id": "planner",
+      "name": "Objective planner"
+    }
+  ],
+  "title": "GanttStopMe UI",
+  "v": 3
+}
