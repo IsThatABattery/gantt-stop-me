@@ -5,7 +5,7 @@ import { Icon } from '../../components/Icon'
 import type { TaskDetail } from '../../data/api/types'
 import type { ColumnKey } from '../../data/types'
 import { actionLabels, columnLabels, runStatusLabels } from '../../labels/labels'
-import { runLook } from '../board/runLook'
+import { runLook } from '../../components/runLook'
 
 interface DrawerHeaderProps {
   projectId: string
@@ -42,7 +42,7 @@ export function DrawerHeader({ projectId, task, column }: DrawerHeaderProps) {
         <span>{closed ? 'Closed' : 'Open'}</span>
         {run && task.runStatus && (
           <Chip tone={run.tone}>
-            {run.icon && <Icon name={run.icon} size={12} />}
+            {run.icon && <Icon name={run.icon} size={14} className={run.iconClass} />}
             {runStatusLabels[task.runStatus]}
           </Chip>
         )}

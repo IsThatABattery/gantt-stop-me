@@ -3,7 +3,7 @@ import { Chip } from '../../components/Chip'
 import { Icon } from '../../components/Icon'
 import type { Task } from '../../data/api/types'
 import { runStatusLabels, taskStatusLabels } from '../../labels/labels'
-import { runLook } from './runLook'
+import { runLook } from '../../components/runLook'
 
 interface TaskCardProps {
   task: Task
@@ -49,21 +49,24 @@ export function TaskCard({ task, to, overlay = false }: TaskCardProps) {
           )}
         </div>
         <div className="line-clamp-2 text-sm leading-[1.4] font-medium">{task.title}</div>
-        {(run || closed) && (
-          <div className="flex flex-wrap items-center gap-2">
-            {run && task.runStatus && (
+        {/* Landed says it all on the card; the drawer keeps the last run. */}
+        {closed ? (
+          <div className="flex">
+            <Chip tone="good">
+              <Icon name="check" size={12} />
+              {taskStatusLabels.landed}
+            </Chip>
+          </div>
+        ) : (
+          run &&
+          task.runStatus && (
+            <div className="flex">
               <Chip tone={run.tone}>
-                {run.icon && <Icon name={run.icon} size={12} />}
+                {run.icon && <Icon name={run.icon} size={14} className={run.iconClass} />}
                 {runStatusLabels[task.runStatus]}
               </Chip>
-            )}
-            {closed && (
-              <Chip tone="good" className="ml-auto">
-                <Icon name="check" size={12} />
-                {taskStatusLabels.landed}
-              </Chip>
-            )}
-          </div>
+            </div>
+          )
         )}
         {task.needsAttention && (
           <div className="flex items-start gap-1.5 rounded-lg border border-critical/60 bg-critical/8 px-2 py-1.5 text-xs text-critical">

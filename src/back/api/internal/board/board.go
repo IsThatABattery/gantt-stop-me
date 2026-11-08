@@ -52,6 +52,7 @@ func (b *Board) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{id}/assignees", b.Accounts.Require(b.assignable))
 	mux.HandleFunc("PUT /api/projects/{id}/tasks/{taskID}/tests", b.Accounts.Require(b.setTests))
 	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/move", b.Accounts.Require(b.move))
+	mux.HandleFunc("GET /api/me/tasks", b.Accounts.Require(b.assigned))
 }
 
 type column struct {
@@ -102,8 +103,13 @@ func (b *Board) scanTask(row pgx.Row, p projects.Project, extra ...any) (task, e
 		&t.RunStatus, &t.NeedsAttention, &t.Assignees}, extra...)...); err != nil {
 		return task{}, err
 	}
-	t.URL = fmt.Sprintf("%s/%s/%s/issues/%d", b.GitHub.Web, p.Owner, p.Name, t.IssueNumber)
+	t.URL = b.issueURL(p, t.IssueNumber)
 	return t, nil
+}
+
+// issueURL is the GitHub page of issue number in project p.
+func (b *Board) issueURL(p projects.Project, number int) string {
+	return fmt.Sprintf("%s/%s/%s/issues/%d", b.GitHub.Web, p.Owner, p.Name, number)
 }
 
 // taskID returns the {taskID} path value, or 0, which matches no task, when it is not a number.

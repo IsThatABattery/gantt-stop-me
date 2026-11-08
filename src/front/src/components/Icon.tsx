@@ -23,6 +23,22 @@ const paths = {
       <path d="M9 19l-1 2M15 19l1 2" />
     </>
   ),
+  /** A rocket on its pad: a test run waiting to start */
+  launchpad: (
+    <>
+      <path d="M12 2.5c2.6 1.8 4.2 5.2 4.2 8.6L14.6 14H9.4l-1.6-2.9c0-3.4 1.6-6.8 4.2-8.6z" />
+      <circle cx="12" cy="8.6" r="1.4" />
+      <path d="M9.4 14l-1 2.5M14.6 14l1 2.5M4 20.5h16M7 20.5v-2M17 20.5v-2" />
+    </>
+  ),
+  /** A rocket with its engine lit: a test run in progress */
+  liftoff: (
+    <>
+      <path d="M12 2.5c2.6 1.8 4.2 5.2 4.2 8.6L14.6 14H9.4l-1.6-2.9c0-3.4 1.6-6.8 4.2-8.6z" />
+      <circle cx="12" cy="8.6" r="1.4" />
+      <path d="M9.4 14l-1 2.5M14.6 14l1 2.5M12 16.5v5M10 17l-.8 2.6M14 17l.8 2.6" />
+    </>
+  ),
   helmet: (
     <>
       <circle cx="12" cy="11" r="7" />

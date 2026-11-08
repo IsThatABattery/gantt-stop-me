@@ -1,6 +1,7 @@
 package projects_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestListProjects(t *testing.T) {
 	ada := env.SignUp("ada@example.com", "correct horse")
 	adaToken := env.LinkGitHub(ada, "ada-gh")
 	env.GitHub.AddRepo("octo", "hello").Grant(adaToken, "push")
-	env.AddProject(ada, "octo", "hello")
+	hello := env.AddProject(ada, "octo", "hello")
 	other := env.GitHub.AddRepo("octo", "other")
 	bob := env.SignUp("bob@example.com", "correct horse")
 	bobToken := env.LinkGitHub(bob, "bob-gh")
@@ -38,6 +39,12 @@ func TestListProjects(t *testing.T) {
 	add(env, ada, "https://github.com/octo/other").Expect(http.StatusOK, "")
 	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 2 || got[0].Name != "other" || got[0].Permission != "read" {
 		t.Fatalf("after opening other, ada's projects = %+v", got)
+	}
+
+	// Visiting any of a project's pages puts it first again.
+	env.Do("GET", fmt.Sprintf("/api/projects/%d/board", hello), nil, ada).Expect(http.StatusOK, "")
+	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 2 || got[0].Name != "hello" {
+		t.Fatalf("after visiting hello, ada's projects = %+v", got)
 	}
 
 	// Losing access drops it once the cached permission expires.

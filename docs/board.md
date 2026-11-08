@@ -35,7 +35,7 @@ Adds a GitHub repository as a project, setting up its board labels and a task pe
 
 ## List projects
 
-Returns the projects the caller has added or opened, most recently used first, keeping only those their GitHub account still sees. It never lists other repositories the account can see.
+Returns the projects the caller has added or opened, most recently visited first, keeping only those their GitHub account still sees. Opening a project's board, which every project page loads, counts as a visit. It never lists other repositories the account can see.
 
 `GET /api/projects`
 
@@ -58,6 +58,55 @@ A project whose access check is over 5 minutes old is checked on GitHub again, a
 
 ```json
 { "projects": [{ "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }] }
+```
+
+## List assigned tasks
+
+Returns the open tasks assigned to the caller's GitHub account, grouped by project in [List projects](#list-projects) order, leaving out projects with none.
+
+`GET /api/me/tasks`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `projects`, each a `project` as [Add project](#add-project) answers it and its `tasks` in board order; `[]` for none |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `502` | `github_error` |
+
+Each task is as [Show board](#show-board) gives it, with `column`, the `key` and `name` of the column it is in. Assignees are as the project's last sync read them, so an assignment made on GitHub shows once someone opens that project's board.
+
+```json
+{
+  "projects": [
+    {
+      "project": { "id": 1, "owner": "ada", "name": "gantt", "permission": "write" },
+      "tasks": [
+        {
+          "id": 7,
+          "issueNumber": 12,
+          "columnId": 3,
+          "position": 1,
+          "version": 2,
+          "title": "Draw the timeline",
+          "state": "open",
+          "url": "https://github.com/ada/gantt/issues/12",
+          "runStatus": "running",
+          "needsAttention": null,
+          "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1" }],
+          "column": { "key": "testing", "name": "Testing" }
+        }
+      ]
+    }
+  ]
+}
 ```
 
 ## Show board

@@ -114,6 +114,12 @@ func (p *Projects) Permission(ctx context.Context, pr *Project, userID int64, to
 	return perm, p.remember(ctx, pr.ID, userID, perm)
 }
 
+// Visited records that the user opened the project now, which orders Opened.
+func (p *Projects) Visited(ctx context.Context, projectID, userID int64) error {
+	_, err := p.DB.Exec(ctx, `update project_members set visited_at = now() where project_id = $1 and user_id = $2`, projectID, userID)
+	return err
+}
+
 // gitHubError marks Permission's failed GitHub call apart from a database error, so Check answers it with github.Fail.
 type gitHubError struct{ error }
 

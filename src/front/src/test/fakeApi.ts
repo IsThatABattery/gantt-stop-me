@@ -283,6 +283,19 @@ export const handlers = [
     if (!fake.github) return fail(403, 'github_not_linked', 'Link your GitHub account first.')
     return HttpResponse.json({ projects: fake.opened })
   }),
+  route('get', '/me/tasks', () => {
+    signedIn()
+    if (!fake.github) return fail(403, 'github_not_linked', 'Link your GitHub account first.')
+    const login = fake.github.login
+    const mine = fake.tasks
+      .filter((t) => t.state === 'open' && t.assignees.some((a) => a.login === login))
+      .map((t) => {
+        const c = fake.columns.find((c) => c.id === t.columnId)!
+        return { ...brief(t), column: { key: c.key, name: c.name } }
+      })
+    const opened = fake.opened.some((p) => p.id === fake.project.id)
+    return HttpResponse.json({ projects: opened && mine.length ? [{ project: fake.project, tasks: mine }] : [] })
+  }),
   route('get', '/projects/:id/board', ({ params }) => {
     projectAccess(params.id)
     return HttpResponse.json({ project: fake.project, columns: fake.columns, tasks: fake.tasks.map(brief) })

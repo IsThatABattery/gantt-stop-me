@@ -9,27 +9,34 @@ import (
 	"gantt-stop-me/api/internal/httpx"
 )
 
-// list answers GET /api/projects: the projects the user has added or opened, most recently checked first, keeping
+// list answers GET /api/projects: the projects the user has added or opened, most recently visited first, keeping
 // only those their GitHub account still sees. It never lists repositories the user has not opened here.
+func (p *Projects) list(w http.ResponseWriter, r *http.Request) {
+	if out, ok := p.Opened(w, r); ok {
+		httpx.JSON(w, http.StatusOK, map[string]any{"projects": out})
+	}
+}
+
+// Opened returns the projects the user has added or opened and their GitHub account still sees, most recently
+// visited first, or answers the request itself and returns false.
 //
 // shortcut: each project whose cached permission is over 5 minutes old is checked on GitHub one after another, so
 // dozens of stale projects make a slow answer; check them in parallel when users open that many.
-func (p *Projects) list(w http.ResponseWriter, r *http.Request) {
+func (p *Projects) Opened(w http.ResponseWriter, r *http.Request) ([]Project, bool) {
 	ctx := r.Context()
 	userID := accounts.UserID(ctx)
 	token, ok := p.token(w, r)
 	if !ok {
-		return
+		return nil, false
 	}
-	// checked_at moves at most every 5 minutes as the user opens the project, so it orders by recent use.
 	rows, err := p.DB.Query(ctx, `
 		select p.id, p.github_repo_id, p.owner, p.name from projects p
 		join project_members m on m.project_id = p.id and m.user_id = $1
 		where p.synced_at is not null
-		order by m.checked_at desc, p.id`, userID)
+		order by m.visited_at desc, p.id`, userID)
 	if err != nil {
 		httpx.Internal(w, r, err)
-		return
+		return nil, false
 	}
 	var opened []Project
 	for rows.Next() {
@@ -37,29 +44,29 @@ func (p *Projects) list(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&pr.ID, &pr.RepoID, &pr.Owner, &pr.Name); err != nil {
 			rows.Close()
 			httpx.Internal(w, r, err)
-			return
+			return nil, false
 		}
 		opened = append(opened, pr)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		httpx.Internal(w, r, err)
-		return
+		return nil, false
 	}
 	out := []Project{}
 	for _, pr := range opened {
 		pr.Permission, err = p.Permission(ctx, &pr, userID, token)
 		if errors.As(err, new(gitHubError)) {
 			github.Fail(w, r, err)
-			return
+			return nil, false
 		}
 		if err != nil {
 			httpx.Internal(w, r, err)
-			return
+			return nil, false
 		}
 		if pr.Permission != "" { // lost access: Permission forgot the membership too
 			out = append(out, pr)
 		}
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"projects": out})
+	return out, true
 }

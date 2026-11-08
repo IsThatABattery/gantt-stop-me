@@ -7,6 +7,7 @@ export const keys = {
   workspace: ['workspace'] as const,
   user: (id: ID | undefined) => ['user', id] as const,
   projects: ['projects'] as const,
+  assigned: ['assigned'] as const,
   project: (projectId: ID) => ['project', projectId] as const,
   board: (projectId: ID) => ['board', projectId] as const,
   task: (projectId: ID, taskId: ID) => ['task', projectId, taskId] as const,

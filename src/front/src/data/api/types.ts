@@ -56,6 +56,16 @@ export interface Task {
   assignees: GitHubUser[]
 }
 
+/** A task assigned to the user, with the column it is in (GET /api/me/tasks) */
+export interface AssignedTask extends Task {
+  column: { key: ColumnKey; name: string }
+}
+
+export interface AssignedGroup {
+  project: Project
+  tasks: AssignedTask[]
+}
+
 export interface GitHubUser {
   login: string
   avatarUrl: string
