@@ -45,6 +45,7 @@ describe('plans', () => {
     let denied: unknown
     server.use(
       http.get('/api/projects/1/plans/1', () => HttpResponse.json(plan('approved'))),
+      http.post('/api/projects/1/plans/1/proposals/1/approve', () => HttpResponse.json(plan('approved'))),
       http.post('/api/projects/1/plans/1/proposals/2/deny', async ({ request }) => {
         denied = await request.json()
         return HttpResponse.json(plan('approved'))
@@ -52,11 +53,14 @@ describe('plans', () => {
     )
     renderApp('/projects/1/plans/1')
     const decide = within(await screen.findByRole('group', { name: 'Decide on CSV writer' }))
+    await userEvent.click(within(await screen.findByRole('group', { name: 'Decide on Export button' })).getByRole('button', { name: 'Approve Export button' }))
     await userEvent.click(decide.getByRole('button', { name: 'Reject CSV writer' }))
-    const revise = screen.getByRole('button', { name: 'Revise' })
-    expect(revise).toBeDisabled()
+    const confirm = screen.getByRole('button', { name: 'Confirm' })
+    expect(confirm).toBeDisabled() // a rejection needs a reason
     await userEvent.type(screen.getByLabelText('Why reject CSV writer'), 'Stream it, do not buffer.')
-    await userEvent.click(revise)
+    await userEvent.selectOptions(screen.getByLabelText('What to do with CSV writer'), 'revise')
+    expect(denied).toBeUndefined() // choosing sends nothing
+    await userEvent.click(confirm)
     await waitFor(() => expect(denied).toEqual({ feedback: 'Stream it, do not buffer.', outcome: 'revise' }))
   })
 
@@ -71,8 +75,22 @@ describe('plans', () => {
     )
     renderApp('/projects/1/plans/1')
     await userEvent.click(await screen.findByRole('button', { name: 'Reject all' }))
-    await userEvent.type(screen.getByLabelText('Why reject all'), 'Out of scope.')
-    await userEvent.click(screen.getByRole('button', { name: 'Drop' }))
+    await userEvent.type(screen.getByLabelText('Reason for every rejected task'), 'Out of scope.')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(denied).toEqual([1, 2]))
+  })
+
+  it('moves a plan to Done once every task is approved and confirmed', async () => {
+    let approved = 0
+    server.use(
+      http.get('/api/projects/1/plans/1', () => HttpResponse.json(plan('approved'))),
+      http.post('/api/projects/1/plans/1/proposals/:pid/approve', () => HttpResponse.json(plan(++approved === 2 ? 'done' : 'approved'))),
+      http.get('/api/projects/1/plans', () => HttpResponse.json({ plans: [] })),
+    )
+    const { router } = renderApp('/projects/1/plans/1')
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve all' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(router.state.location.search).toBe('?tab=done'))
+    expect(approved).toBe(2)
   })
 })

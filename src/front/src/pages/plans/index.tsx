@@ -2,9 +2,9 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Button, Field, TextInput, Textarea } from '../../components/controls'
 import { Dialog } from '../../components/Dialog'
-import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { Tabs } from '../../components/Tabs'
+import { Proposals } from './Proposals'
 import { usePlan, usePlanAction, usePlans, useStartPlan, type Plan } from '../../data/views/plans'
 
 const statusText: Record<Plan['status'], string> = {
@@ -119,8 +119,6 @@ export function PlanPage() {
   const { data: plan, error, isPending } = usePlan(projectId, planId)
   const act = usePlanAction(projectId, planId)
   const [answer, setAnswer] = useState('')
-  const [rejecting, setRejecting] = useState<number | 'all' | null>(null)
-  const [feedback, setFeedback] = useState('')
 
   if (isPending || error)
     return <PlanDialog>{isPending ? <StatusMessage title="Loading plan…" /> : <StatusMessage title="Something went wrong" body={error.message} />}</PlanDialog>
@@ -130,37 +128,6 @@ export function PlanPage() {
   const messages = plan.messages ?? []
   const last = messages[messages.length - 1]
   const question = plan.status === 'briefing' && !plan.pending && last?.role === 'agent' ? last : null
-  const toReview = (plan.proposals ?? []).filter((p) => p.status === 'needs_review')
-  const deniable = (plan.proposals ?? []).filter((p) => p.status === 'needs_review' || p.status === 'sent_back')
-
-  // One by one: each answers the whole plan, and a failure stops the rest with its message shown.
-  const deny = async (ids: number[], outcome: 'revise' | 'drop') => {
-    for (const id of ids) await act.mutateAsync({ path: `proposals/${id}/deny`, body: { feedback: feedback.trim(), outcome } })
-    setRejecting(null)
-    setFeedback('')
-  }
-  const rejectBox = (what: string, ids: number[]) => (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <TextInput
-        aria-label={`Why reject ${what}`}
-        placeholder="Why? The agent revises from this."
-        value={feedback}
-        onChange={(e) => setFeedback(e.target.value)}
-        className="min-h-9 flex-1 text-sm"
-      />
-      {(['revise', 'drop'] as const).map((outcome) => (
-        <Button
-          key={outcome}
-          variant={outcome === 'revise' ? 'primary' : 'secondary'}
-          className="min-h-9 px-3 text-sm"
-          disabled={busy || !feedback.trim()}
-          onClick={() => deny(ids, outcome).catch(() => {})}
-        >
-          {outcome === 'revise' ? 'Revise' : 'Drop'}
-        </Button>
-      ))}
-    </div>
-  )
 
   return (
     <PlanDialog>
@@ -229,90 +196,7 @@ export function PlanPage() {
         </Button>
       )}
 
-      {(plan.proposals ?? []).length > 0 && (
-        <section className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <h2 className="eyebrow m-0">Proposed tasks</h2>
-            {toReview.length > 1 && (
-              // Sequential, in position order, so a task's dependencies get their issues first.
-              <Button
-                disabled={busy}
-                className="min-h-9 px-3 text-sm"
-                onClick={async () => {
-                  for (const p of toReview) await act.mutateAsync({ path: `proposals/${p.id}/approve` })
-                }}
-              >
-                <Icon name="check" size={14} className="text-good" />
-                Approve all
-              </Button>
-            )}
-            {deniable.length > 1 && (
-              <Button
-                disabled={busy}
-                aria-expanded={rejecting === 'all'}
-                className="min-h-9 px-3 text-sm"
-                onClick={() => setRejecting(rejecting === 'all' ? null : 'all')}
-              >
-                <Icon name="close" size={14} className="text-critical" />
-                Reject all
-              </Button>
-            )}
-          </div>
-          {rejecting === 'all' && rejectBox('all', deniable.map((p) => p.id))}
-          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-            {plan.proposals!.map((p) => (
-              <li key={p.id} className="rounded-lg border border-line-strong bg-surface-sunken px-3 py-2">
-                <div className="flex items-start gap-3">
-                  <details className="min-w-0 flex-1">
-                    <summary className="cursor-pointer text-sm">
-                      {p.position}. {p.title} <span className="text-xs text-text-muted">{p.status.replace('_', ' ')}</span>
-                    </summary>
-                    <p className="mt-1.5 mb-0 text-[13px] whitespace-pre-wrap text-text-soft">{p.description}</p>
-                    <ul className="mt-1 mb-0 pl-4 text-xs text-text-muted">
-                      {p.tests.map((t, i) => (
-                        <li key={i}>
-                          {t.kind}: {t.command ? <code>{t.command}</code> : t.name}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                  {p.taskId && (
-                    <Link to={`/projects/${projectId}/tasks/${p.taskId}`} className="text-xs whitespace-nowrap">
-                      Open task
-                    </Link>
-                  )}
-                  {(p.status === 'needs_review' || p.status === 'sent_back') && (
-                    <div role="group" aria-label={`Decide on ${p.title}`} className="inline-flex flex-none overflow-hidden rounded-lg border border-line-strong bg-surface">
-                      <button
-                        type="button"
-                        aria-label={`Approve ${p.title}`}
-                        title="Approve, add to Backlog"
-                        disabled={busy || p.status !== 'needs_review'}
-                        onClick={() => send(`proposals/${p.id}/approve`)}
-                        className="flex size-8 cursor-pointer items-center justify-center border-0 bg-good/10 text-good hover:bg-good/25 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Icon name="check" size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Reject ${p.title}`}
-                        title="Reject"
-                        aria-expanded={rejecting === p.id}
-                        disabled={busy}
-                        onClick={() => setRejecting(rejecting === p.id ? null : p.id)}
-                        className="flex size-8 cursor-pointer items-center justify-center border-0 border-l border-line-strong bg-critical/10 text-critical hover:bg-critical/25 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Icon name="close" size={16} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {rejecting === p.id && rejectBox(p.title, [p.id])}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {(plan.proposals ?? []).length > 0 && <Proposals projectId={projectId} plan={plan} act={act} busy={busy} />}
 
       <section className="flex flex-col gap-3">
         <h2 className="eyebrow m-0">Doc</h2>
