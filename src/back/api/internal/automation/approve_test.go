@@ -155,6 +155,25 @@ func TestApproveHeadMoved(t *testing.T) {
 	f.expectHeadMoved(n)
 }
 
+func TestApproveWaitsForTheOtherLinkedTasksRun(t *testing.T) {
+	f := withLLM(t)
+	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Two"}, f.ada).Expect(http.StatusCreated, "")
+	f.tests(1, "## Tests\n- [ ] `true`\n")
+	f.tests(2, "## Tests\n- [ ] `true`\n")
+	n := f.pull("ada", false, 1, 2) // merging it closes both issues
+	f.poll()
+	f.work() // one workflow at a time: issue 1's run passes while issue 2's waits
+	if got := f.task(1); got.Column != "user-check" {
+		t.Fatalf("task = %+v, want it in User Check", got)
+	}
+	f.approve(f.ada).Expect(http.StatusConflict, "run_in_progress")
+	if pr := f.repo.Issue(n); pr.State != "open" || f.merges() != 0 || f.approvals() != 0 {
+		t.Fatalf("pull request = %s with %d merge requests and %d approvals, want nothing merged", pr.State, f.merges(), f.approvals())
+	}
+	f.work()
+	f.approve(f.ada).Expect(http.StatusOK, "")
+}
+
 func TestApproveHeadMovedAtMergeTime(t *testing.T) {
 	f, n := inUserCheck(t)
 	manual := f.manual()

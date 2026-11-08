@@ -93,13 +93,14 @@ func (s Spec) validate() string {
 	return ""
 }
 
-// buildPaths checks that a build's context and Dockerfile stay inside the source directory.
+// buildPaths checks that a build's context and Dockerfile stay inside the source directory. The Dockerfile is
+// relative to the context and may climb out of it, as the API's parser allows, but not out of the repository.
 func buildPaths(field, context, dockerfile string) string {
 	if !filepath.IsLocal(context) {
 		return field + "context must be a relative path inside the repository"
 	}
-	if !filepath.IsLocal(dockerfile) {
-		return field + "dockerfile must be a relative path inside the context"
+	if filepath.IsAbs(dockerfile) || !filepath.IsLocal(filepath.Join(context, dockerfile)) {
+		return field + "dockerfile must be a relative path inside the repository"
 	}
 	return ""
 }

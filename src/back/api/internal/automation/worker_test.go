@@ -3,9 +3,12 @@ package automation_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/jackc/pgx/v5"
 
@@ -233,6 +236,30 @@ func TestClaimChecksTheOwner(t *testing.T) {
 	f.expectCalls()
 }
 
+func TestTurnedOffDuringTheOwnerCheckCancelsTheClaim(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, twoTests)
+	n := f.ready()
+	f.plan()
+	f.expire()
+	// Turned off after the claim, while the owner check reads ada's permission from the repository, which she has
+	// just lost: the check finds no automation left to pause.
+	next, off := f.Config.GitHub.HTTP.Transport, false
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == fmt.Sprintf("/repositories/%d", f.repo.ID) && !off {
+			off = true
+			f.Do("DELETE", f.path("/automation"), nil, f.ada).Expect(http.StatusNoContent, "")
+			f.repo.Grant(f.token, "pull")
+		}
+		return next.RoundTrip(r)
+	})}
+	f.work()
+	// Cancelled, so it no longer holds a place in the install's queue.
+	f.expectExecutions(executionRow{"default", "cancelled", 1})
+	f.expectCalls()
+	f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "cancelled", Reason: "Automation was turned off.", Finished: true})
+}
+
 func TestRejectedCredentialRequeuesTheExecution(t *testing.T) {
 	f := withLLM(t)
 	f.tests(1, twoTests)
@@ -358,6 +385,51 @@ func TestGitHubFailingForNowRequeuesTheExecution(t *testing.T) {
 	f.expectResults(resultRow{1, "pending", "", "default", false}, resultRow{2, "pending", "", "default", false})
 	f.GitHub.Fail("GET /repositories/{id}/tarball/{sha}", 0)
 	f.work()
+	f.expectRuns(pass(n))
+}
+
+func TestSourceBrokenOffRequeuesTheExecution(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, twoTests)
+	n := f.ready()
+	// The archive's first bytes arrive, then the connection drops.
+	next, broken := f.Config.GitHub.HTTP.Transport, false
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		res, err := next.RoundTrip(r)
+		if err == nil && strings.Contains(r.URL.Path, "/legacy.tar.gz/") && !broken {
+			broken = true
+			res.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(io.LimitReader(res.Body, 16), iotest.ErrReader(io.ErrUnexpectedEOF)), res.Body}
+		}
+		return res, err
+	})}
+	f.work()
+	f.expectExecutions(executionRow{"default", "queued", 0})
+	f.expectResults(resultRow{1, "pending", "", "default", false}, resultRow{2, "pending", "", "default", false})
+	f.work()
+	f.expectRuns(pass(n))
+}
+
+func TestEndRecordedAfterADatabaseFailure(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, twoTests)
+	n := f.ready()
+	// The first try to record an execution's end fails, as when the database drops the connection. A sequence counts
+	// the tries, since the failure rolls back everything else.
+	f.exec(`create sequence ends`)
+	f.exec(`create function fail_first_end() returns trigger language plpgsql as $$
+		begin
+			if nextval('ends') = 1 then
+				raise exception 'injected failure';
+			end if;
+			return new;
+		end $$`)
+	f.exec(`create trigger fail_first_end before update of status on workflow_executions for each row
+		when (old.status = 'running' and new.status <> 'running') execute function fail_first_end()`)
+	f.work()
+	f.expectExecutions(executionRow{"default", "passed", 1}) // not left running, holding its place in the queue
 	f.expectRuns(pass(n))
 }
 

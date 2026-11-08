@@ -70,9 +70,20 @@ func (a *Automation) drive(ctx context.Context, e *execution) {
 	unwatch := a.watch(xctx, e.id, cancel)
 	err := a.carryOut(xctx, e)
 	unwatch()
+	// Left running, e would hold its place in the queue until the API restarts, so a failure to record its end is
+	// tried again every second until the worker stops, after which Recover mends it.
 	settle := func() {
-		if err := a.settle(ctx, xctx, e, err); err != nil {
-			log.Printf("end workflow execution %d: %v", e.id, err)
+		for {
+			sErr := a.settle(ctx, xctx, e, err)
+			if sErr == nil {
+				return
+			}
+			log.Printf("end workflow execution %d: %v", e.id, sErr)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
 		}
 	}
 	// The end is recorded after Delete, so the queue starts nothing beside an execution still being removed. But
@@ -146,6 +157,9 @@ func (a *Automation) carryOut(ctx context.Context, e *execution) error {
 	}
 	out, err := a.Runner.Prepare(ctx, e.id, e.spec, source)
 	source.Close()
+	if se := (*runner.SourceError)(nil); errors.As(err, &se) { // the download broke off partway
+		return gitHubFailure{fmt.Errorf("download the source from GitHub: %w", err)}
+	}
 	if f := (*runner.Failure)(nil); errors.As(err, &f) {
 		out = f.Log
 	}
@@ -225,12 +239,11 @@ type gitHubFailure struct{ error }
 func (g gitHubFailure) Unwrap() error { return g.error }
 
 // fromRunner marks err, from a runner call, unreachable when it could not connect, or interrupted unless it is the
-// runner's own answer or the source failing.
+// runner's own answer. carryOut has taken the source failing out already.
 func fromRunner(err error) error {
 	var f *runner.Failure
-	var se *runner.SourceError
 	var re *runner.Error
-	if err == nil || errors.As(err, &f) || errors.As(err, &se) || errors.As(err, &re) && re.Status != http.StatusNotFound {
+	if err == nil || errors.As(err, &f) || errors.As(err, &re) && re.Status != http.StatusNotFound {
 		return err
 	}
 	if op := (*net.OpError)(nil); errors.As(err, &op) && op.Op == "dial" {

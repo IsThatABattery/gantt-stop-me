@@ -63,7 +63,7 @@ func (a *Automation) RunWorker(ctx context.Context) {
 
 // claimAll claims workflow executions while the queue allows, and drives each one in a goroutine of drives. It checks
 // the owner with OwnerToken before each starts: a paused project, or a check that failed for now, puts the execution
-// back without counting the attempt.
+// back without counting the attempt, and automation turned off since the claim cancels it.
 func (a *Automation) claimAll(ctx context.Context, drives *sync.WaitGroup) {
 	skip := []int64{} // put back this pass; not nil, which the claim would read as NULL and match nothing
 	for ctx.Err() == nil {
@@ -74,7 +74,8 @@ func (a *Automation) claimAll(ctx context.Context, drives *sync.WaitGroup) {
 		}
 		e.token, err = a.OwnerToken(ctx, e.project.ID)
 		switch {
-		case errors.Is(err, ErrOff): // turning automation off cancelled it
+		case errors.Is(err, ErrOff): // turning automation off cancelled its run, but cancels no running execution
+			report(ctx, fmt.Sprintf("cancel workflow execution %d", e.id), a.end(context.WithoutCancel(ctx), e, "skipped", ""))
 		case err != nil:
 			report(ctx, fmt.Sprintf("check the automation owner of project %d", e.project.ID), err)
 			skip = append(skip, e.id)

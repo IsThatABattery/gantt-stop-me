@@ -38,7 +38,7 @@ func TestValidate(t *testing.T) {
 		{"image that is a flag", func(s *Spec) { s.Services[0].Image = "--privileged" }, "image"},
 		{"image with a flag after it", func(s *Spec) { s.Services[0].Image = "postgres:18 --privileged" }, "image"},
 		{"service context outside", func(s *Spec) { s.Services[1].Context = "../.." }, "context"},
-		{"service dockerfile outside", func(s *Spec) { s.Services[1].Dockerfile = "../Dockerfile" }, "dockerfile"},
+		{"service dockerfile outside", func(s *Spec) { s.Services[1].Dockerfile = "../../../../x" }, "dockerfile"},
 		{"service port", func(s *Spec) { s.Services[1].Port = portOf(-1) }, "port"},
 	}
 	for _, c := range cases {
@@ -52,6 +52,11 @@ func TestValidate(t *testing.T) {
 	}
 	if got := hostileSpec().validate(); got != "" {
 		t.Errorf("validate() of a good spec = %q", got)
+	}
+	s := hostileSpec()
+	s.Services[1].Dockerfile = "../Dockerfile" // outside the context but inside the repository, as the API's parser allows
+	if got := s.validate(); got != "" {
+		t.Errorf("validate() of a Dockerfile beside the context = %q", got)
 	}
 }
 
