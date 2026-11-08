@@ -29,25 +29,32 @@ type Test struct {
 var pinRule = regexp.MustCompile(`^\[(` + namePattern + `)\](\s|$)`)
 
 // ParseTests parses the Tests section of an issue body into its tests, in order. It returns ErrNoTests when the
-// body has no section or the section has no items, and an error for more than maxTests items.
+// body has no section or the section has no items, and an error for more than maxTests items. A line inside a code
+// fence that opens at column 0 is code, so it neither starts nor ends the section.
 func ParseTests(body string) ([]Test, error) {
-	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
-	start := slices.IndexFunc(lines, func(l string) bool { return strings.EqualFold(strings.TrimRight(l, " "), "## Tests") })
-	if start < 0 {
-		return nil, ErrNoTests
-	}
 	type item struct {
 		line  string
 		block []string
 	}
 	var items []item
-	for _, l := range lines[start+1:] {
-		if l == "#" || l == "##" || strings.HasPrefix(l, "# ") || strings.HasPrefix(l, "## ") {
-			break // a level-1 or level-2 heading ends the section
+	section := false
+	fenced := "" // the mark of the column-0 code fence the line is in, whose lines are code, not headings
+lines:
+	for _, l := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
+		code := fenced != ""
+		if !code {
+			fenced = fenceMark(l)
+		} else if closes(l, fenced) {
+			fenced = ""
 		}
-		if strings.HasPrefix(l, "- ") || strings.HasPrefix(l, "* ") {
+		switch {
+		case !section:
+			section = !code && strings.EqualFold(strings.TrimRight(l, " "), "## Tests")
+		case !code && (l == "#" || l == "##" || strings.HasPrefix(l, "# ") || strings.HasPrefix(l, "## ")):
+			break lines // a level-1 or level-2 heading ends the section
+		case strings.HasPrefix(l, "- ") || strings.HasPrefix(l, "* "):
 			items = append(items, item{line: l[2:]})
-		} else if len(items) > 0 && (strings.TrimSpace(l) == "" || l[0] == ' ' || l[0] == '\t') {
+		case len(items) > 0 && (strings.TrimSpace(l) == "" || l[0] == ' ' || l[0] == '\t'):
 			items[len(items)-1].block = append(items[len(items)-1].block, l)
 		}
 	}
@@ -112,21 +119,34 @@ func dedent(lines []string) string {
 // untagged.
 func fence(block string) (string, bool) {
 	lines := strings.Split(block, "\n")
-	open := lines[0]
-	if len(lines) < 2 || !strings.HasPrefix(open, "```") && !strings.HasPrefix(open, "~~~") {
+	mark := fenceMark(lines[0])
+	if len(lines) < 2 || mark == "" {
 		return "", false
 	}
-	mark := open[:len(open)-len(strings.TrimLeft(open, open[:1]))]
-	if info := strings.Fields(open[len(mark):]); len(info) > 0 && !slices.Contains([]string{"sh", "bash", "shell"}, info[0]) {
+	if info := strings.Fields(lines[0][len(mark):]); len(info) > 0 && !slices.Contains([]string{"sh", "bash", "shell"}, info[0]) {
 		return "", false
 	}
 	for i, l := range lines[1:] {
-		// A closing fence is a run of the opening's character, at least as long, then only spaces.
-		if l = strings.TrimRight(l, " \t"); len(l) >= len(mark) && strings.Trim(l, mark[:1]) == "" {
+		if closes(l, mark) {
 			return strings.Join(lines[1:i+1], "\n"), i+2 == len(lines)
 		}
 	}
 	return "", false // never closed
+}
+
+// fenceMark returns the run of backticks or tildes that opens a code fence on line l, or "" if l opens none.
+func fenceMark(l string) string {
+	if !strings.HasPrefix(l, "```") && !strings.HasPrefix(l, "~~~") {
+		return ""
+	}
+	return l[:len(l)-len(strings.TrimLeft(l, l[:1]))]
+}
+
+// closes reports whether line l closes the fence opened by mark: a run of mark's character, at least as long, then
+// only spaces.
+func closes(l, mark string) bool {
+	l = strings.TrimRight(l, " \t")
+	return len(l) >= len(mark) && strings.Trim(l, mark[:1]) == ""
 }
 
 // codeSpan returns the contents of text when text is exactly one inline code span, trimmed.

@@ -88,6 +88,14 @@ func TestParseTests(t *testing.T) {
 		{"hashtag inside", section("- a", "#tag", "- b"), []automation.Test{llm(1, "a", ""), llm(2, "b", "")}},
 		{"indented heading inside", section("- a", " ## Notes"), []automation.Test{llm(1, "a", "## Notes")}},
 		{"CRLF line endings", "## Tests\r\n- a\r\n  one\r\n  two\r\n", []automation.Test{llm(1, "a", "one\ntwo")}},
+		{"heading in a fence does not end it", section("- [ ] builds", "```sh", "# build it", "make", "```", "- [ ] lints"),
+			[]automation.Test{llm(1, "builds", ""), llm(2, "lints", "")}},
+		{"heading in a tilde fence does not end it", section("- a", "~~~", "## x", "~~~", "- b"),
+			[]automation.Test{llm(1, "a", ""), llm(2, "b", "")}},
+		{"heading after a fence ends it", section("- a", "````", "```", "# x", "````", "## Notes", "- b"),
+			[]automation.Test{llm(1, "a", "")}},
+		{"unclosed fence runs to the end", section("- a", "```", "# x", "- b"), []automation.Test{llm(1, "a", ""), llm(2, "b", "")}},
+		{"heading in a fence does not start it", "```md\n## Tests\n- fake\n```\n\n## Tests\n- real", []automation.Test{llm(1, "real", "")}},
 
 		// Items and blocks
 		{"star bullet", section("* a"), []automation.Test{llm(1, "a", "")}},
@@ -112,6 +120,7 @@ func TestParseTests(t *testing.T) {
 		{"link is text", section("- [ ] [docs](https://example.com) say so"), []automation.Test{llm(1, "[docs](https://example.com) say so", "")}},
 		{"capital name is text", section("- [Backend] a"), []automation.Test{llm(1, "[Backend] a", "")}},
 		{"one letter is text", section("- [ ] [b] a"), []automation.Test{llm(1, "[b] a", "")}},
+		{"trailing - is text", section("- [ ] [back-] a"), []automation.Test{llm(1, "[back-] a", "")}},
 		{"pin glued to text is text", section("- [backend]a"), []automation.Test{llm(1, "[backend]a", "")}},
 		{"text trimmed", section("- [ ]   a  b  "), []automation.Test{llm(1, "a  b", "")}},
 
@@ -164,6 +173,7 @@ func TestParseTestsNone(t *testing.T) {
 		"## Tests",
 		"## Tests\nJust a paragraph.\n  indented\n",
 		"## Tests\n## Notes\n- a",
+		"```\n## Tests\n- a\n```",
 	} {
 		if got, err := automation.ParseTests(body); !errors.Is(err, automation.ErrNoTests) {
 			t.Errorf("ParseTests(%q) = %+v, %v; want ErrNoTests", body, got, err)
