@@ -18,8 +18,8 @@ function ProjectList({ projects }: { projects: Project[] }) {
             to={`/projects/${p.id}`}
             className="flex min-h-14 items-center gap-3 rounded-[14px] border border-line bg-surface px-5 text-text no-underline hover:border-ion"
           >
-            <Icon name="github" />
-            <span className="flex-1 font-mono">
+            <Icon name="github" className="shrink-0" />
+            <span className="min-w-0 flex-1 font-mono wrap-anywhere">
               {p.owner}/{p.name}
             </span>
             <span className="text-xs text-text-muted">{p.permission}</span>
@@ -39,7 +39,7 @@ export function FlightDeckPage() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 py-10">
       <div className="flex w-full max-w-[640px] flex-col gap-4">
-        <header className="flex items-end justify-between gap-4">
+        <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="m-0 font-heading text-[26px] font-semibold">Recent {labels.projects.toLowerCase()}</h1>
           </div>
@@ -64,7 +64,7 @@ export function ProjectsPage() {
   const { data: projects, isPending, error } = useMyProjects()
   return (
     <div className="flex flex-col gap-6 px-8 py-10">
-      <header className="flex max-w-[640px] items-end justify-between gap-4">
+      <header className="flex max-w-[640px] flex-wrap items-end justify-between gap-4">
         <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.allProjects}</h1>
         <Link to="/projects/new" className={buttonClass('secondary')}>
           <Icon name="plus" />
