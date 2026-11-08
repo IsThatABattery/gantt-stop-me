@@ -85,7 +85,7 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusConflict, refusal.Code, refusal.Message)
 	case errors.Is(err, errInvalidBefore):
 		httpx.Error(w, http.StatusBadRequest, "invalid_before_task", "beforeTaskId must be another task in the target column.")
-	case errors.As(err, new(gitHubError)), errors.As(err, new(*github.Error)): // the latter from the rules
+	case errors.As(err, new(GitHubError)), errors.As(err, new(*github.Error)): // the latter from the rules
 		github.Fail(w, r, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
@@ -116,10 +116,11 @@ func (b *Board) MoveToEnd(ctx context.Context, tx pgx.Tx, token string, p projec
 // errInvalidBefore means the task to place a task before is not another task in the target column.
 var errInvalidBefore = errors.New("board: before is not another task in the column")
 
-// gitHubError marks place's failed GitHub write apart from a database error, so the move endpoint answers it with github.Fail.
-type gitHubError struct{ error }
+// GitHubError marks a failed GitHub write, of place or CreateTask, apart from a database error, so endpoints answer it
+// with github.Fail.
+type GitHubError struct{ error }
 
-func (e gitHubError) Unwrap() error { return e.error }
+func (e GitHubError) Unwrap() error { return e.error }
 
 // place puts task t in column to before the task before, or at the end when before is nil, writing a column change
 // through to GitHub with token first, and returns the task as saved. A column change follows b.Rules first, as a
@@ -146,7 +147,7 @@ func (b *Board) place(ctx context.Context, tx pgx.Tx, token string, p projects.P
 	state, boardLabels, labels := t.State, []string(nil), []github.Label(nil)
 	if to.ID != from.ID {
 		if state, labels, err = b.relabel(ctx, token, p, t, from, to); err != nil {
-			return task{}, gitHubError{err}
+			return task{}, GitHubError{err}
 		}
 		boardLabels = []string{to.label()}
 	}

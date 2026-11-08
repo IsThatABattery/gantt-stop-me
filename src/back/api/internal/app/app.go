@@ -81,7 +81,7 @@ func New(db *pgxpool.Pool, cfg Config) *App {
 	auto.Register(mux)
 	brd.Rules = auto
 	pln := &planning.Planning{DB: db, Accounts: acc, Projects: prj, Secrets: cfg.Secrets,
-		LLM: llm.HTTPClient(cfg.AllowPrivateProviderURLs, llm.CallTimeout)}
+		LLM: llm.HTTPClient(cfg.AllowPrivateProviderURLs, llm.CallTimeout), Board: brd}
 	pln.Register(mux)
 	routes := jsonErrors(mux)
 	checked := httpx.CheckOrigin(cfg.PublicURL, routes)

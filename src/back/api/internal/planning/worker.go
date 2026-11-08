@@ -44,10 +44,9 @@ func (p *Planning) Run(ctx context.Context) {
 	}
 }
 
-// startAll starts an interviewer turn, in a goroutine of turns, for each plan whose job is a question or the draft,
-// in id order. Generating tasks waits, since no agent takes that job yet. A plan whose creator has a turn running
-// waits for a later pass, so a slow provider delays only its own user's plans, and turns hold at most half the
-// database pool, one connection each.
+// startAll starts an agent turn, in a goroutine of turns, for each plan with a job, in id order. A plan whose
+// creator has a turn running waits for a later pass, so a slow provider delays only its own user's plans, and turns
+// hold at most half the database pool, one connection each and a second while one creates a task.
 // shortcut: that many creators whose providers hang still hold up everyone else's turns, by up to turnTimeout each;
 // free the connection during LLM calls if that bites.
 func (p *Planning) startAll(ctx context.Context, turns *sync.WaitGroup) {
@@ -86,15 +85,15 @@ func (p *Planning) startAll(ctx context.Context, turns *sync.WaitGroup) {
 	}
 }
 
-// claim takes the first plan after id after whose job is a question or the draft and whose creator is not busy, in a
-// transaction holding its row, so requests answer agent_busy meanwhile. It returns a nil tx when there is none.
+// claim takes the first plan after id after with a job whose creator is not busy, in a transaction holding its row,
+// so requests answer agent_busy meanwhile. It returns a nil tx when there is none.
 func (p *Planning) claim(ctx context.Context, after int64, busy []int64) (pgx.Tx, plan, error) {
 	tx, err := p.DB.Begin(ctx)
 	if err != nil {
 		return nil, plan{}, err
 	}
 	pl, err := scanPlan(tx.QueryRow(ctx, `select `+planColumns+` from feature_plans fp
-		where fp.pending in ('ask', 'draft') and fp.id > $1 and coalesce(fp.created_by, 0) <> all($2)
+		where fp.pending is not null and fp.id > $1 and coalesce(fp.created_by, 0) <> all($2)
 		order by fp.id limit 1 for update of fp skip locked`, after, busy))
 	if err != nil {
 		tx.Rollback(context.WithoutCancel(ctx))
@@ -106,8 +105,9 @@ func (p *Planning) claim(ctx context.Context, after int64, busy []int64) (pgx.Tx
 	return tx, pl, nil
 }
 
-// turn runs the interviewer on plan pl, whose row tx holds, with its creator's planning model, and saves what it did
-// in tx. A failed turn records why and drops the job, for a person to retry.
+// turn runs the agent of plan pl's job on it, whose row tx holds, with its creator's planning model, and saves what
+// it did in tx: the interviewer for a question or the draft, else the task agent. A failed turn records why and drops
+// the job, for a person to retry.
 func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 	defer tx.Rollback(context.WithoutCancel(ctx))
 	msgs, err := messages(ctx, tx, pl.ID)
@@ -138,13 +138,17 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 			break
 		}
 		// The creator's provider reads the plan, so they must still be able to see it.
-		if failure, err = p.access(ctx, &pr, pl.createdBy); err != nil {
+		var token string
+		if token, failure, err = p.access(ctx, &pr, pl.createdBy); err != nil {
 			return err
 		}
 		if failure != "" {
 			break
 		}
 		c := &llm.Client{BaseURL: baseURL, Key: string(key), HTTP: p.LLM}
+		if *pl.Pending == "generate" || *pl.Pending == "revise" {
+			return p.tasks(ctx, tx, c, model, token, pr, pl, review)
+		}
 		tctx, cancel := context.WithTimeout(ctx, turnTimeout)
 		doc, question, err = interview(tctx, c, model, pr.Owner+"/"+pr.Name, pl, msgs)
 		cancel()
@@ -159,12 +163,7 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 	status, pending := "briefing", (*string)(nil)
 	switch {
 	case failure != "":
-		_, err = tx.Exec(ctx, `update feature_plans set pending = null, error = $2, version = version + 1, updated_at = now()
-			where id = $1`, pl.ID, failure)
-		if err != nil {
-			return err
-		}
-		return tx.Commit(ctx)
+		return fail(ctx, tx, pl.ID, failure)
 	case question != nil:
 		_, err = tx.Exec(ctx, `insert into plan_messages (plan_id, role, text, options) values ($1, 'agent', $2, $3)`,
 			pl.ID, question.Text, question.Options)
@@ -184,23 +183,38 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 	return tx.Commit(ctx)
 }
 
-// access returns why the plan's creator can no longer have their provider read the project's plans, or "" while their
-// GitHub account still sees its repository, checked as project routes check people. Other errors are temporary.
-func (p *Planning) access(ctx context.Context, pr *projects.Project, creator int64) (string, error) {
+// fail records why plan id's turn failed, in tx, which holds its row, drops its job, for a person to retry, and
+// commits.
+func fail(ctx context.Context, tx pgx.Tx, id int64, failure string) error {
+	_, err := tx.Exec(ctx, `update feature_plans set pending = null, error = $2, version = version + 1, updated_at = now()
+		where id = $1`, id, failure)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// access returns the plan's creator's GitHub token while their GitHub account still sees the project's repository,
+// checked as project routes check people, and else why they can no longer have their provider read its plans. Other
+// errors are temporary.
+func (p *Planning) access(ctx context.Context, pr *projects.Project, creator int64) (token, failure string, err error) {
 	const lost = "The plan's creator can no longer see the repository on GitHub. Once they can, someone retries."
-	token, err := github.Token(ctx, p.DB, p.Secrets, creator)
+	token, err = github.Token(ctx, p.DB, p.Secrets, creator)
 	if errors.Is(err, github.ErrNotLinked) {
-		return lost, nil
+		return "", lost, nil
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	perm, err := p.Projects.Permission(ctx, pr, creator, token)
 	if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
-		return lost, nil
+		return "", lost, nil
 	}
-	if err != nil || projects.Allows(perm, projects.Read) {
-		return "", err
+	if err != nil {
+		return "", "", err
 	}
-	return lost, nil
+	if !projects.Allows(perm, projects.Read) {
+		return "", lost, nil
+	}
+	return token, "", nil
 }

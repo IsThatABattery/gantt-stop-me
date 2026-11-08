@@ -9,7 +9,7 @@ import (
 	"gantt-stop-me/api/internal/projects"
 )
 
-// list answers the project's plans, newest first, without their messages.
+// list answers the project's plans, newest first, without their messages and proposals.
 func (p *Planning) list(w http.ResponseWriter, r *http.Request) {
 	pr, _, ok := p.Projects.Check(w, r, projects.Read)
 	if !ok {

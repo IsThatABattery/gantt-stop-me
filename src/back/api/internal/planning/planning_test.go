@@ -12,6 +12,7 @@ import (
 	"gantt-stop-me/api/internal/github/githubtest"
 	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/llm/llmtest"
+	"gantt-stop-me/api/internal/tasktests"
 )
 
 // fixture is octo/hello added as a project by ada, who can push to it and plans with the fake provider's chat
@@ -70,6 +71,20 @@ type planJSON struct {
 	Pending, Feedback, Error             *string
 	Version, Answered, ExpectedQuestions int
 	Messages                             []messageJSON
+	Proposals                            []proposalJSON
+}
+
+type proposalJSON struct {
+	ID                 int64
+	Position           int
+	Status             string
+	Title, Description string
+	AcceptanceCriteria []string
+	Tests              []tasktests.Test
+	DependsOn          []int
+	Source, AgentNote  string
+	Feedback           *string
+	TaskID             *int64
 }
 
 // sectionJSON has the API's field names, so a test can send a doc back as GET answered it.
@@ -188,14 +203,20 @@ func orNull(s *string) string {
 
 func TestPlansNeedAccess(t *testing.T) {
 	f := setup(t)
-	pl := f.toReview()
+	pl := f.generate(f.approved(), task("Export", nil, script("make")))
+	proposal := f.path("/plans/%d/proposals/%d", pl.ID, pl.Proposals[0].ID)
 	reader := f.member("bob", "pull")
 	stranger := f.SignUp("eve@example.com", "correct horse")
 	f.LinkGitHub(stranger, "eve")
 
 	f.Do("GET", f.path("/plans"), nil, reader).Expect(http.StatusOK, "")
-	f.Do("GET", f.path("/plans/%d", pl.ID), nil, reader).Expect(http.StatusOK, "")
+	if got := decode(t, f.Do("GET", f.path("/plans/%d", pl.ID), nil, reader), http.StatusOK); len(got.Proposals) != 1 {
+		t.Fatalf("plan %+v as a reader sees it, want its proposal", got)
+	}
 	writes := []struct{ method, path string }{
+		{"PATCH", proposal},
+		{"POST", proposal + "/approve"},
+		{"POST", proposal + "/deny"},
 		{"POST", f.path("/plans")},
 		{"PATCH", f.path("/plans/%d", pl.ID)},
 		{"DELETE", f.path("/plans/%d", pl.ID)},
@@ -213,7 +234,10 @@ func TestPlansNeedAccess(t *testing.T) {
 	f.Do("GET", f.path("/plans"), nil, stranger).Expect(http.StatusNotFound, "not_found")
 	f.Do("GET", f.path("/plans/%d", pl.ID), nil, stranger).Expect(http.StatusNotFound, "not_found")
 	f.Do("GET", f.path("/plans"), nil).Expect(http.StatusUnauthorized, "unauthorized")
-	if got := f.plan(pl.ID); got.Status != "needs_review" || got.Version != pl.Version {
+	if got := f.plan(pl.ID); got.Status != "approved" || got.Version != pl.Version || got.Proposals[0].Status != "needs_review" {
 		t.Fatalf("plan %+v after refused writes, want it unchanged", got)
+	}
+	if n := f.tasks(); n != 0 {
+		t.Fatalf("%d tasks after refused writes", n)
 	}
 }
