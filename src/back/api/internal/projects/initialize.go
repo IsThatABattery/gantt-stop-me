@@ -96,8 +96,9 @@ func AddTask(ctx context.Context, tx pgx.Tx, projectID int64, is github.Issue) e
 	labels := BoardLabels(is)
 	var id int64
 	err := tx.QueryRow(ctx, `
-		insert into tasks (project_id, issue_number, github_issue_id, column_id, position, title, state, board_labels, body, labels)
-		select $1, $2, $3, c.id, coalesce((select max(position) from tasks where column_id = c.id), 0) + 1, $4, 'open', $5, $6, $7
+		insert into tasks (project_id, issue_number, github_issue_id, column_id, position, title, state, board_labels, body, labels,
+			assignees)
+		select $1, $2, $3, c.id, coalesce((select max(position) from tasks where column_id = c.id), 0) + 1, $4, 'open', $5, $6, $7, $8
 		from columns c
 		where c.project_id = $1 and c.key = coalesce(
 			(select key from columns
@@ -106,7 +107,7 @@ func AddTask(ctx context.Context, tx pgx.Tx, projectID int64, is github.Issue) e
 			'backlog')
 		on conflict do nothing
 		returning id`,
-		projectID, is.Number, is.ID, is.Title, labels, is.Body, Labels(is)).Scan(&id)
+		projectID, is.Number, is.ID, is.Title, labels, is.Body, Labels(is), Assignees(is)).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // it has a task already
 	}

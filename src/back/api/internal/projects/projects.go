@@ -76,6 +76,21 @@ func BoardLabels(is github.Issue) []string {
 	return labels
 }
 
+// Assignee is an issue's assignee as the API shows and caches it.
+type Assignee struct {
+	Login     string `json:"login"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+// Assignees returns the issue's assignees, empty rather than nil, which would store NULL.
+func Assignees(is github.Issue) []Assignee {
+	out := []Assignee{}
+	for _, u := range is.Assignees {
+		out = append(out, Assignee{u.Login, u.AvatarURL})
+	}
+	return out
+}
+
 // Labels returns the issue's labels, empty rather than nil, which would store NULL.
 func Labels(is github.Issue) []github.Label {
 	if is.Labels == nil {

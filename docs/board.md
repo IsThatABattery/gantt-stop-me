@@ -56,7 +56,7 @@ Returns the project's columns and tasks, syncing the tasks from the repository's
 | `404` | `not_found` |
 | `502` | `github_error` |
 
-Every task, here and wherever an endpoint answers one, has `runStatus`, its latest test run's status as [List test runs](automation.md#list-test-runs) gives it, `null` when it has none, and `needsAttention`, why it waits in Testing after a runner error, `null` while clear.
+Every task, here and wherever an endpoint answers one, has `runStatus`, its latest test run's status as [List test runs](automation.md#list-test-runs) gives it, `null` when it has none, `needsAttention`, why it waits in Testing after a runner error, `null` while clear, and `assignees`, its issue's assignees as each `login` and `avatarUrl`, as last read from GitHub like its title.
 
 ```json
 {
@@ -79,7 +79,8 @@ Every task, here and wherever an endpoint answers one, has `runStatus`, its late
       "state": "open",
       "url": "https://github.com/ada/gantt/issues/12",
       "runStatus": null,
-      "needsAttention": null
+      "needsAttention": null,
+      "assignees": []
     },
     {
       "id": 9,
@@ -91,7 +92,8 @@ Every task, here and wherever an endpoint answers one, has `runStatus`, its late
       "state": "closed",
       "url": "https://github.com/ada/gantt/issues/14",
       "runStatus": "passed",
-      "needsAttention": null
+      "needsAttention": null,
+      "assignees": []
     }
   ]
 }
@@ -138,13 +140,14 @@ Opens an issue labeled `board:backlog` on GitHub and adds its task at the end of
   "state": "open",
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": null,
-  "needsAttention": null
+  "needsAttention": null,
+  "assignees": []
 }
 ```
 
 ## Get task
 
-Returns a task with its issue's title, state, body and labels as last read from GitHub, and its tests, syncing the tasks from the repository's issues first when the last sync is over 30 seconds old.
+Returns a task with its issue's title, state, body, labels and assignees as last read from GitHub, its tests, and the pull requests that close its issue, syncing the tasks from the repository's issues first when the last sync is over 30 seconds old.
 
 `GET /api/projects/{id}/tasks/{taskID}`
 
@@ -160,7 +163,7 @@ Returns a task with its issue's title, state, body and labels as last read from 
 
 | Status | Body |
 | --- | --- |
-| `200` | task, with its issue's body and labels, its tests and `testsError` |
+| `200` | task, with its issue's body and labels, its tests and `testsError`, and `pullRequests` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
 | `404` | `not_found` |
@@ -176,6 +179,8 @@ Returns a task with its issue's title, state, body and labels as last read from 
 | `details` | string | a check's indented block, such as its steps, `""` when none or for a script |
 | `workflow` | string or null | the workflow its `[name]` pin names, as written, else `null` for the decision model to pick |
 
+`pullRequests` are the pull requests, open, closed or merged, that close the issue on GitHub, such as with "Closes #12", whether the project's automation is on or off. They are read from GitHub with the caller's credential when the task's last read of them is over 30 seconds old, else answered as last read; a failed read answers `403` or `502` as other GitHub failures do. Each has `number`, `title`, `state` (`open`, `closed` or `merged`), `draft` and `url`.
+
 ```json
 {
   "id": 7,
@@ -188,6 +193,7 @@ Returns a task with its issue's title, state, body and labels as last read from 
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": "failed",
   "needsAttention": null,
+  "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }],
   "body": "One bar per task, by week.\n\n## Tests\n- [ ] `npm test`\n- [ ] The timeline shows one bar per task\n  1. Open a board with two tasks.\n",
   "labels": [
     { "name": "board:in-progress", "color": "fbca04" },
@@ -197,7 +203,10 @@ Returns a task with its issue's title, state, body and labels as last read from 
     { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null },
     { "name": "The timeline shows one bar per task", "kind": "check", "command": "", "details": "1. Open a board with two tasks.", "workflow": null }
   ],
-  "testsError": null
+  "testsError": null,
+  "pullRequests": [
+    { "number": 15, "title": "Draw the timeline", "state": "open", "draft": false, "url": "https://github.com/ada/gantt/pull/15" }
+  ]
 }
 ```
 
@@ -243,7 +252,8 @@ Changes the title or body of a task's issue on GitHub.
   "state": "open",
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": null,
-  "needsAttention": null
+  "needsAttention": null,
+  "assignees": []
 }
 ```
 
@@ -375,7 +385,8 @@ The rules hold for this endpoint only. A sync follows GitHub: a board label adde
   "state": "open",
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": "queued",
-  "needsAttention": null
+  "needsAttention": null,
+  "assignees": []
 }
 ```
 
@@ -404,7 +415,8 @@ The rules hold for this endpoint only. A sync follows GitHub: a board label adde
     "state": "open",
     "url": "https://github.com/ada/gantt/issues/12",
     "runStatus": null,
-    "needsAttention": null
+    "needsAttention": null,
+    "assignees": []
   }
 }
 ```

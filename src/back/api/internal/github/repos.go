@@ -38,6 +38,7 @@ type Label struct {
 // Issue is an issue, or a pull request, which GitHub's issue list mixes in.
 type Issue struct {
 	ID          int64     `json:"id"`
+	NodeID      string    `json:"node_id"` // its GraphQL id
 	Number      int       `json:"number"`
 	Title       string    `json:"title"`
 	Body        string    `json:"body"`
@@ -46,6 +47,7 @@ type Issue struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	PullRequest *struct{} `json:"pull_request"` // set only on pull requests
 	User        User      `json:"user"`         // its author
+	Assignees   []User    `json:"assignees"`
 }
 
 // repo is the REST URL of the repository with this id. Calls go by id, which survives renames and transfers,
@@ -232,6 +234,13 @@ func (c *Client) Tarball(ctx context.Context, token string, repoID int64, sha st
 func (c *Client) UpdateIssue(ctx context.Context, token string, repoID int64, number int, fields map[string]string) (Issue, error) {
 	var is Issue
 	_, err := c.do(ctx, http.MethodPatch, c.issue(repoID, number), token, nil, fields, &is)
+	return is, err
+}
+
+// AddAssignees assigns logins to an issue and returns the issue as it is now.
+func (c *Client) AddAssignees(ctx context.Context, token string, repoID int64, number int, logins []string) (Issue, error) {
+	var is Issue
+	_, err := c.do(ctx, http.MethodPost, c.issue(repoID, number)+"/assignees", token, nil, map[string][]string{"assignees": logins}, &is)
 	return is, err
 }
 

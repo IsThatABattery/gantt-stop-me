@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 // PullRequest is a pull request as automation's triggers read it.
@@ -114,6 +115,55 @@ func (c *Client) ClosingIssues(ctx context.Context, token string, repoID int64, 
 		}
 	}
 	return closes, nil
+}
+
+// linkedPullRequests is the LinkedPullRequests query.
+// shortcut: an issue that more than 50 pull requests close lists only 50; page the references if one does.
+const linkedPullRequests = `query LinkedPullRequests($id: ID!) {
+  node(id: $id) {
+    ... on Issue {
+      closedByPullRequestsReferences(first: 50, includeClosedPrs: true) { nodes { number title state isDraft url } }
+    }
+  }
+}`
+
+// LinkedPull is a pull request that closes an issue, as the API shows it.
+type LinkedPull struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	State  string `json:"state"` // "open", "closed" or "merged"
+	Draft  bool   `json:"draft"`
+	URL    string `json:"url"`
+}
+
+// LinkedPulls returns the pull requests, open, closed or merged, that close issue number, such as with "Closes #42".
+// It reads the issue for its GraphQL id first, by the repository's id, as every call goes.
+func (c *Client) LinkedPulls(ctx context.Context, token string, repoID int64, number int) ([]LinkedPull, error) {
+	is, err := c.Issue(ctx, token, repoID, number)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Node struct {
+			ClosedBy struct {
+				Nodes []struct {
+					LinkedPull
+					State   string `json:"state"` // OPEN, CLOSED or MERGED
+					IsDraft bool   `json:"isDraft"`
+				} `json:"nodes"`
+			} `json:"closedByPullRequestsReferences"`
+		} `json:"node"`
+	}
+	if err := c.graphql(ctx, token, linkedPullRequests, map[string]any{"id": is.NodeID}, &out); err != nil {
+		return nil, err
+	}
+	pulls := []LinkedPull{} // not nil, which would answer null
+	for _, n := range out.Node.ClosedBy.Nodes {
+		pr := n.LinkedPull
+		pr.State, pr.Draft = strings.ToLower(n.State), n.IsDraft
+		pulls = append(pulls, pr)
+	}
+	return pulls, nil
 }
 
 // convertToDraft is the ConvertToDraft mutation.

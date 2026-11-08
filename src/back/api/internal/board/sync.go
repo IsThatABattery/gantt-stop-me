@@ -210,7 +210,7 @@ func target(cols []column, cur column, is github.Issue, seen []string) column {
 	return cur
 }
 
-// refresh overwrites the task's cached title, state, body, labels and board labels, takes its tests from the body,
+// refresh overwrites the task's cached title, state, body, labels, board labels and assignees, takes its tests from the body,
 // and moves it to the end of column to when that is not cur. Leaving Testing clears needs_attention, as a move on
 // the board does. Moves while automated, in AUTOMATION.md, guard the board's moves only: the board follows GitHub,
 // and approving checks the run.
@@ -224,8 +224,8 @@ func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3, board_labels = $4, body = $5, labels = $6 where id = $1`,
-		id, is.Title, is.State, projects.BoardLabels(is), is.Body, projects.Labels(is))
+	_, err := tx.Exec(ctx, `update tasks set title = $2, state = $3, board_labels = $4, body = $5, labels = $6, assignees = $7 where id = $1`,
+		id, is.Title, is.State, projects.BoardLabels(is), is.Body, projects.Labels(is), projects.Assignees(is))
 	if err == nil {
 		_, err = projects.TakeTests(ctx, tx, id, is.Body)
 	}

@@ -50,8 +50,9 @@ func Fail(w http.ResponseWriter, r *http.Request, err error) {
 
 // User is a GitHub account.
 type User struct {
-	ID    int64  `json:"id"`
-	Login string `json:"login"`
+	ID        int64  `json:"id"`
+	Login     string `json:"login"`
+	AvatarURL string `json:"avatar_url"`
 }
 
 // User loads the account token belongs to.

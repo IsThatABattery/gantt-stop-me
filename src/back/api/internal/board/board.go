@@ -83,12 +83,13 @@ type task struct {
 	URL         string  `json:"url"`
 	RunStatus   *string `json:"runStatus"` // the latest test run's, nil for none
 	// NeedsAttention is why the task waits in Testing after a runner error, nil while clear.
-	NeedsAttention *string `json:"needsAttention"`
+	NeedsAttention *string             `json:"needsAttention"`
+	Assignees      []projects.Assignee `json:"assignees"` // as the issue had them when last read
 }
 
 // taskColumns selects, from tasks t, what scanTask reads.
 const taskColumns = `t.id, t.issue_number, t.column_id, t.position, t.version, t.title, t.state,
-	(select status from test_runs where task_id = t.id order by id desc limit 1), t.needs_attention`
+	(select status from test_runs where task_id = t.id order by id desc limit 1), t.needs_attention, t.assignees`
 
 // taskByID selects the task $1 of the project $2.
 const taskByID = `select ` + taskColumns + ` from tasks t where t.id = $1 and t.project_id = $2`
@@ -97,7 +98,7 @@ const taskByID = `select ` + taskColumns + ` from tasks t where t.id = $1 and t.
 func (b *Board) scanTask(row pgx.Row, p projects.Project, extra ...any) (task, error) {
 	var t task
 	if err := row.Scan(append([]any{&t.ID, &t.IssueNumber, &t.ColumnID, &t.Position, &t.Version, &t.Title, &t.State,
-		&t.RunStatus, &t.NeedsAttention}, extra...)...); err != nil {
+		&t.RunStatus, &t.NeedsAttention, &t.Assignees}, extra...)...); err != nil {
 		return task{}, err
 	}
 	t.URL = fmt.Sprintf("%s/%s/%s/issues/%d", b.GitHub.Web, p.Owner, p.Name, t.IssueNumber)
