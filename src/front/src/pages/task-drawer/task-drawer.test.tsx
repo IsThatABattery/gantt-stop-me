@@ -53,6 +53,7 @@ describe('payload drawer', () => {
     const task = db.tasks.find((t) => t.id === 't-41')!
     expect(task).toMatchObject({ column: 'closed', status: 'landed', version: 2 })
     expect(db.activityEvents.at(-1)).toMatchObject({ verb: 'approved', taskId: 't-41', actor: { kind: 'user', id: 'u-tv' } })
+    expect(db.activityEvents.find((e) => e.id === 'ev-1')!.needsAction).toBe(false)
   })
 
   it('R asks for a required note, then sends the payload back to In orbit', async () => {

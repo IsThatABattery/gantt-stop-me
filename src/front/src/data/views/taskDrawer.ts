@@ -113,6 +113,11 @@ function mustAwaitApproval(task: Task) {
   if (!needsApproval(task)) throw new ApprovalError(`${task.key} is not waiting for approval.`)
 }
 
+/** A decision was made, so the task's log entries stop asking for one. */
+function settle(task: Task) {
+  for (const e of db.activityEvents) if (e.taskId === task.id) e.needsAction = false
+}
+
 interface TaskRef {
   projectId: ID
   taskId: ID
@@ -126,6 +131,7 @@ export function approveTask({ projectId, taskId }: TaskRef): Promise<Task> {
     moveTo(task, 'closed')
     task.status = 'landed'
     task.version++
+    settle(task)
     logEvent(task, 'approved', 'Approved and landed')
     return task
   })
@@ -141,6 +147,7 @@ export function requestChanges({ projectId, taskId, note }: TaskRef & { note: st
     moveTo(task, 'in-progress')
     task.status = 'working'
     task.version++
+    settle(task)
     logEvent(task, 'requested-changes', text)
     return task
   })
@@ -154,6 +161,7 @@ export function takeOver({ projectId, taskId }: TaskRef): Promise<Task> {
     task.assignee = { kind: 'user', id: signedInUserId }
     task.status = 'working'
     task.version++
+    settle(task)
     logEvent(task, 'took-over', 'Took over from the assignee')
     return task
   })
