@@ -1,5 +1,5 @@
 // Package llmtest fakes an OpenAI-compatible LLM provider for tests: the model listing settings checks, the
-// Decisions API and Chat Completions, answered from a script.
+// Decisions API and the Responses API, answered from a script.
 package llmtest
 
 import (

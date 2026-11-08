@@ -62,7 +62,7 @@ Turns automation on with the caller as its owner, or takes it over: the caller r
 | `decisionProviderId` | body | integer | one of the caller's providers |
 | `decisionModel` | body | string | one of that provider's chosen `models`; picks workflows, so it should serve the OpenAI Decisions API |
 | `chatProviderId` | body | integer | one of the caller's providers, the same or another |
-| `chatModel` | body | string | one of that provider's chosen `models`; runs LLM checks, so it should support tool calling |
+| `chatModel` | body | string | one of that provider's chosen `models`; runs LLM checks, so it should serve the OpenAI Responses API, `POST {baseUrl}/responses`, with tool calling, `store` false and the reasoning's encrypted content |
 | `decisionInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added once to the end of the decision model's input |
 | `chatInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added to every LLM check's prompt after its rules, which win where they conflict |
 
