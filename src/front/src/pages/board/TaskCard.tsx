@@ -37,7 +37,7 @@ export function TaskCard({ task, to, overlay = false }: TaskCardProps) {
           : 'transition-[border-color,translate] hover:-translate-y-px hover:border-ion focus-visible:-translate-y-px focus-visible:border-ion'
       }`}
     >
-      <div className="flex flex-col gap-2.5 p-3">
+      <div className="flex flex-col gap-2.5 p-3 wrap-anywhere">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono text-xs text-text-muted">#{task.issueNumber}</span>
           {task.assignees.length > 0 && (
@@ -45,6 +45,7 @@ export function TaskCard({ task, to, overlay = false }: TaskCardProps) {
               {task.assignees.slice(0, 3).map((a) => (
                 <img key={a.login} src={a.avatarUrl} alt="" className="size-5 rounded-full border border-surface" />
               ))}
+              {task.assignees.length > 3 && <span className="pl-2.5 font-mono text-[11px] text-text-muted">+{task.assignees.length - 3}</span>}
             </span>
           )}
         </div>

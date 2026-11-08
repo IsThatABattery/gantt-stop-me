@@ -41,13 +41,20 @@ export function HangarPage() {
                     className="flex min-h-12 items-center gap-3 rounded-lg border border-line-strong bg-surface-sunken px-4 text-text no-underline hover:border-ion"
                   >
                     <span className="w-12 flex-none font-mono text-xs text-text-muted">#{t.issueNumber}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm" title={t.title}>
+                      {t.title}
+                    </span>
                     {t.runStatus && <span className="text-xs text-text-muted">{runStatusLabels[t.runStatus]}</span>}
                     <span className="flex -space-x-1.5" title={t.assignees.map((a) => a.login).join(', ') || 'Unassigned'}>
                       {t.assignees.length === 0 ? (
                         <span className="text-xs text-text-muted">Unassigned</span>
                       ) : (
-                        t.assignees.slice(0, 3).map((a) => <img key={a.login} src={a.avatarUrl} alt="" className="size-5 rounded-full border border-surface" />)
+                        <>
+                          {t.assignees.slice(0, 3).map((a) => (
+                            <img key={a.login} src={a.avatarUrl} alt="" className="size-5 rounded-full border border-surface" />
+                          ))}
+                          {t.assignees.length > 3 && <span className="pl-2.5 font-mono text-[11px] text-text-muted">+{t.assignees.length - 3}</span>}
+                        </>
                       )}
                     </span>
                   </Link>
