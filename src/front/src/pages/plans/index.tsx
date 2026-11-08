@@ -1,8 +1,10 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Button, Field, TextInput, Textarea } from '../../components/controls'
 import { Dialog } from '../../components/Dialog'
+import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
+import { Tabs } from '../../components/Tabs'
 import { usePlan, usePlanAction, usePlans, useStartPlan, type Plan } from '../../data/views/plans'
 
 const statusText: Record<Plan['status'], string> = {
@@ -26,7 +28,7 @@ function PlanDialog({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   return (
     <Dialog label="Plan a feature" wide onClose={() => navigate(`/projects/${projectId}`)}>
-      <div className="flex flex-col gap-6 p-6 pr-14">{children}</div>
+      <div className="flex flex-col gap-4 p-6 pr-14">{children}</div>
     </Dialog>
   )
 }
@@ -45,39 +47,68 @@ export function PlansPage() {
     start.mutate({ title, description }, { onSuccess: (p) => navigate(`/projects/${projectId}/plans/${p.id}`) })
   }
 
-  return (
-    <PlanDialog>
-      <h1 className="m-0 text-2xl">Plan a feature</h1>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <Field id="plan-title" label="Feature">
-          <TextInput id="plan-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={256} />
-        </Field>
-        <Field id="plan-description" label="Describe it">
-          <Textarea id="plan-description" value={description} onChange={(e) => setDescription(e.target.value)} required />
-        </Field>
-        {start.error && (
-          <p role="alert" className="m-0 text-sm text-critical">
-            {start.error.message} {/* planning_not_set_up: the interviewer has no model yet */}
-            <Link to="/settings">Settings</Link>
-          </p>
-        )}
-        <Button type="submit" variant="primary" disabled={start.isPending} className="self-start">
-          Start interview
-        </Button>
-      </form>
-      <section className="flex flex-col gap-2">
-        <h2 className="eyebrow m-0">Plans</h2>
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') ?? 'new'
+  const list = (keep: (p: Plan) => boolean) => {
+    const shown = plans.data?.filter(keep) ?? []
+    return (
+      <div className="flex flex-col gap-2 pt-4">
         {plans.error && <p className="m-0 text-sm text-critical">{plans.error.message}</p>}
-        {plans.data?.length === 0 && <p className="m-0 text-[13px] text-text-muted">No plans yet.</p>}
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {plans.data?.map((p) => (
+        {plans.data && shown.length === 0 && <p className="m-0 text-[13px] text-text-muted">No plans here yet.</p>}
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {shown.map((p) => (
             <li key={p.id}>
-              <Link to={`/projects/${projectId}/plans/${p.id}`}>{p.title}</Link>{' '}
-              <span className="text-sm text-text-muted">{statusText[p.status]}</span>
+              <Link
+                to={`/projects/${projectId}/plans/${p.id}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2 text-sm text-text no-underline hover:border-ion"
+              >
+                {p.title}
+                <span className="text-xs text-text-muted">{p.pending ? pendingText[p.pending] : statusText[p.status]}</span>
+              </Link>
             </li>
           ))}
         </ul>
-      </section>
+      </div>
+    )
+  }
+  const active = (p: Plan) => p.status !== 'done' && p.status !== 'discarded'
+  const activeCount = plans.data?.filter(active).length ?? 0
+
+  return (
+    <PlanDialog>
+      <h1 className="m-0 text-xl">Plan a feature</h1>
+      <Tabs
+        label="Plans"
+        value={tab}
+        onChange={(id) => setParams(id === 'new' ? {} : { tab: id }, { replace: true })}
+        items={[
+          {
+            id: 'new',
+            label: 'New plan',
+            content: (
+              <form onSubmit={submit} className="flex flex-col gap-3 pt-4">
+                <Field id="plan-title" label="Feature">
+                  <TextInput id="plan-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={256} />
+                </Field>
+                <Field id="plan-description" label="Describe it">
+                  <Textarea id="plan-description" value={description} onChange={(e) => setDescription(e.target.value)} required />
+                </Field>
+                {start.error && (
+                  <p role="alert" className="m-0 text-sm text-critical">
+                    {start.error.message} {/* planning_not_set_up: the interviewer has no model yet */}
+                    <Link to="/settings">Settings</Link>
+                  </p>
+                )}
+                <Button type="submit" variant="primary" disabled={start.isPending} className="self-start">
+                  Start interview
+                </Button>
+              </form>
+            ),
+          },
+          { id: 'active', label: `In progress${activeCount ? ` (${activeCount})` : ''}`, content: list(active) },
+          { id: 'done', label: 'Done', content: list((p) => !active(p)) },
+        ]}
+      />
     </PlanDialog>
   )
 }
@@ -88,6 +119,8 @@ export function PlanPage() {
   const { data: plan, error, isPending } = usePlan(projectId, planId)
   const act = usePlanAction(projectId, planId)
   const [answer, setAnswer] = useState('')
+  const [rejecting, setRejecting] = useState<number | null>(null)
+  const [feedback, setFeedback] = useState('')
 
   if (isPending || error)
     return <PlanDialog>{isPending ? <StatusMessage title="Loading plan…" /> : <StatusMessage title="Something went wrong" body={error.message} />}</PlanDialog>
@@ -101,10 +134,10 @@ export function PlanPage() {
 
   return (
     <PlanDialog>
-      <Link to={`/projects/${projectId}/plans`} className="text-sm">
-        ← Plans
+      <Link to={`/projects/${projectId}/plans?tab=active`} className="text-sm">
+        ← Plans in progress
       </Link>
-      <h1 className="m-0 text-2xl">
+      <h1 className="m-0 text-xl">
         {plan.title} <span className="text-base text-text-muted">{statusText[plan.status]}</span>
       </h1>
       {plan.pending && <p className="m-0 text-ion">{pendingText[plan.pending]}</p>}
@@ -167,7 +200,7 @@ export function PlanPage() {
       )}
 
       {(plan.proposals ?? []).length > 0 && (
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <h2 className="eyebrow m-0">Proposed tasks</h2>
             {toReview.length > 1 && (
@@ -182,32 +215,89 @@ export function PlanPage() {
               </Button>
             )}
           </div>
-          {plan.proposals!.map((p) => (
-            <article key={p.id} className="flex flex-col gap-1 rounded-lg border border-line p-4">
-              <h3 className="m-0 text-base">
-                {p.position}. {p.title} <span className="text-sm text-text-muted">{p.status.replace('_', ' ')}</span>
-              </h3>
-              <p className="m-0 whitespace-pre-wrap text-text-soft">{p.description}</p>
-              <ul className="m-0 text-sm text-text-soft">
-                {p.tests.map((t, i) => (
-                  <li key={i}>
-                    Test ({t.kind}): {t.name}
-                    {t.command && <code> {t.command}</code>}
-                  </li>
-                ))}
-              </ul>
-              {p.status === 'needs_review' && (
-                <Button variant="primary" disabled={busy} onClick={() => send(`proposals/${p.id}/approve`)} className="self-start">
-                  Approve, add to Backlog
-                </Button>
-              )}
-              {p.taskId && (
-                <Link to={`/projects/${projectId}/tasks/${p.taskId}`} className="text-sm">
-                  Open task
-                </Link>
-              )}
-            </article>
-          ))}
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+            {plan.proposals!.map((p) => (
+              <li key={p.id} className="rounded-lg border border-line px-3 py-2">
+                <div className="flex items-start gap-3">
+                  <details className="min-w-0 flex-1">
+                    <summary className="cursor-pointer text-sm">
+                      {p.position}. {p.title} <span className="text-xs text-text-muted">{p.status.replace('_', ' ')}</span>
+                    </summary>
+                    <p className="mt-1.5 mb-0 text-[13px] whitespace-pre-wrap text-text-soft">{p.description}</p>
+                    <ul className="mt-1 mb-0 pl-4 text-xs text-text-muted">
+                      {p.tests.map((t, i) => (
+                        <li key={i}>
+                          {t.kind}: {t.command ? <code>{t.command}</code> : t.name}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  {p.taskId && (
+                    <Link to={`/projects/${projectId}/tasks/${p.taskId}`} className="text-xs whitespace-nowrap">
+                      Open task
+                    </Link>
+                  )}
+                  {(p.status === 'needs_review' || p.status === 'sent_back') && (
+                    <div role="group" aria-label={`Decide on ${p.title}`} className="inline-flex flex-none overflow-hidden rounded-lg border border-line">
+                      <button
+                        type="button"
+                        aria-label={`Approve ${p.title}`}
+                        title="Approve, add to Backlog"
+                        disabled={busy || p.status !== 'needs_review'}
+                        onClick={() => send(`proposals/${p.id}/approve`)}
+                        className="flex size-8 cursor-pointer items-center justify-center border-0 bg-transparent text-good hover:bg-good/15 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Icon name="check" size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Reject ${p.title}`}
+                        title="Reject"
+                        aria-expanded={rejecting === p.id}
+                        disabled={busy}
+                        onClick={() => setRejecting(rejecting === p.id ? null : p.id)}
+                        className="flex size-8 cursor-pointer items-center justify-center border-0 border-l border-line bg-transparent text-critical hover:bg-critical/15 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Icon name="close" size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {rejecting === p.id && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <TextInput
+                      aria-label={`Why reject ${p.title}`}
+                      placeholder="Why? The agent revises from this."
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      className="min-h-9 flex-1 text-sm"
+                    />
+                    {(['revise', 'drop'] as const).map((outcome) => (
+                      <Button
+                        key={outcome}
+                        variant={outcome === 'revise' ? 'primary' : 'secondary'}
+                        className="min-h-9 px-3 text-sm"
+                        disabled={busy || !feedback.trim()}
+                        onClick={() =>
+                          act.mutate(
+                            { path: `proposals/${p.id}/deny`, body: { feedback: feedback.trim(), outcome } },
+                            {
+                              onSuccess: () => {
+                                setRejecting(null)
+                                setFeedback('')
+                              },
+                            },
+                          )
+                        }
+                      >
+                        {outcome === 'revise' ? 'Revise' : 'Drop'}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
