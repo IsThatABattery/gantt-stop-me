@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
-import { Eyebrow } from '../components/Eyebrow'
 import { Icon } from '../components/Icon'
 import { Logo } from '../components/Logo'
 import { Button, Checkbox, Field, TextInput } from '../components/controls'
@@ -44,8 +43,7 @@ export function LoginPage() {
       }
     >
       <div>
-        <Eyebrow>{labels.flightDeckAccess}</Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">Sign in</h1>
+        <h1 className="m-0 font-heading text-[26px] font-semibold">Sign in</h1>
       </div>
 
       <div className="flex flex-col gap-2.5">

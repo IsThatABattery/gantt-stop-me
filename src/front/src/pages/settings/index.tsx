@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
-import { Eyebrow } from '../../components/Eyebrow'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useMe } from '../../data/session'
 import { labels, settingsLabels } from '../../labels/labels'
@@ -26,8 +25,7 @@ export function SettingsPage() {
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
       <header>
-        <Eyebrow>{me?.email ?? '…'}</Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.settings}</h1>
+        <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.settings}</h1>
       </header>
 
       <div className="flex flex-wrap items-start gap-7">

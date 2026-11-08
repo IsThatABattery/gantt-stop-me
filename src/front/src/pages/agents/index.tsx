@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useMockProjectContext } from '../../app/projectContext'
 import { buttonClass } from '../../components/buttonClass'
-import { Eyebrow } from '../../components/Eyebrow'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useMockSession, useUser } from '../../data/core'
 import { useAgents, useAutonomyPolicy } from '../../data/views/agents'
@@ -20,8 +19,6 @@ export function AgentsPage() {
   const { data: me } = useUser(session?.userId)
   const [picked, setPicked] = useState<string | null>(null)
 
-  const active = rows?.filter((r) => r.task && r.agent.state !== 'idle').length ?? 0
-  const needsYou = rows?.filter((r) => r.openHail).length ?? 0
   // Start on the astronaut waiting on a hail, else the first one, and stay
   // there once its hail is answered.
   const initial = rows?.find((r) => r.openHail) ?? rows?.[0]
@@ -33,10 +30,7 @@ export function AgentsPage() {
     <div className="flex flex-col gap-6 px-8 py-7">
       <header className="flex flex-wrap items-end gap-4">
         <div className="flex-[1_1_320px]">
-          <Eyebrow>
-            {labels.agents} · {active} active · {needsYou} {labels.needsYou.toLowerCase()}
-          </Eyebrow>
-          <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.agent} console</h1>
+          <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.agent} console</h1>
         </div>
         <Link to={board} className={buttonClass('secondary')}>
           {actionLabels.backToBoard}

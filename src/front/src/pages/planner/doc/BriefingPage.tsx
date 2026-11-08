@@ -28,8 +28,7 @@ function Briefing({ draft }: { draft: FeatureDraft }) {
     <div className="flex flex-wrap items-start gap-6">
       <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-5">
         <div>
-          <div className="eyebrow">STEP 1 · {plannerLabels.steps[0].toUpperCase()}</div>
-          <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">Tell the {agentWord} about the {labels.feature.toLowerCase()}</h1>
+          <h1 className="m-0 font-heading text-[28px] font-semibold">Tell the {agentWord} about the {labels.feature.toLowerCase()}</h1>
           <p className="mt-2 mb-0 max-w-[640px] leading-normal text-text-muted-strong">
             The briefing {agentWord} asks one question at a time, then drafts an {labels.feature.toLowerCase()} doc for you to approve. Nothing is
             added to the board yet.

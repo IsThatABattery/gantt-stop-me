@@ -6,7 +6,6 @@ import { useProjectContext } from '../../app/projectContext'
 import { AgentEditor, NoProviders } from '../../components/AgentEditor'
 import { Workflows } from './Workflows'
 import { Button } from '../../components/controls'
-import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
@@ -44,10 +43,7 @@ export function AutomationPage() {
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
       <header>
-        <Eyebrow>
-          {labels.project} · {project.name}
-        </Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.automation}</h1>
+        <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.automation}</h1>
       </header>
       {!automation.data && automation.error instanceof NotFoundError ? (
         <StatusMessage

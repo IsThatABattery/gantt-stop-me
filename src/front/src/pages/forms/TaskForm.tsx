@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { Dialog } from '../../components/Dialog'
-import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { Button, Field, Textarea, TextInput } from '../../components/controls'
@@ -106,10 +105,7 @@ export function NewTaskDialog() {
     <Dialog label={formLabels.task.titleNew} onClose={close}>
       <form onSubmit={submit} noValidate className="flex flex-col gap-[18px] p-7">
         <div className="pr-10">
-          <Eyebrow>
-            {`${project.owner}/${project.name}`.toUpperCase()} · {formLabels.task.eyebrowNew.toUpperCase()}
-          </Eyebrow>
-          <h2 className="mt-1.5 mb-0 font-heading text-2xl font-semibold">{formLabels.task.titleNew}</h2>
+          <h2 className="m-0 font-heading text-2xl font-semibold">{formLabels.task.titleNew}</h2>
           <p className="mt-2 mb-0 leading-normal text-text-muted-strong">
             A {labels.task.toLowerCase()} is a GitHub issue. It opens in the {labels.backlog}.
           </p>
@@ -201,10 +197,7 @@ function TaskEditor({ task }: { task: TaskDetail }) {
 
       <header className="flex flex-wrap items-end gap-4">
         <div className="mr-auto">
-          <Eyebrow>
-            {formLabels.task.eyebrowEdit.toUpperCase()} · #{task.issueNumber}
-          </Eyebrow>
-          <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">{formLabels.task.titleEdit}</h1>
+          <h1 className="m-0 font-heading text-[28px] font-semibold">{formLabels.task.titleEdit}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <span role="status" className="text-[13px]">

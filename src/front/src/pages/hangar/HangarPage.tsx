@@ -1,6 +1,4 @@
 import { Link, Outlet, useParams } from 'react-router'
-import { useProjectContext } from '../../app/projectContext'
-import { Eyebrow } from '../../components/Eyebrow'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useBoard } from '../../data/views/board'
 import { labels, runStatusLabels } from '../../labels/labels'
@@ -9,7 +7,6 @@ const lower = (s: string) => s.toLowerCase()
 
 /** The Hangar tab: the Hangar (Backlog) column as a list, in board order. The drawer opens over it. */
 export function HangarPage() {
-  const project = useProjectContext()
   const { projectId = '' } = useParams()
   const { data: board, isPending, error } = useBoard(projectId)
   const tasks = board?.columns.find((c) => c.key === 'backlog')?.tasks ?? []
@@ -18,10 +15,7 @@ export function HangarPage() {
     <>
       <div className="flex min-w-0 flex-1 flex-col gap-6 px-8 py-7">
         <header>
-          <Eyebrow>
-            {labels.project} · {project.name}
-          </Eyebrow>
-          <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.backlog}</h1>
+          <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.backlog}</h1>
         </header>
         {isPending ? (
           <StatusMessage title={`Loading ${lower(labels.backlog)}…`} />

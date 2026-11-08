@@ -31,8 +31,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
     <Dialog label={labels.newProject} onClose={onClose}>
       <form onSubmit={submit} noValidate className="flex flex-col gap-[18px] p-7">
         <div className="pr-10">
-          <div className="eyebrow">{labels.flightDeck.toUpperCase()}</div>
-          <h2 className="mt-1.5 mb-0 font-heading text-2xl font-semibold">{labels.newProject}</h2>
+          <h2 className="m-0 font-heading text-2xl font-semibold">{labels.newProject}</h2>
           <p className="mt-2 mb-0 leading-normal text-text-muted-strong">
             A mission holds one team's board, objectives and astronauts. You can add operators and a launch window once it exists.
           </p>

@@ -52,8 +52,6 @@ export const labels = {
   newProjectHint: 'Start from scratch or import a backlog',
   selectProject: 'Select a mission',
   searchProjects: 'Search missions',
-  flightDeck: 'Flight deck',
-  flightDeckAccess: 'Flight deck access',
   newUser: 'New operator?',
   requestAccess: 'Request access',
   needsYou: 'Needs you',
@@ -127,8 +125,6 @@ export const taskTabLabels = {
 /** Shared create/edit form text (NewObjective, ObjectiveEditor mockups). */
 export const formLabels = {
   feature: {
-    eyebrowNew: 'New objective',
-    eyebrowEdit: 'Objective',
     titleNew: 'New objective',
     titleEdit: 'Edit objective',
     intro: 'An objective groups the payloads that deliver one outcome. You can add payloads and success criteria after creating it.',
@@ -144,8 +140,6 @@ export const formLabels = {
     progressLabel: 'Landed',
   },
   task: {
-    eyebrowNew: 'New payload',
-    eyebrowEdit: 'Payload',
     titleNew: 'New payload',
     titleEdit: 'Edit payload',
     intro: 'A payload is one piece of work. It waits in the Hangar until it is scheduled into a launch window.',

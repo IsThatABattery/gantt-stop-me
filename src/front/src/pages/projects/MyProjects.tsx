@@ -1,6 +1,5 @@
 import { Link } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
-import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import type { Project } from '../../data/api/types'
@@ -42,8 +41,7 @@ export function FlightDeckPage() {
       <div className="flex w-full max-w-[640px] flex-col gap-4">
         <header className="flex items-end justify-between gap-4">
           <div>
-            <Eyebrow>{labels.flightDeck}</Eyebrow>
-            <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">Recent {labels.projects.toLowerCase()}</h1>
+            <h1 className="m-0 font-heading text-[26px] font-semibold">Recent {labels.projects.toLowerCase()}</h1>
           </div>
           <Link to="/projects/new" className={buttonClass('secondary')}>
             <Icon name="plus" />

@@ -166,19 +166,20 @@ describe('project automation', () => {
     fake.providers = providers
     fake.automation = enabled
     const { router } = renderApp(PATH)
-    const visit = async (path: string, name: string) => {
+    const visit = async (path: string) => {
       await act(() => router.navigate(path))
-      await screen.findByText(`Mission · ${name}`)
+      // The rail's links follow the open project once its page rendered.
+      expect(await screen.findByRole('link', { name: 'Automation' })).toHaveAttribute('href', path)
       await screen.findByRole('form', { name: 'Automation' })
     }
     // Both projects are cached, so going back and forth keeps the page mounted.
-    await visit('/projects/2/automation', 'second')
-    await visit(PATH, 'gantt')
+    await visit('/projects/2/automation')
+    await visit(PATH)
     failNext(`PUT /api${PATH}`, { status: 403, code: 'forbidden', message: 'You need write access.' })
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByText(/You have read access only/)
 
-    await visit('/projects/2/automation', 'second')
+    await visit('/projects/2/automation')
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
     expect(screen.queryByText(/You have read access only/)).not.toBeInTheDocument()
   })

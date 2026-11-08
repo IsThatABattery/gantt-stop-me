@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Dialog } from '../../components/Dialog'
-import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { Button } from '../../components/controls'
@@ -75,10 +74,7 @@ function NewItemForm({ kind, project, options, onCancel }: NewItemFormProps) {
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-[18px] p-7">
       <div className="pr-10">
-        <Eyebrow>
-          {project.name.toUpperCase()} · {t.eyebrowNew.toUpperCase()}
-        </Eyebrow>
-        <h2 className="mt-1.5 mb-0 font-heading text-2xl font-semibold">{t.titleNew}</h2>
+        <h2 className="m-0 font-heading text-2xl font-semibold">{t.titleNew}</h2>
         <p className="mt-2 mb-0 leading-normal text-text-muted-strong">{t.intro}</p>
       </div>
 

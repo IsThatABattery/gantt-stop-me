@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useMockProjectContext } from '../../app/projectContext'
-import { Eyebrow } from '../../components/Eyebrow'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useActivity, useActivityContext } from '../../data/views/activity'
 import { labels } from '../../labels/labels'
@@ -27,10 +26,7 @@ export function ActivityPage() {
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
       <header>
-        <Eyebrow>
-          {labels.project} · {project.name}
-        </Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.activity}</h1>
+        <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.activity}</h1>
         {events.data && events.data.length > 0 && (
           <p className="m-0 mt-1.5 text-[13px] text-text-muted-strong">
             {events.data.length} entries · {needsAction > 0 ? `${needsAction} need action` : 'nothing needs you'}

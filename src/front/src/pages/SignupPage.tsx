@@ -1,12 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router'
-import { Eyebrow } from '../components/Eyebrow'
 import { Button, Field, TextInput } from '../components/controls'
 import { errorCode } from '../data/errors'
 import { keys } from '../data/keys'
 import { signUp, useMe } from '../data/session'
-import { labels } from '../labels/labels'
 import { AuthFrame } from './LoginPage'
 
 /** Which field each signup error belongs to (docs/accounts.md). */
@@ -53,8 +51,7 @@ export function SignupPage() {
       }
     >
       <div>
-        <Eyebrow>{labels.flightDeckAccess}</Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">Create an account</h1>
+        <h1 className="m-0 font-heading text-[26px] font-semibold">Create an account</h1>
       </div>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">

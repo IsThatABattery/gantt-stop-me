@@ -2,7 +2,6 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useMockProjectContext } from '../../app/projectContext'
 import { Chip, type Tone } from '../../components/Chip'
-import { Eyebrow } from '../../components/Eyebrow'
 import { ProgressBar } from '../../components/ProgressBar'
 import { RadioCard } from '../../components/RadioCard'
 import { StatusMessage } from '../../components/StatusMessage'
@@ -72,7 +71,6 @@ function FeatureEditor({ project, feature, options }: { project: Project; featur
   const tasks = useFeatureTasks(project.id, feature.id)
   const save = useUpdateFeature(project.id, feature.id)
   const archive = useArchiveFeature(project.id, feature.id)
-  const epic = options.epics.find((e) => e.id === feature.epicId)
   const inherited = project.defaultAutonomy
 
   return (
@@ -85,7 +83,6 @@ function FeatureEditor({ project, feature, options }: { project: Project; featur
         { label: labels.features, to: `/projects/${project.id}` },
         { label: feature.name },
       ]}
-      eyebrow={[formLabels.feature.eyebrowEdit, feature.key, `${labels.epic}: ${epic?.name ?? '—'}`]}
       status={feature.status === 'archived' ? featureStatusLabels.archived : null}
       inherited={{ label: labels.inheritProject, level: inherited }}
       onSave={(edit) => save.mutateAsync(edit)}
@@ -190,7 +187,6 @@ interface EditorProps {
   options: FormOptions
   initial: EditValue
   crumbs: { label: string; to?: string }[]
-  eyebrow: string[]
   /** A status word shown beside the heading, e.g. Archived */
   status?: string | null
   inherited: { label: string; level: Autonomy }
@@ -201,7 +197,7 @@ interface EditorProps {
   side: ReactNode
 }
 
-function Editor({ kind, project, options, initial, crumbs, eyebrow, status, inherited, onSave, saving, saveError, onArchive, side }: EditorProps) {
+function Editor({ kind, project, options, initial, crumbs, status, inherited, onSave, saving, saveError, onArchive, side }: EditorProps) {
   const navigate = useNavigate()
   const t = formLabels[kind]
   const [value, setValue] = useState(initial)
@@ -243,8 +239,7 @@ function Editor({ kind, project, options, initial, crumbs, eyebrow, status, inhe
 
       <header className="flex flex-wrap items-end gap-4">
         <div className="mr-auto">
-          <Eyebrow>{eyebrow.join(' · ').toUpperCase()}</Eyebrow>
-          <h1 className="mt-1.5 mb-0 flex items-center gap-3 font-heading text-[28px] font-semibold">
+          <h1 className="m-0 flex items-center gap-3 font-heading text-[28px] font-semibold">
             {t.titleEdit}
             {status && <Chip tone="neutral">{status}</Chip>}
           </h1>

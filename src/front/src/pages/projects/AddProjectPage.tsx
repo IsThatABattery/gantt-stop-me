@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { Button, Field, TextInput } from '../../components/controls'
@@ -36,8 +35,7 @@ export function AddProjectPage() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 py-10">
       <header className="w-full max-w-[640px]">
-        <Eyebrow>{labels.flightDeck}</Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.addProject}</h1>
+        <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.addProject}</h1>
         <p className="mt-2 mb-0 leading-normal text-text-muted-strong">
           A {labels.project.toLowerCase()} is a GitHub repository, and its open issues become {labels.tasks.toLowerCase()}. Paste the
           repository's URL to open its board. If it was added before, you'll go straight to it.

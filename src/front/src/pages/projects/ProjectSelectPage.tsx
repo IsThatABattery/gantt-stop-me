@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
 import { StatusMessage } from '../../components/StatusMessage'
@@ -41,7 +40,6 @@ export function ProjectSelectPage() {
     [projects, filter, query, sort, session?.userId, favorites],
   )
   const needs = useMemo(() => needsYou(projects ?? []), [projects])
-  const liveCount = projects?.filter((p) => !p.archived).length ?? 0
 
   return (
     <div className="stars min-h-screen bg-background text-text">
@@ -67,10 +65,7 @@ export function ProjectSelectPage() {
       <main className="mx-auto flex max-w-[1240px] flex-col gap-7 px-8 pt-10 pb-16">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex-[1_1_360px]">
-            <Eyebrow>
-              {labels.flightDeck} · {liveCount} {labels.projects}
-            </Eyebrow>
-            <h1 className="mt-1.5 mb-0 font-heading text-[32px] font-semibold">{labels.selectProject}</h1>
+            <h1 className="m-0 font-heading text-[32px] font-semibold">{labels.selectProject}</h1>
           </div>
           <button type="button" onClick={() => setCreating(true)} className={buttonClass('primary', 'min-h-[46px] px-5')}>
             <Icon name="plus" size={16} strokeWidth={2.25} />

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button, Textarea } from '../../components/controls'
-import { Eyebrow } from '../../components/Eyebrow'
 import { useSaveWorkflows, useWorkflows } from '../../data/views/workflows'
 
 // One workflow's fields, as the parser documents them; context and dockerfile default to . and Dockerfile.
@@ -29,8 +28,7 @@ export function Workflows({ projectId, readOnly }: { projectId: string; readOnly
   return (
     <section className="flex flex-col gap-3 border-t border-line-soft pt-6" aria-labelledby="workflows-title">
       <div>
-        <Eyebrow>.gantt/workflows.yml</Eyebrow>
-        <h2 id="workflows-title" className="mt-1 mb-0 font-heading text-lg font-semibold">
+        <h2 id="workflows-title" className="m-0 font-heading text-lg font-semibold">
           Workflows
         </h2>
         <p className="m-0 mt-1 text-[13px] text-text-muted-strong">

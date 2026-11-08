@@ -20,10 +20,7 @@ export function TelemetryBar({ project, counts, active, onToggle }: TelemetryBar
   return (
     <header className="flex flex-wrap items-center gap-6 border-b border-line-soft bg-header px-7 py-5">
       <div className="min-w-0 flex-[1_1_320px]">
-        <div className="eyebrow">
-          {labels.project} · {project.owner}
-        </div>
-        <h1 className="mt-1.5 mb-0 font-heading text-2xl font-semibold">{project.name}</h1>
+        <h1 className="m-0 font-heading text-2xl font-semibold">{project.name}</h1>
         <a
           href={`https://github.com/${repo}`}
           target="_blank"
