@@ -24,6 +24,11 @@ type PullRequest struct {
 		} `json:"repo"` // nil once the fork it came from is deleted
 	} `json:"head"`
 	User User `json:"user"` // its author
+	// Only PullRequest, which reads one pull request, fills these two: GitHub's list leaves them out.
+	Merged bool `json:"merged"`
+	// MergeableState is GitHub's mergeable_state: "clean", "has_hooks" or "unstable" when it may merge as it is, and
+	// "blocked", "behind", "dirty", "draft" or "unknown" (not worked out yet) when it may not.
+	MergeableState string `json:"mergeable_state"`
 }
 
 // ErrPullsChanged reports an open pull request list that changed while PullRequests read its pages, so it may hold a
@@ -139,6 +144,49 @@ func (c *Client) Permission(ctx context.Context, token string, repoID int64, log
 // CreateComment comments body on issue or pull request number.
 func (c *Client) CreateComment(ctx context.Context, token string, repoID int64, number int, body string) error {
 	_, err := c.do(ctx, http.MethodPost, c.issue(repoID, number)+"/comments", token, nil, map[string]string{"body": body}, nil)
+	return err
+}
+
+// mergeSettings is the MergeSettings query. It reads the merge methods through the pull request's repository, where
+// members with write access see them, unlike REST's allow_* fields, which GitHub shows only to admins.
+const mergeSettings = `query MergeSettings($id: ID!) {
+  node(id: $id) {
+    ... on PullRequest { repository { squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed } }
+  }
+}`
+
+// MergeMethod returns the first of "squash", "merge" and "rebase" that the repository of the pull request with this
+// GraphQL node id allows, for Merge.
+func (c *Client) MergeMethod(ctx context.Context, token, nodeID string) (string, error) {
+	var out struct {
+		Node struct {
+			Repository struct {
+				Squash bool `json:"squashMergeAllowed"`
+				Merge  bool `json:"mergeCommitAllowed"`
+				Rebase bool `json:"rebaseMergeAllowed"`
+			} `json:"repository"`
+		} `json:"node"`
+	}
+	if err := c.graphql(ctx, token, mergeSettings, map[string]any{"id": nodeID}, &out); err != nil {
+		return "", err
+	}
+	switch r := out.Node.Repository; {
+	case r.Squash:
+		return "squash", nil
+	case r.Merge:
+		return "merge", nil
+	case r.Rebase:
+		return "rebase", nil
+	}
+	return "", errors.New("github: the repository allows no merge method")
+}
+
+// Merge merges pull request number with method, as MergeMethod returns it, only while its head is still sha. GitHub
+// answers 409 once the head moved, and 405 when the pull request may not merge, such as for a conflict, a required
+// check or branch protection, with why in the *Error's Message.
+func (c *Client) Merge(ctx context.Context, token string, repoID int64, number int, sha, method string) error {
+	_, err := c.do(ctx, http.MethodPut, c.repo(repoID)+"/pulls/"+strconv.Itoa(number)+"/merge", token, nil,
+		map[string]string{"sha": sha, "merge_method": method}, nil)
 	return err
 }
 

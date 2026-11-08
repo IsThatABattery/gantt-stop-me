@@ -189,7 +189,7 @@ Returns a task's test runs, newest first, also after automation is turned off.
 | `404` | `not_found` |
 | `502` | `github_error` |
 
-`status` is `queued`, `running`, `passed`, `failed`, `error` (a runner error) or `cancelled`. `prNumber` and `headSha` are the pull request and commit tested, `null` when no one linked pull request was found. `reason` is a runner error or cancel reason for the whole run, else `null`. `finishedAt` is `null` until the run ends.
+`status` is `queued`, `running`, `passed`, `failed`, `error` (a runner error) or `cancelled`. `prNumber` and `headSha` are the pull request and commit tested, `null` when no one linked pull request was found. `reason` is a runner error or cancel reason for the whole run, else `null`. `finishedAt` is `null` until the run ends. `approvedAt` is when a member [approved](#approve-and-merge) the run and its pull request merged, else `null`, and `approvedBy` is their GitHub login, `null` until then or once they unlink GitHub.
 
 ```json
 {
@@ -201,7 +201,9 @@ Returns a task's test runs, newest first, also after automation is turned off.
       "status": "passed",
       "reason": null,
       "createdAt": "2026-11-08T09:30:00Z",
-      "finishedAt": "2026-11-08T09:34:12Z"
+      "finishedAt": "2026-11-08T09:34:12Z",
+      "approvedBy": "ada",
+      "approvedAt": "2026-11-08T10:02:31Z"
     },
     {
       "id": 3,
@@ -210,7 +212,9 @@ Returns a task's test runs, newest first, also after automation is turned off.
       "status": "cancelled",
       "reason": "Cancelled by ada.",
       "createdAt": "2026-11-08T09:12:00Z",
-      "finishedAt": "2026-11-08T09:13:40Z"
+      "finishedAt": "2026-11-08T09:13:40Z",
+      "approvedBy": null,
+      "approvedAt": null
     }
   ]
 }
@@ -242,7 +246,7 @@ Returns one test run with its workflow executions and its test results, also aft
 
 Each execution is one workflow running its tests. `logTail` is the last 64 KB of its log: build and start output, then each script's command and output. Its `status` is a run's, from its own results.
 
-Each result is one test, by its `position` in the Tests section. `text` is its line and block. `kind` is `script` or `llm`. `pinned` says it named its workflow. `executionId` and `workflow` are `null` when it went to no workflow. `probabilities` are the decision model's, by workflow name, empty when it made no pick. `status` is `pending`, `passed`, `failed`, `manual` (for the approver to check by hand), `error` (a runner error) or `skipped` (cancelled). `detail` is a script's exit code and output, an LLM check's reason, or the runner error. `transcript` is an LLM check's tool calls with their answers, cut to 64 KB, else `null`. `hasScreenshot` says whether [Show screenshot](#show-screenshot) has one.
+Each result is one test, by its `position` in the Tests section. `text` is its line and block. `kind` is `script` or `llm`. `pinned` says it named its workflow. `executionId` and `workflow` are `null` when it went to no workflow. `probabilities` are the decision model's, by workflow name, empty when it made no pick. `status` is `pending`, `passed`, `failed`, `manual` (for the approver to check by hand), `error` (a runner error) or `skipped` (cancelled). `detail` is a script's exit code and output, an LLM check's reason, or the runner error. `transcript` is an LLM check's tool calls with their answers, cut to 64 KB, else `null`. `hasScreenshot` says whether [Show screenshot](#show-screenshot) has one. The `manual` results of a task's latest run are the approver's checklist: [Approve and merge](#approve-and-merge) takes their `id`s.
 
 ```json
 {
@@ -253,6 +257,8 @@ Each result is one test, by its `position` in the Tests section. `text` is its l
   "reason": null,
   "createdAt": "2026-11-08T09:30:00Z",
   "finishedAt": "2026-11-08T09:34:12Z",
+  "approvedBy": null,
+  "approvedAt": null,
   "executions": [
     {
       "id": 7,
@@ -349,3 +355,59 @@ Cancels a queued or running test run and its workflow executions, and skips its 
 | `404` | `not_found` |
 | `409` | `run_finished` |
 | `502` | `github_error` |
+
+## Approve and merge
+
+Merges a task's linked pull request once the caller has checked its manual tests by hand, then moves the task to Closed. The task must be in User Check with a latest test run that `passed`. The merge and the move use the automation owner's GitHub credential, so GitHub shows them as the owner's, and the run records the caller as its approver. The merge method is the first of squash, merge commit and rebase that the repository allows, and the tested commit goes with it as `sha`, so GitHub merges nothing newer. Whether the branch is deleted follows the repository's "automatically delete head branches" setting.
+
+`POST /api/projects/{id}/tasks/{taskID}/approve`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id` with automation on; write access |
+| `taskID` | path | integer | a task's `id` in the project |
+| `checked` | body | integer array | exactly the `id`s of the latest run's `manual` results, in any order; empty or `null` when it has none |
+
+```json
+{ "checked": [22] }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the approved test run, as [List test runs](#list-test-runs) shows it |
+| `400` | `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `not_tested`, `head_moved`, `not_mergeable`, `pull_request_closed`, `automation_paused`, `automation_off` |
+| `422` | `unchecked_manual_tests` |
+| `502` | `github_error` |
+
+- `not_tested`: the task is not in User Check, or its latest test run did not pass.
+- `unchecked_manual_tests`: `checked` misses a manual test or holds an id that is none of the run's. The message names the tests not ticked and the ids that are not the run's.
+- `head_moved`: the pull request has commits newer than the one tested, found before merging or by GitHub refusing the merge. Nothing merged: the task moved back to Testing and a new test run of the new head is queued. When the pull request is a draft again, or its author no longer has write access, that run ends at once as a runner error saying so, as the triggers would refuse it.
+- `not_mergeable`: GitHub will not merge the pull request as it is. Before merging, the API reads GitHub's `mergeable_state` and merges only when it is `clean`, `has_hooks` or `unstable`, so branch protection that the owner may bypass, such as an admin, still holds for the approver: `blocked` (a required review or check), `behind`, `dirty` (conflicts), `draft` and `unknown` (GitHub has not worked it out yet; try again) each answer with their own message. When GitHub then refuses the merge itself, the message is GitHub's. The task stays in User Check.
+- `pull_request_closed`: the pull request is closed or merged already, also by another approval at the same moment. Of two approvals at once, one merges.
+- `automation_paused`, `automation_off`: automation is paused, also when GitHub just refused the owner's credential, or off, also when it was turned off while the approval read GitHub. Nothing merged.
+- `403` and `502`: GitHub refused or failed a call with the owner's credential, answered as on other routes. Nothing merged. GitHub refusing the merge with `409` while a new read still shows the tested head also answers `502`: try again.
+
+A merge stands even when GitHub then fails the move to Closed: the answer is still `200`, and the task stays in User Check until the issue sync sees its issue closed. So does a merge whose answer got lost, as on a timeout: the API reads the pull request again, and when it merged at the tested head, the approval is saved as usual.
+
+```json
+{
+  "id": 4,
+  "prNumber": 12,
+  "headSha": "9fceb02d0ae598e95dc970b74767f19372d61af8",
+  "status": "passed",
+  "reason": null,
+  "createdAt": "2026-11-08T09:30:00Z",
+  "finishedAt": "2026-11-08T09:34:12Z",
+  "approvedBy": "ada",
+  "approvedAt": "2026-11-08T10:02:31Z"
+}
+```

@@ -55,6 +55,7 @@ func (a *Automation) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{id}/runs/{runID}", a.Accounts.Require(a.getRun))
 	mux.HandleFunc("GET /api/projects/{id}/runs/{runID}/results/{resultID}/screenshot", a.Accounts.Require(a.screenshot))
 	mux.HandleFunc("POST /api/projects/{id}/runs/{runID}/cancel", a.Accounts.Require(a.cancelRun))
+	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/approve", a.Accounts.Require(a.approve))
 }
 
 // pathID is the path value name as an id, or 0, which matches no row, when it is not a number.
@@ -72,10 +73,13 @@ type run struct {
 	Reason     *string    `json:"reason"` // a runner error or cancel reason for the whole run
 	CreatedAt  time.Time  `json:"createdAt"`
 	FinishedAt *time.Time `json:"finishedAt"`
+	ApprovedBy *string    `json:"approvedBy"` // the approver's GitHub login; nil until approved, or once they unlink GitHub
+	ApprovedAt *time.Time `json:"approvedAt"` // when a person approved it and its pull request merged
 }
 
 // runColumns selects, from test_runs r, a run's fields in order.
-const runColumns = `r.id, r.pr_number, r.head_sha, r.status, r.reason, r.created_at, r.finished_at`
+const runColumns = `r.id, r.pr_number, r.head_sha, r.status, r.reason, r.created_at, r.finished_at,
+	(select login from github_links where user_id = r.approved_by), r.approved_at`
 
 // runNotFound answers 404 for a test run that is not the project's.
 func runNotFound(w http.ResponseWriter) {

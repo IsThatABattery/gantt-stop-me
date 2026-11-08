@@ -115,3 +115,56 @@ func TestConvertToDraft(t *testing.T) {
 		t.Fatalf("ConvertToDraft with GitHub failing: err = %v", err)
 	}
 }
+
+func TestMergeMethod(t *testing.T) {
+	_, repo, gh := fake(t)
+	n := repo.AddPull("Fix", githubtest.Pull{Author: "ada", HeadSHA: "a1", HeadRepo: repo.ID})
+	pr, err := gh.PullRequest(t.Context(), "token", repo.ID, n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		allowed []string
+		want    string
+	}{
+		{[]string{"squash", "merge", "rebase"}, "squash"},
+		{[]string{"merge", "rebase"}, "merge"},
+		{[]string{"rebase"}, "rebase"},
+	} {
+		repo.AllowMerges(c.allowed...)
+		if got, err := gh.MergeMethod(t.Context(), "token", pr.NodeID); err != nil || got != c.want {
+			t.Errorf("MergeMethod allowing %v = %q, %v, want %q", c.allowed, got, err, c.want)
+		}
+	}
+	if _, err := gh.MergeMethod(t.Context(), "token", "PR_404"); err == nil {
+		t.Fatal("MergeMethod of an unknown node succeeded")
+	}
+}
+
+func TestMerge(t *testing.T) {
+	_, repo, gh := fake(t)
+	n := repo.AddPull("Fix", githubtest.Pull{Author: "ada", HeadSHA: "a1", HeadRepo: repo.ID})
+	if err := gh.Merge(t.Context(), "token", repo.ID, n, "b2", "squash"); !isStatus(err, http.StatusConflict) {
+		t.Fatalf("Merge of a head that moved: err = %v, want HTTP 409", err)
+	}
+	const why = `Required status check "ci" is expected.`
+	repo.EditPull(n, func(p *githubtest.Pull) { p.Unmergeable = why })
+	var ghErr *github.Error
+	if err := gh.Merge(t.Context(), "token", repo.ID, n, "a1", "squash"); !errors.As(err, &ghErr) ||
+		ghErr.Status != http.StatusMethodNotAllowed || ghErr.Message != why {
+		t.Fatalf("Merge GitHub refuses: err = %#v, want HTTP 405 with its message", err)
+	}
+	repo.EditPull(n, func(p *githubtest.Pull) { p.Unmergeable, p.MergeState = "", "blocked" })
+	if pr, err := gh.PullRequest(t.Context(), "token", repo.ID, n); err != nil || pr.MergeableState != "blocked" || pr.Merged {
+		t.Fatalf("PullRequest = %+v, %v; want it blocked, not merged", pr, err)
+	}
+	if err := gh.Merge(t.Context(), "token", repo.ID, n, "a1", "squash"); err != nil {
+		t.Fatal(err)
+	}
+	if is := repo.Issue(n); is.State != "closed" || is.Pull.MergedWith != "squash" {
+		t.Fatalf("pull request = %s, merged with %q; want closed by a squash", is.State, is.Pull.MergedWith)
+	}
+	if pr, err := gh.PullRequest(t.Context(), "token", repo.ID, n); err != nil || !pr.Merged {
+		t.Fatalf("PullRequest = %+v, %v; want it merged", pr, err)
+	}
+}

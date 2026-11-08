@@ -56,6 +56,7 @@ type Repo struct {
 	labels []Label
 	issues []*Issue
 	files  map[string]map[string]string // commit sha -> path -> content
+	merges []string                     // the merge methods it allows
 }
 
 // Issue is an issue or a pull request in a Repo.
@@ -78,6 +79,12 @@ type Pull struct {
 	HeadRepo int64 // id of the repository its branch is in, 0 once that fork is deleted
 	Draft    bool
 	Closes   []Ref // the issues it closes, such as with "Closes #42"
+	// Unmergeable is GitHub's message refusing to merge it, as for a conflict or a required check; "" lets it merge.
+	Unmergeable string
+	// MergeState is GitHub's mergeable_state for it, such as "blocked"; "" is "clean". The merge route ignores it, as
+	// GitHub does for an admin who may bypass branch protection.
+	MergeState string
+	MergedWith string // the merge method that merged it, "" until then
 }
 
 // Ref names an issue in a repository.
@@ -128,6 +135,7 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/comments", f.createComment)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls", f.listPulls)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls/{number}", f.getPull)
+	f.mux.HandleFunc("PUT /repositories/{id}/pulls/{number}/merge", f.mergePull)
 	f.mux.HandleFunc("GET /repositories/{id}/collaborators/{login}/permission", f.permission)
 	f.mux.HandleFunc("GET /repositories/{id}/contents/{path...}", f.contents)
 	f.mux.HandleFunc("GET /repositories/{id}/tarball/{sha}", f.tarball)
@@ -172,7 +180,7 @@ func (f *Fake) AddRepo(owner, name string) *Repo {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastID++
-	r := &Repo{ID: f.lastID, Owner: owner, Name: name, f: f, roles: map[string]string{}}
+	r := &Repo{ID: f.lastID, Owner: owner, Name: name, f: f, roles: map[string]string{}, merges: []string{"squash", "merge", "rebase"}}
 	f.repos = append(f.repos, r)
 	return r
 }
@@ -194,6 +202,14 @@ func (r *Repo) Rename(owner, name string) {
 	r.f.mu.Lock()
 	defer r.f.mu.Unlock()
 	r.Owner, r.Name = owner, name
+}
+
+// AllowMerges sets the merge methods the repository allows, of "squash", "merge" and "rebase", as its settings on
+// GitHub would. A new repository allows all three.
+func (r *Repo) AllowMerges(methods ...string) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	r.merges = methods
 }
 
 // AddFile puts a file with content at name, a slash-separated path, in commit sha, for the contents API and the
@@ -692,7 +708,42 @@ func (f *Fake) getPull(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, rp.pullJSON(is))
+	pr := rp.pullJSON(is)
+	pr["merged"], pr["mergeable_state"] = is.Pull.MergedWith != "", cmp.Or(is.Pull.MergeState, "clean") // not in the list, as on GitHub
+	writeJSON(w, http.StatusOK, pr)
+}
+
+// mergePull serves PUT /repositories/{id}/pulls/{number}/merge like GitHub: 405 for a pull request closed already,
+// one Unmergeable, or a merge_method the repository does not allow, 409 when sha is set and is not its head, and
+// else it closes the pull request as merged with merge_method, "merge" when unset.
+func (f *Fake) mergePull(w http.ResponseWriter, r *http.Request) {
+	rp, is, ok := f.issue(w, r, true)
+	if !ok {
+		return
+	}
+	if is.Pull == nil {
+		notFound(w)
+		return
+	}
+	var in struct {
+		SHA    string `json:"sha"`
+		Method string `json:"merge_method"`
+	}
+	json.NewDecoder(r.Body).Decode(&in)
+	method := cmp.Or(in.Method, "merge")
+	switch {
+	case is.State != "open":
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "Pull Request is not mergeable"})
+	case is.Pull.Unmergeable != "":
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": is.Pull.Unmergeable})
+	case !slices.Contains(rp.merges, method):
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "The " + method + " merge method is not allowed on this repository."})
+	case in.SHA != "" && in.SHA != is.Pull.HeadSHA:
+		writeJSON(w, http.StatusConflict, map[string]string{"message": "Head branch was modified. Review and try the merge again."})
+	default:
+		is.State, is.Pull.MergedWith, is.UpdatedAt = "closed", method, time.Now()
+		writeJSON(w, http.StatusOK, map[string]any{"sha": "merge-" + is.Pull.HeadSHA, "merged": true, "message": "Pull Request successfully merged"})
+	}
 }
 
 // permission serves GET /repositories/{id}/collaborators/{login}/permission with GitHub's permission field for the
@@ -807,6 +858,10 @@ func (f *Fake) graphql(w http.ResponseWriter, r *http.Request) {
 		var id string
 		json.Unmarshal(in.Variables["id"], &id)
 		f.convertToDraft(w, r, id)
+	case "MergeSettings":
+		var id string
+		json.Unmarshal(in.Variables["id"], &id)
+		f.mergeSettings(w, r, id)
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "Unknown operation " + name}}})
 	}
@@ -820,7 +875,7 @@ func (f *Fake) closingIssues(w http.ResponseWriter, r *http.Request, ids []strin
 	var errs []map[string]any
 	for i, id := range ids {
 		var node any
-		if is, _ := f.pullByNode(token, id); is != nil {
+		if _, is, _ := f.pullByNode(token, id); is != nil {
 			refs := []map[string]any{}
 			for _, ref := range is.Pull.Closes {
 				refs = append(refs, map[string]any{"number": ref.Number, "repository": map[string]int64{"databaseId": ref.RepoID}})
@@ -843,7 +898,7 @@ func (f *Fake) closingIssues(w http.ResponseWriter, r *http.Request, ids []strin
 // convertToDraft answers ConvertToDraft by making the pull request with node id a draft, or with null and an error
 // for one the token cannot see or cannot push to.
 func (f *Fake) convertToDraft(w http.ResponseWriter, r *http.Request, id string) {
-	is, role := f.pullByNode(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), id)
+	_, is, role := f.pullByNode(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), id)
 	refuse := func(kind, message string) {
 		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"convertPullRequestToDraft": nil},
 			"errors": []map[string]any{{"type": kind, "path": []any{"convertPullRequestToDraft"}, "message": message}}})
@@ -861,9 +916,25 @@ func (f *Fake) convertToDraft(w http.ResponseWriter, r *http.Request, id string)
 	}
 }
 
-// pullByNode returns the pull request with GraphQL node id in a repository token has a role on, and that role,
-// or nil.
-func (f *Fake) pullByNode(token, id string) (*Issue, string) {
+// mergeSettings answers MergeSettings with the merge methods the repository of the pull request with node id allows,
+// or with null and a NOT_FOUND error for one the token cannot see.
+func (f *Fake) mergeSettings(w http.ResponseWriter, r *http.Request, id string) {
+	rp, is, _ := f.pullByNode(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), id)
+	if is == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"node": nil},
+			"errors": []map[string]any{{"type": "NOT_FOUND", "path": []any{"node"}, "message": "Could not resolve to a node with the global id of '" + id + "'"}}})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"node": map[string]any{"repository": map[string]bool{
+		"squashMergeAllowed": slices.Contains(rp.merges, "squash"),
+		"mergeCommitAllowed": slices.Contains(rp.merges, "merge"),
+		"rebaseMergeAllowed": slices.Contains(rp.merges, "rebase"),
+	}}}})
+}
+
+// pullByNode returns the pull request with GraphQL node id in a repository token has a role on, with that repository
+// and role, or nils.
+func (f *Fake) pullByNode(token, id string) (*Repo, *Issue, string) {
 	for _, rp := range f.repos {
 		role, granted := rp.roles[token]
 		if !granted {
@@ -871,11 +942,11 @@ func (f *Fake) pullByNode(token, id string) (*Issue, string) {
 		}
 		for _, is := range rp.issues {
 			if is.Pull != nil && nodeID(is) == id {
-				return is, role
+				return rp, is, role
 			}
 		}
 	}
-	return nil, ""
+	return nil, nil, ""
 }
 
 func (f *Fake) accessToken(w http.ResponseWriter, r *http.Request) {
