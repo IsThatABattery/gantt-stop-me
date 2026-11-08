@@ -172,7 +172,7 @@ Positions are floating-point numbers. A card dropped between two others gets the
 
 ### Syncing with GitHub
 
-Issues change on GitHub too, so the API refreshes a project's issues whenever its board or a task's detail view loads, at most once every 30 seconds per project. It uses conditional requests (`ETag`), so an unchanged repository costs nothing against the rate limit. The sync uses the credential of the user loading the page, and finishes even when that page's request is abandoned.
+Issues change on GitHub too, so the API refreshes a project's issues whenever its board or a task's detail view loads, at most once every 30 seconds per project. It uses conditional requests (`ETag`), so an unchanged repository costs nothing against the rate limit, unless it has 100 or more labels: an ETag covers only the first page, so that label list is read in full on every sync. The sync uses the credential of the user loading the page, and finishes even when that page's request is abandoned.
 
 - A new issue on GitHub becomes a task in Backlog.
 - An issue closed on GitHub moves to Closed.

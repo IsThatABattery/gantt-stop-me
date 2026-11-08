@@ -1,9 +1,11 @@
 package board_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -378,6 +380,99 @@ func TestSyncFollowsRepositoryLabelEdits(t *testing.T) {
 	}
 	if v, a := f.stamp(1); v != version || !a.Equal(at) {
 		t.Fatalf("version %d, updated_at %v after the label edits; want %d, %v untouched", v, a, version, at)
+	}
+}
+
+// Deleting every label a task carries, down to the repository's last, leaves it with none, and syncs keep going.
+func TestSyncDeletesEveryLabelOfATask(t *testing.T) {
+	f := setup(t, "One", "Two")
+	f.labeledTask("bug", "board:backlog")
+	for _, name := range f.repo.Labels() {
+		f.repo.DeleteLabel(name)
+	}
+	f.dueSync()
+	if _, labels := f.details(1); len(labels) != 0 {
+		t.Fatalf("every label deleted on GitHub: GET task labels %v, want none", labels)
+	}
+	f.repo.AddIssue("Three")
+	f.dueSync()
+	if n := len(f.board().Tasks); n != 3 {
+		t.Fatalf("%d tasks, want the new issue imported", n)
+	}
+}
+
+// A sync whose issue read began before a label rename must not leave the old name once a newer sync has stored
+// the new list's ETag.
+func TestSyncLabelRenameSurvivesAnOverlappingSync(t *testing.T) {
+	f := setup(t, "One", "Two", "Three")
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Labels = []string{"bug"} })
+	f.dueSync()
+	f.board()
+	f.GitHub.PageSize = 1
+	now := time.Now()
+	for n, ago := range map[int]time.Duration{1: 30, 2: 20, 3: 10} {
+		f.repo.EditIssue(n, func(is *githubtest.Issue) { is.UpdatedAt = now.Add(-ago * time.Minute) })
+	}
+	f.exec(`update projects set synced_at = now() - interval '1 hour' where id = $1`, f.project)
+	stalled, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	f.intercept(func(r *http.Request, next http.RoundTripper) (*http.Response, error) {
+		res, err := next.RoundTrip(r)
+		first := false
+		if strings.HasSuffix(r.URL.Path, "/issues") && r.URL.Query().Get("page") == "3" {
+			once.Do(func() { first = true })
+		}
+		if first && err == nil { // the first read holds #1 with bug while the label is renamed and another sync runs
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			res.Body = io.NopCloser(bytes.NewReader(body))
+			close(stalled)
+			<-release
+		}
+		return res, err
+	})
+	done := make(chan int)
+	go func() { done <- f.Do("GET", f.path("/board"), nil, f.ada).Status }()
+	<-stalled
+	f.repo.EditLabel("bug", func(l *githubtest.Label) { l.Name = "defect" })
+	f.dueSync()
+	f.board()
+	close(release)
+	if s := <-done; s != http.StatusOK {
+		t.Fatalf("first sync's board answered %d", s)
+	}
+	f.dueSync()
+	if _, labels := f.details(1); !slices.Equal(labels, []label{{"defect", "ededed"}}) {
+		t.Fatalf("labels %v after overlapping syncs, want the rename", labels)
+	}
+}
+
+// A label deleted between two page reads shifts the next one onto the page already read; that label must survive.
+func TestSyncLabelsChangedBetweenPages(t *testing.T) {
+	f := setup(t, "One", "Two")
+	var names []string
+	for i := range 95 { // after the 5 board labels: a full first page, then triage alone on the second
+		names = append(names, fmt.Sprint("l", i))
+	}
+	f.repo.EditIssue(2, func(is *githubtest.Issue) { is.Labels = names })
+	f.labeledTask("triage")
+	var once sync.Once
+	f.intercept(func(r *http.Request, next http.RoundTripper) (*http.Response, error) {
+		res, err := next.RoundTrip(r)
+		if strings.HasSuffix(r.URL.Path, "/labels") {
+			once.Do(func() { f.repo.DeleteLabel("l0") }) // right after the first page
+		}
+		return res, err
+	})
+	for range 3 {
+		f.dueSync()
+		f.board()
+	}
+	if _, labels := f.details(1); !slices.Equal(labels, []label{{"triage", "ededed"}}) {
+		t.Fatalf("labels %v after a deletion mid-read, want triage kept", labels)
+	}
+	if _, labels := f.details(2); len(labels) != 94 || slices.Contains(labels, label{"l0", "ededed"}) {
+		t.Fatalf("%d labels on issue 2, want the 94 left after deleting l0", len(labels))
 	}
 }
 

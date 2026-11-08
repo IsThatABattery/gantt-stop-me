@@ -66,7 +66,7 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 	}
 	var issues []github.Issue
 	var newETag string
-	err = b.syncLabels(ctx, p, token, labelsETag)
+	labelsETag, err = b.syncLabels(ctx, p, token, labelsETag)
 	if err == nil {
 		query := url.Values{"state": {"all"}, "sort": {"updated"}, "direction": {"desc"}, "per_page": {"100"}}
 		newETag, err = b.GitHub.Issues(ctx, token, p.RepoID, query, etag, func(page []github.Issue) bool {
@@ -86,6 +86,12 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 		b.DB.Exec(context.WithoutCancel(ctx), `update projects set synced_at = $2 where id = $1 and synced_at = $3`, p.ID, prev, claimed)
 		return err
 	}
+	// A newer sync's label rewrite may predate the issues applied here: drop its ETag so the next sync rewrites again.
+	_, err = b.DB.Exec(ctx, `update projects set labels_etag = null where id = $1 and labels_etag is distinct from nullif($2, '')`,
+		p.ID, labelsETag)
+	if err != nil {
+		return err
+	}
 	if skipped {
 		// Give the claim back and drop the ETag, so the next sync refetches from the old cutoff,
 		// which reaches the skipped tasks' issues even when their changes are older than this sync.
@@ -98,16 +104,20 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 }
 
 // syncLabels rewrites each label stored on the project's tasks to the repository's label with its id, keeping their
-// order and dropping those the repository no longer has, unless the label list is unchanged since etag. A label
+// order and dropping those the repository no longer has, unless the label list is unchanged since sent. A label
 // stored with no id stays as it is until the backfill re-reads its issue. It leaves version and updated_at alone:
-// a label edit moves no task, and updated_at tells a sync whether a task changed since its fetch.
-func (b *Board) syncLabels(ctx context.Context, p projects.Project, token, etag string) error {
-	labels, etag, err := b.GitHub.Labels(ctx, token, p.RepoID, etag)
+// a label edit moves no task, and updated_at tells a sync whether a task changed since its fetch. It returns the
+// ETag of the label list the stored labels now match, or "" when it cannot tell.
+func (b *Board) syncLabels(ctx context.Context, p projects.Project, token, sent string) (string, error) {
+	labels, etag, err := b.GitHub.Labels(ctx, token, p.RepoID, sent)
 	if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusNotModified {
-		return nil
+		return sent, nil
+	}
+	if errors.Is(err, github.ErrLabelsChanged) {
+		return "", nil // the next sync reads them again
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 	// The <@ test leaves unwritten a task whose labels all still match the repository's.
 	_, err = b.DB.Exec(ctx, `
@@ -121,7 +131,7 @@ func (b *Board) syncLabels(ctx context.Context, p projects.Project, token, etag 
 	if err == nil {
 		_, err = b.DB.Exec(ctx, `update projects set labels_etag = nullif($2, '') where id = $1`, p.ID, etag)
 	}
-	return err
+	return etag, err
 }
 
 // apply brings the project's tasks in line with issues, as GitHub listed them after claimed.
