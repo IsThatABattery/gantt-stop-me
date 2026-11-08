@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Button, Field, TextInput, Textarea } from '../../components/controls'
+import { Dialog } from '../../components/Dialog'
 import { StatusMessage } from '../../components/StatusMessage'
 import { usePlan, usePlanAction, usePlans, useStartPlan, type Plan } from '../../data/views/plans'
 
@@ -19,6 +20,17 @@ const pendingText: Record<NonNullable<Plan['pending']>, string> = {
   revise: 'The task agent is revising a task…',
 }
 
+/** Planning opens over the board, and closing it goes back to the board. */
+function PlanDialog({ children }: { children: ReactNode }) {
+  const { projectId = '' } = useParams()
+  const navigate = useNavigate()
+  return (
+    <Dialog label="Plan a feature" wide onClose={() => navigate(`/projects/${projectId}`)}>
+      <div className="flex flex-col gap-6 p-6 pr-14">{children}</div>
+    </Dialog>
+  )
+}
+
 /** Start a plan, and the project's plans, newest first. */
 export function PlansPage() {
   const { projectId = '' } = useParams()
@@ -34,7 +46,7 @@ export function PlansPage() {
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6 p-8">
+    <PlanDialog>
       <h1 className="m-0 text-2xl">Plan a feature</h1>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <Field id="plan-title" label="Feature">
@@ -65,7 +77,7 @@ export function PlansPage() {
           ))}
         </ul>
       </section>
-    </div>
+    </PlanDialog>
   )
 }
 
@@ -76,8 +88,8 @@ export function PlanPage() {
   const act = usePlanAction(projectId, planId)
   const [answer, setAnswer] = useState('')
 
-  if (isPending) return <StatusMessage title="Loading plan…" />
-  if (error) return <StatusMessage title="Something went wrong" body={error.message} />
+  if (isPending || error)
+    return <PlanDialog>{isPending ? <StatusMessage title="Loading plan…" /> : <StatusMessage title="Something went wrong" body={error.message} />}</PlanDialog>
 
   const send = (path: string, body?: unknown) => act.mutate({ path, body }, { onSuccess: () => setAnswer('') })
   const busy = act.isPending || plan.pending !== null
@@ -87,7 +99,7 @@ export function PlanPage() {
   const toReview = (plan.proposals ?? []).filter((p) => p.status === 'needs_review')
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6 p-8">
+    <PlanDialog>
       <Link to={`/projects/${projectId}/plans`} className="text-sm">
         ← Plans
       </Link>
@@ -215,6 +227,6 @@ export function PlanPage() {
           </div>
         ))}
       </section>
-    </div>
+    </PlanDialog>
   )
 }

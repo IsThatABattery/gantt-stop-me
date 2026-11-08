@@ -6,13 +6,15 @@ interface DialogProps {
   label: string
   onClose: () => void
   children: ReactNode
+  /** 860px, top-aligned, for long content such as a plan */
+  wide?: boolean
 }
 
 /** Centered dialog, 560px wide (SCREENS.md layout notes). */
-export function Dialog({ label, onClose, children }: DialogProps) {
+export function Dialog({ label, onClose, children, wide }: DialogProps) {
   const ref = useModal<HTMLDivElement>(onClose)
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+    <div className={`fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 ${wide ? '' : 'sm:items-center'}`}>
       <div className="fixed inset-0 bg-background/70" onClick={onClose} aria-hidden="true" />
       <div
         ref={ref}
@@ -20,7 +22,7 @@ export function Dialog({ label, onClose, children }: DialogProps) {
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className="relative w-full max-w-[560px] rounded-dialog border border-line bg-surface text-text shadow-2xl outline-none"
+        className={`relative w-full ${wide ? 'max-w-[860px]' : 'max-w-[560px]'} rounded-dialog border border-line bg-surface text-text shadow-2xl outline-none`}
       >
         <button
           type="button"
