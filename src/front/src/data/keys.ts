@@ -18,4 +18,6 @@ export const keys = {
   proposals: (draftId: ID) => ['proposals', draftId] as const,
   settings: ['settings'] as const,
   providers: ['providers'] as const,
+  planning: ['planning'] as const,
+  automation: (projectId: ID) => ['automation', projectId] as const,
 }

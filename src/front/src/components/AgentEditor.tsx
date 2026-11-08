@@ -1,0 +1,117 @@
+import { Link } from 'react-router'
+import type { AgentSettings, Provider } from '../data/api/types'
+import { INSTRUCTIONS_MAX, instructionsLength, type AgentErrors, type AgentField } from '../data/views/agentSettings'
+import { Field, Select, Textarea } from './controls'
+
+interface AgentEditorProps {
+  /** Prefix of the field ids, `${id}-provider` and so on, so the form can focus them */
+  id: string
+  name: string
+  /** One line on what the agent does */
+  description: string
+  providers: Provider[]
+  value: AgentSettings
+  onChange: (value: AgentSettings) => void
+  errors?: AgentErrors
+  /** It must have a model; otherwise "None" is a choice */
+  required?: boolean
+}
+
+/** One LLM agent's provider, model and extra instructions. */
+export function AgentEditor({ id, name, description, providers, value, onChange, errors = {}, required }: AgentEditorProps) {
+  const provider = providers.find((p) => p.id === value.providerId)
+  const models = provider?.models ?? []
+  const length = instructionsLength(value.instructions)
+  const fieldId = (f: AgentField) => `${id}-${f}`
+  const describedBy = (f: AgentField, ...extra: string[]) =>
+    [...extra, errors[f] && `${fieldId(f)}-error`].filter(Boolean).join(' ') || undefined
+  const error = (f: AgentField) =>
+    errors[f] && (
+      <span id={`${fieldId(f)}-error`} className="text-xs text-critical">
+        {errors[f]}
+      </span>
+    )
+
+  return (
+    <div role="group" aria-labelledby={`${id}-name`} aria-describedby={`${id}-about`} className="flex flex-col gap-4 border-t border-line-soft pt-5">
+      <div>
+        <h3 id={`${id}-name`} className="m-0 font-heading text-base font-semibold">
+          {name}
+        </h3>
+        <p id={`${id}-about`} className="m-0 mt-1 text-[13px] text-text-muted-strong">
+          {description}
+        </p>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+        <Field id={fieldId('provider')} label="Provider">
+          <Select
+            id={fieldId('provider')}
+            value={value.providerId ?? ''}
+            aria-invalid={!!errors.provider}
+            aria-describedby={describedBy('provider')}
+            onChange={(e) => {
+              const p = providers.find((x) => x.id === Number(e.target.value))
+              onChange({ ...value, providerId: p?.id ?? null, model: p?.models[0] ?? null })
+            }}
+          >
+            <option value="">{required ? 'Choose a provider' : 'None'}</option>
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+          {error('provider')}
+        </Field>
+        <Field id={fieldId('model')} label="Model">
+          <Select
+            id={fieldId('model')}
+            value={value.model ?? ''}
+            disabled={!provider}
+            aria-invalid={!!errors.model}
+            aria-describedby={describedBy('model')}
+            onChange={(e) => onChange({ ...value, model: e.target.value })}
+          >
+            {value.model === null ? (
+              <option value="">{provider ? 'No models chosen' : 'None'}</option>
+            ) : (
+              // A saved model the provider no longer offers stays visible until it's changed.
+              !models.includes(value.model) && <option value={value.model}>{value.model} (not available)</option>
+            )}
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+          {error('model')}
+        </Field>
+      </div>
+      <Field id={fieldId('instructions')} label="Your instructions">
+        <Textarea
+          id={fieldId('instructions')}
+          value={value.instructions}
+          aria-invalid={!!errors.instructions}
+          aria-describedby={describedBy('instructions', `${id}-help`, `${id}-count`)}
+          onChange={(e) => onChange({ ...value, instructions: e.target.value })}
+        />
+        <span className="flex flex-wrap justify-between gap-x-3 text-xs text-text-muted">
+          <span id={`${id}-help`}>Added to the agent's built-in instructions. They don't replace them.</span>
+          <span id={`${id}-count`} className={length > INSTRUCTIONS_MAX ? 'text-critical' : undefined}>
+            {length} / {INSTRUCTIONS_MAX}
+          </span>
+        </span>
+        {error('instructions')}
+      </Field>
+    </div>
+  )
+}
+
+/** In place of the editors while the user has no providers to pick from. */
+export function NoProviders() {
+  return (
+    <p className="m-0 rounded-control border border-dashed border-line-strong px-4 py-3 text-[13px] text-text-muted-strong">
+      You have no LLM providers yet. <Link to="/settings#providers">Add a provider</Link> to choose the agents' models.
+    </p>
+  )
+}

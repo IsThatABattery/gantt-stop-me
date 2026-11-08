@@ -96,3 +96,41 @@ export interface Provider {
 export interface ProviderWithModels extends Provider {
   availableModels: string[]
 }
+
+/** One LLM agent's model and the user's own instructions (docs/planning.md, automation.md). */
+export interface AgentSettings {
+  /** Both null for no model */
+  providerId: number | null
+  model: string | null
+  /** Added to the agent's built-in instructions; at most 4000 characters, trimmed */
+  instructions: string
+}
+
+/** GET and PUT /api/me/planning */
+export interface PlanningSettings {
+  review: boolean
+  interviewer: AgentSettings
+  taskAgent: AgentSettings
+}
+
+/** PUT /api/projects/{id}/automation */
+export interface AutomationInput {
+  decisionProviderId: number
+  decisionModel: string
+  decisionInstructions: string
+  chatProviderId: number
+  chatModel: string
+  chatInstructions: string
+}
+
+/** GET /api/projects/{id}/automation */
+export type Automation =
+  | { enabled: false }
+  | (AutomationInput & {
+      enabled: true
+      /** login is null once the owner unlinks GitHub */
+      owner: { id: number; login: string | null }
+      pausedReason: string | null
+      payloadUrl: string
+      webhookSecretSet: boolean
+    })

@@ -41,6 +41,7 @@ export const labels = {
   activity: 'Mission log',
   retro: 'Debrief',
   settings: 'Settings',
+  automation: 'Automation',
 
   allProjects: 'All missions',
   addProject: 'Add a mission',
@@ -221,6 +222,19 @@ export const settingsLabels = {
   integrationsHelp: 'The AI company that powers your astronauts. Applies to every payload unless overridden.',
   apiKey: 'API key',
   changePassword: 'Change password',
+  agents: 'Agents',
+  agentsHelp: 'The LLM agents that plan your features. Each uses one of your providers.',
+  review: 'Review plan docs before tasks are made',
+  reviewHelp: 'Off: a finished plan doc is approved without review.',
+  saveAgents: 'Save agent settings',
+} as const
+
+/** The LLM agents people configure: name and what each does. */
+export const llmAgentLabels = {
+  interviewer: { name: 'Interviewer', description: 'Asks about a feature one question at a time and writes its plan doc.' },
+  taskAgent: { name: 'Task agent', description: 'Turns an approved plan doc into tasks with tests.' },
+  decision: { name: 'Decision agent', description: 'Picks which workflow runs each test.' },
+  chat: { name: 'Check agent', description: 'Runs LLM checks, using the browser and other tools.' },
 } as const
 
 export const autonomyDescriptions: Record<Autonomy, string> = {
