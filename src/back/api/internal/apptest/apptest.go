@@ -22,6 +22,7 @@ import (
 	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/github/githubtest"
+	"gantt-stop-me/api/internal/runner/runnertest"
 	"gantt-stop-me/api/internal/secret"
 	"gantt-stop-me/api/internal/store"
 	"gantt-stop-me/api/migrations"
@@ -30,18 +31,17 @@ import (
 // PublicURL is the app's URL in tests. Do sends it as the Origin header.
 const PublicURL = "http://app.test"
 
-// RunnerURL is the runner's URL in tests, so automation is on unless a test clears Config.RunnerURL.
-const RunnerURL = "http://runner.test"
-
-// Env is a running API, its database and the fake GitHub it talks to.
+// Env is a running API, its database, and the fake GitHub and runner it talks to.
 type Env struct {
 	t      testing.TB
 	DB     *pgxpool.Pool
 	Server *httptest.Server
 	Config app.Config
 	GitHub *githubtest.Fake
-	// Automation is the API's automation. Its poller never ticks in tests: Automation.Poll runs one poll of a project,
-	// and Automation.Wait waits for the webhook deliveries already answered.
+	Runner *runnertest.Fake // at Config.RunnerURL, so automation is on unless a test clears that
+	// Automation is the API's automation. Its poller and queue worker never tick in tests: Automation.Poll runs one
+	// poll of a project, Automation.Work one pass of the worker, and Automation.Wait waits for the webhook deliveries
+	// already answered.
 	Automation *automation.Automation
 }
 
@@ -57,6 +57,7 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	}
 	db := DB(t)
 	gh := githubtest.New(t)
+	run := runnertest.New(t)
 	cfg := app.Config{
 		PublicURL:                PublicURL,
 		Secrets:                  box,
@@ -64,7 +65,9 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 		GitHubClientID:           gh.ClientID,
 		GitHubClientSecret:       gh.ClientSecret,
 		AllowPrivateProviderURLs: true, // fake provider endpoints listen on 127.0.0.1
-		RunnerURL:                RunnerURL,
+		RunnerURL:                run.Server.URL,
+		Runner:                   run.Client(),
+		MaxConcurrentWorkflows:   1,
 	}
 	for _, c := range configure {
 		c(&cfg)
@@ -74,7 +77,7 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	// Cleanups run last first: the server stops taking deliveries, then the ones it answered finish, then the database goes.
 	t.Cleanup(api.Automation.Wait)
 	t.Cleanup(srv.Close)
-	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh, Automation: api.Automation}
+	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh, Runner: run, Automation: api.Automation}
 }
 
 // DB returns a pool on a new schema with every migration applied, dropped when the test ends.

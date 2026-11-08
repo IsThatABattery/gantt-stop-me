@@ -81,8 +81,27 @@ func (c *Client) ExchangeCode(ctx context.Context, clientID, clientSecret, code,
 // in, if not nil, is sent as JSON; out, if not nil, receives the JSON answer.
 // A non-2xx answer returns *Error.
 func (c *Client) do(ctx context.Context, method, url, token string, header http.Header, in, out any) (http.Header, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	res, err := c.open(ctx, method, url, token, header, in)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if out != nil {
+		if err := json.NewDecoder(res.Body).Decode(out); err != nil {
+			return res.Header, fmt.Errorf("github: decode %s %s: %w", method, res.Request.URL.Path, err)
+		}
+	}
+	return res.Header, nil
+}
+
+// timeout bounds each call but Tarball, whose download only the caller's context bounds.
+const timeout = 15 * time.Second
+
+// open sends one request as do does, with no time limit of its own, and returns the 2xx answer, whose body the
+// caller closes. A non-2xx answer returns *Error.
+func (c *Client) open(ctx context.Context, method, url, token string, header http.Header, in any) (*http.Response, error) {
 	var body io.Reader
 	if in != nil {
 		data, err := json.Marshal(in)
@@ -110,26 +129,21 @@ func (c *Client) do(ctx context.Context, method, url, token string, header http.
 	if err != nil {
 		return nil, err
 	}
+	if res.StatusCode >= 200 && res.StatusCode <= 299 {
+		return res, nil
+	}
 	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		status := res.StatusCode
-		if status == http.StatusForbidden {
-			var e struct {
-				Message string `json:"message"`
-			}
-			json.NewDecoder(io.LimitReader(res.Body, 64<<10)).Decode(&e)
-			// GitHub answers some rate limits with 403; report them as the 429 it uses for others, not as lost access.
-			if res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "" ||
-				strings.Contains(strings.ToLower(e.Message), "rate limit") {
-				status = http.StatusTooManyRequests
-			}
+	status := res.StatusCode
+	if status == http.StatusForbidden {
+		var e struct {
+			Message string `json:"message"`
 		}
-		return res.Header, &Error{Status: status}
-	}
-	if out != nil {
-		if err := json.NewDecoder(res.Body).Decode(out); err != nil {
-			return res.Header, fmt.Errorf("github: decode %s %s: %w", method, req.URL.Path, err)
+		json.NewDecoder(io.LimitReader(res.Body, 64<<10)).Decode(&e)
+		// GitHub answers some rate limits with 403; report them as the 429 it uses for others, not as lost access.
+		if res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "" ||
+			strings.Contains(strings.ToLower(e.Message), "rate limit") {
+			status = http.StatusTooManyRequests
 		}
 	}
-	return res.Header, nil
+	return nil, &Error{Status: status}
 }

@@ -6,47 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/netip"
 	"slices"
-	"syscall"
-	"time"
 
 	"gantt-stop-me/api/internal/httpx"
 )
-
-// modelsClient fetches user-supplied URLs from inside our network. It never follows a redirect,
-// so the URL the user entered is the only one the API calls, and it dials only addresses dialGuard allows.
-func modelsClient(allowPrivate bool) *http.Client {
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.Proxy = nil // through a proxy, the guard would check the proxy's address instead of the provider's
-	t.DialContext = (&net.Dialer{Timeout: 10 * time.Second, Control: dialGuard(allowPrivate)}).DialContext
-	return &http.Client{
-		Transport:     t,
-		Timeout:       10 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
-
-var cgnat = netip.MustParsePrefix("100.64.0.0/10")
-
-// dialGuard refuses link-local addresses, such as cloud metadata at 169.254.169.254, and loopback and private
-// ones unless allowPrivate. It checks the address being dialled, after DNS, so a rebinding name cannot pass it.
-func dialGuard(allowPrivate bool) func(network, address string, c syscall.RawConn) error {
-	return func(_, address string, _ syscall.RawConn) error {
-		ap, err := netip.ParseAddrPort(address)
-		if err != nil {
-			return err
-		}
-		a := ap.Addr().Unmap()
-		if a.IsLinkLocalUnicast() || a.IsMulticast() || a.IsUnspecified() ||
-			!allowPrivate && (a.IsLoopback() || a.IsPrivate() || cgnat.Contains(a)) {
-			return errBlocked
-		}
-		return nil
-	}
-}
 
 // maxModels is the most models one provider can have chosen.
 const maxModels = 100
@@ -54,7 +18,6 @@ const maxModels = 100
 var (
 	errKeyRejected = errors.New("provider rejected the key")
 	errUnreachable = errors.New("provider unreachable")
-	errBlocked     = errors.New("provider address not allowed")
 )
 
 // listModels returns the model ids an OpenAI-compatible endpoint offers to key, from GET {baseURL}/models.

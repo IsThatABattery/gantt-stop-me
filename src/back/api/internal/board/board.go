@@ -24,7 +24,24 @@ type Board struct {
 	Accounts *accounts.Accounts // guards every route
 	Projects *projects.Projects // checks access to the project first
 	GitHub   *github.Client
+	// Rules are automation's rules for moves. app.New sets them: automation moves tasks through Board, so board
+	// cannot import it. Nil moves freely.
+	Rules Rules
 }
+
+// Rules add Moves while automated, in AUTOMATION.md, to the moves of a project whose automation is on.
+type Rules interface {
+	// Moving runs in tx, holding projects.Lock, before task taskID moves from the column with key from to another
+	// column with key to, and before GitHub hears of it, which it may ask with token, the mover's. byHand is false for
+	// MoveToEnd, the API's own moves. A *Refusal stops the move, which the move endpoint answers with 409; a
+	// *github.Error fails it as GitHub's, and any other error fails it.
+	Moving(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64, from, to string, byHand bool) error
+}
+
+// Refusal is a move the rules refuse, answered 409 with this error code and message.
+type Refusal struct{ Code, Message string }
+
+func (r *Refusal) Error() string { return "board: move refused: " + r.Message }
 
 // Register adds the board routes to mux.
 func (b *Board) Register(mux *http.ServeMux) {
@@ -63,10 +80,14 @@ type task struct {
 	Title       string  `json:"title"`
 	State       string  `json:"state"` // "open" or "closed"
 	URL         string  `json:"url"`
+	RunStatus   *string `json:"runStatus"` // the latest test run's, nil for none
+	// NeedsAttention is why the task waits in Testing after a runner error, nil while clear.
+	NeedsAttention *string `json:"needsAttention"`
 }
 
 // taskColumns selects, from tasks t, what scanTask reads.
-const taskColumns = `t.id, t.issue_number, t.column_id, t.position, t.version, t.title, t.state`
+const taskColumns = `t.id, t.issue_number, t.column_id, t.position, t.version, t.title, t.state,
+	(select status from test_runs where task_id = t.id order by id desc limit 1), t.needs_attention`
 
 // taskByID selects the task $1 of the project $2.
 const taskByID = `select ` + taskColumns + ` from tasks t where t.id = $1 and t.project_id = $2`
@@ -74,7 +95,8 @@ const taskByID = `select ` + taskColumns + ` from tasks t where t.id = $1 and t.
 // scanTask reads a task of project p from a row of taskColumns, then any further columns into extra.
 func (b *Board) scanTask(row pgx.Row, p projects.Project, extra ...any) (task, error) {
 	var t task
-	if err := row.Scan(append([]any{&t.ID, &t.IssueNumber, &t.ColumnID, &t.Position, &t.Version, &t.Title, &t.State}, extra...)...); err != nil {
+	if err := row.Scan(append([]any{&t.ID, &t.IssueNumber, &t.ColumnID, &t.Position, &t.Version, &t.Title, &t.State,
+		&t.RunStatus, &t.NeedsAttention}, extra...)...); err != nil {
 		return task{}, err
 	}
 	t.URL = fmt.Sprintf("%s/%s/%s/issues/%d", b.GitHub.Web, p.Owner, p.Name, t.IssueNumber)

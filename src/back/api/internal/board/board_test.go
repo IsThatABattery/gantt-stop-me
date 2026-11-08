@@ -57,10 +57,28 @@ func (f *fixture) stranger() *http.Cookie {
 }
 
 type task struct {
-	ID, ColumnID         int64
-	IssueNumber, Version int
-	Position             float64
-	Title, State, URL    string
+	ID, ColumnID              int64
+	IssueNumber, Version      int
+	Position                  float64
+	Title, State, URL         string
+	RunStatus, NeedsAttention *string
+}
+
+// runs gives issue number's task test runs with these statuses, oldest first, and needs_attention, "" for none.
+func (f *fixture) runs(number int, needsAttention string, statuses ...string) {
+	f.t.Helper()
+	for _, s := range statuses {
+		f.exec(`insert into test_runs (task_id, status) select id, $2 from tasks where issue_number = $1`, number, s)
+	}
+	f.exec(`update tasks set needs_attention = nullif($2, '') where issue_number = $1`, number, needsAttention)
+}
+
+// orNull is s, or "null" for nil, to compare the API's nullable strings.
+func orNull(s *string) string {
+	if s == nil {
+		return "null"
+	}
+	return *s
 }
 
 type column struct {

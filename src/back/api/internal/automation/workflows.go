@@ -348,13 +348,16 @@ func timeout(n *yaml.Node, at string) (time.Duration, error) {
 	return d, nil
 }
 
-// text returns the scalar n as written, or "" for null. Maps and lists are refused.
+// text returns the scalar n as written, or "" for null. Maps and lists are refused, and so is a NUL, such as from
+// "\0", which no command line or database column can carry.
 func text(n *yaml.Node, at string) (string, error) {
 	switch {
 	case n.Kind != yaml.ScalarNode:
 		return "", fail(n, at, "must be a string")
 	case isNull(n):
 		return "", nil
+	case strings.Contains(n.Value, "\x00"):
+		return "", fail(n, at, "holds a NUL character")
 	}
 	return n.Value, nil
 }

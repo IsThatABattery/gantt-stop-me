@@ -10,10 +10,12 @@ import (
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/github/githubtest"
+	"gantt-stop-me/api/internal/llm/llmtest"
 	"gantt-stop-me/api/internal/projects"
 )
 
-// fixture is octo/hello, with one open issue, added as a project by ada, who can push to it and has a provider.
+// fixture is octo/hello, with one open issue of ada's, added as a project by ada, who can push to it and has a
+// provider.
 type fixture struct {
 	*apptest.Env
 	t        *testing.T
@@ -22,15 +24,16 @@ type fixture struct {
 	token    string // ada's GitHub token
 	repo     *githubtest.Repo
 	project  int64
-	provider int64  // ada's, with the models "luna" and "chat" chosen
-	secret   string // the project's webhook secret, once automated generated it
+	provider int64         // ada's, with the models "luna" and "chat" chosen
+	secret   string        // the project's webhook secret, once automated generated it
+	llm      *llmtest.Fake // ada's decision and chat models, once withLLM made them the automation's
 }
 
 func setup(t *testing.T, configure ...func(*app.Config)) *fixture {
 	t.Helper()
 	env := apptest.New(t, configure...)
 	f := &fixture{Env: env, t: t, repo: env.GitHub.AddRepo("octo", "hello")}
-	f.repo.AddIssue("One")
+	f.repo.EditIssue(f.repo.AddIssue("One"), func(is *githubtest.Issue) { is.Author = "ada" })
 	f.ada, f.adaID, f.token = f.member("ada", "push")
 	f.project = env.AddProject(f.ada, "octo", "hello")
 	f.provider = f.addProvider(f.adaID, "luna", "chat")
@@ -138,5 +141,7 @@ func TestAutomationNeedsRunnerURL(t *testing.T) {
 	}
 	f.Do("POST", f.path("/automation/webhook"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
 	f.Do("POST", fmt.Sprintf("/api/github/webhook/%d", f.project), "{}").Expect(http.StatusNotFound, "not_found")
+	f.Do("GET", f.path("/tasks/1/runs"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
+	f.Do("POST", f.path("/runs/1/cancel"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
 	f.Automation.Run(context.Background()) // returns at once instead of polling
 }

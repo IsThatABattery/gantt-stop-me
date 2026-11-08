@@ -88,3 +88,30 @@ func TestPermission(t *testing.T) {
 		t.Fatalf("Permission with GitHub failing: err = %v", err)
 	}
 }
+
+func TestConvertToDraft(t *testing.T) {
+	f, repo, gh := fake(t)
+	n := repo.AddPull("Fix", githubtest.Pull{Author: "ada", HeadSHA: "a1", HeadRepo: repo.ID})
+	pulls, _, err := gh.PullRequests(t.Context(), "token", repo.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.AddUser("bob-token", 2, "bob")
+	repo.Grant("bob-token", "triage")
+	if err := gh.ConvertToDraft(t.Context(), "bob-token", pulls[0].NodeID); err == nil {
+		t.Fatal("ConvertToDraft without push access succeeded")
+	}
+	if err := gh.ConvertToDraft(t.Context(), "token", "PR_404"); err == nil {
+		t.Fatal("ConvertToDraft of an unknown node succeeded")
+	}
+	if repo.Issue(n).Pull.Draft {
+		t.Fatal("a refused ConvertToDraft made a draft")
+	}
+	if err := gh.ConvertToDraft(t.Context(), "token", pulls[0].NodeID); err != nil || !repo.Issue(n).Pull.Draft {
+		t.Fatalf("ConvertToDraft = %v, draft %v", err, repo.Issue(n).Pull.Draft)
+	}
+	f.Fail("POST /graphql", http.StatusBadGateway)
+	if err := gh.ConvertToDraft(t.Context(), "token", pulls[0].NodeID); !isStatus(err, http.StatusBadGateway) {
+		t.Fatalf("ConvertToDraft with GitHub failing: err = %v", err)
+	}
+}

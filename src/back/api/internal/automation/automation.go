@@ -6,7 +6,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,21 +16,27 @@ import (
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/board"
 	"gantt-stop-me/api/internal/github"
+	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
+	"gantt-stop-me/api/internal/runner"
 	"gantt-stop-me/api/internal/secret"
 )
 
 // Automation serves the automation routes under /api/projects/{id} and the webhook, polls automated projects'
-// pull requests, and checks the automation owner before work starts.
+// pull requests, checks the automation owner before work starts, and runs the queue of test runs.
 type Automation struct {
 	DB        *pgxpool.Pool
 	Accounts  *accounts.Accounts // guards every route
 	Projects  *projects.Projects // checks access to the project first
 	Secrets   *secret.Box        // opens owners' GitHub credentials and seals webhook secrets
 	GitHub    *github.Client
-	Board     *board.Board // moves tasks the way the move endpoint does
-	PublicURL string       // base URL users open, without a trailing slash
-	RunnerURL string       // the runner's base URL; automation is off while it is empty
+	Board     *board.Board   // moves tasks the way the move endpoint does
+	PublicURL string         // base URL users open, without a trailing slash
+	RunnerURL string         // the runner's base URL; automation is off while it is empty
+	Runner    *runner.Client // the runner at RunnerURL, which builds and runs workflow executions
+	// MaxConcurrentWorkflows is how many workflow executions run at once across the install.
+	MaxConcurrentWorkflows int
+	LLM                    *http.Client // calls the owners' providers, from llm.HTTPClient
 
 	deliveries sync.WaitGroup // webhook deliveries answered and still being applied
 }
@@ -43,6 +51,35 @@ func (a *Automation) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/projects/{id}/automation", a.Accounts.Require(a.disable))
 	mux.HandleFunc("POST /api/projects/{id}/automation/webhook", a.Accounts.Require(a.webhookSecret))
 	mux.HandleFunc("POST /api/github/webhook/{projectID}", a.webhook)
+	mux.HandleFunc("GET /api/projects/{id}/tasks/{taskID}/runs", a.Accounts.Require(a.listRuns))
+	mux.HandleFunc("GET /api/projects/{id}/runs/{runID}", a.Accounts.Require(a.getRun))
+	mux.HandleFunc("GET /api/projects/{id}/runs/{runID}/results/{resultID}/screenshot", a.Accounts.Require(a.screenshot))
+	mux.HandleFunc("POST /api/projects/{id}/runs/{runID}/cancel", a.Accounts.Require(a.cancelRun))
+}
+
+// pathID is the path value name as an id, or 0, which matches no row, when it is not a number.
+func pathID(r *http.Request, name string) int64 {
+	id, _ := strconv.ParseInt(r.PathValue(name), 10, 64)
+	return id
+}
+
+// run is a test run as the run endpoints show it.
+type run struct {
+	ID         int64      `json:"id"`
+	PRNumber   *int       `json:"prNumber"` // nil when no linked pull request was found
+	HeadSHA    *string    `json:"headSha"`
+	Status     string     `json:"status"`
+	Reason     *string    `json:"reason"` // a runner error or cancel reason for the whole run
+	CreatedAt  time.Time  `json:"createdAt"`
+	FinishedAt *time.Time `json:"finishedAt"`
+}
+
+// runColumns selects, from test_runs r, a run's fields in order.
+const runColumns = `r.id, r.pr_number, r.head_sha, r.status, r.reason, r.created_at, r.finished_at`
+
+// runNotFound answers 404 for a test run that is not the project's.
+func runNotFound(w http.ResponseWriter) {
+	httpx.Error(w, http.StatusNotFound, "not_found", "Test run not found.")
 }
 
 // Wait waits until the webhook deliveries already answered are applied.

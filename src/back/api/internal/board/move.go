@@ -75,14 +75,17 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	t, err = b.place(ctx, tx, token, p, t, to, in.BeforeTaskID)
+	t, err = b.place(ctx, tx, token, p, t, to, in.BeforeTaskID, true)
 	if err == nil {
 		err = tx.Commit(ctx)
 	}
+	var refusal *Refusal
 	switch {
+	case errors.As(err, &refusal):
+		httpx.Error(w, http.StatusConflict, refusal.Code, refusal.Message)
 	case errors.Is(err, errInvalidBefore):
 		httpx.Error(w, http.StatusBadRequest, "invalid_before_task", "beforeTaskId must be another task in the target column.")
-	case errors.As(err, new(gitHubError)):
+	case errors.As(err, new(gitHubError)), errors.As(err, new(*github.Error)): // the latter from the rules
 		github.Fail(w, r, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
@@ -93,7 +96,8 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 
 // MoveToEnd moves the project's task to the end of the column with key, as the move endpoint would: a column change
 // goes to GitHub with token first, and a failed GitHub write is undone as far as GitHub lets it and comes back as
-// GitHub's error. Call it in tx holding projects.Lock, and commit tx only when it succeeds.
+// GitHub's error. Only the rules that hold for the API's own moves apply. Call it in tx holding projects.Lock, and
+// commit tx only when it succeeds.
 func (b *Board) MoveToEnd(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64, key string) error {
 	t, err := b.scanTask(tx.QueryRow(ctx, taskByID, taskID, p.ID), p)
 	if err != nil {
@@ -105,7 +109,7 @@ func (b *Board) MoveToEnd(ctx context.Context, tx pgx.Tx, token string, p projec
 	if err != nil {
 		return err
 	}
-	_, err = b.place(ctx, tx, token, p, t, to, nil)
+	_, err = b.place(ctx, tx, token, p, t, to, nil, false)
 	return err
 }
 
@@ -118,8 +122,9 @@ type gitHubError struct{ error }
 func (e gitHubError) Unwrap() error { return e.error }
 
 // place puts task t in column to before the task before, or at the end when before is nil, writing a column change
-// through to GitHub with token first, and returns the task as saved. Call it in tx holding projects.Lock.
-func (b *Board) place(ctx context.Context, tx pgx.Tx, token string, p projects.Project, t task, to column, before *int64) (task, error) {
+// through to GitHub with token first, and returns the task as saved. A column change follows b.Rules first, as a
+// person's move when byHand. Call it in tx holding projects.Lock.
+func (b *Board) place(ctx context.Context, tx pgx.Tx, token string, p projects.Project, t task, to column, before *int64, byHand bool) (task, error) {
 	from, err := columnByID(ctx, tx, p.ID, t.ColumnID)
 	if err != nil {
 		return task{}, err
@@ -130,6 +135,11 @@ func (b *Board) place(ctx context.Context, tx pgx.Tx, token string, p projects.P
 	}
 	if !ok {
 		return task{}, errInvalidBefore
+	}
+	if to.ID != from.ID && b.Rules != nil {
+		if err := b.Rules.Moving(ctx, tx, token, p, t.ID, from.Key, to.Key, byHand); err != nil {
+			return task{}, err
+		}
 	}
 
 	// nil keeps the stored labels: a reorder writes nothing to GitHub.

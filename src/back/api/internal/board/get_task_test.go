@@ -39,6 +39,25 @@ func TestGetTask(t *testing.T) {
 	}
 }
 
+func TestGetTaskRunStatus(t *testing.T) {
+	f := setup(t, "One")
+	id, _ := f.task(1)
+	get := func() task {
+		res := f.Do("GET", f.path("/tasks/%d", id), nil, f.ada)
+		res.Expect(http.StatusOK, "")
+		var got task
+		res.JSON(&got)
+		return got
+	}
+	if got := get(); got.RunStatus != nil || got.NeedsAttention != nil {
+		t.Fatalf("untested task = %+v, want null run status and needs attention", got)
+	}
+	f.runs(1, "", "error", "passed")
+	if got := get(); orNull(got.RunStatus) != "passed" || got.NeedsAttention != nil {
+		t.Fatalf("task = %+v, want the latest run's status", got)
+	}
+}
+
 func TestGetTaskSyncsWhenDue(t *testing.T) {
 	f := setup(t, "One")
 	id, _ := f.task(1)

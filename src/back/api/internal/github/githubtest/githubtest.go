@@ -2,13 +2,18 @@
 package githubtest
 
 import (
+	"archive/tar"
 	"cmp"
+	"compress/gzip"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -50,6 +55,7 @@ type Repo struct {
 	roles  map[string]string // token -> role
 	labels []Label
 	issues []*Issue
+	files  map[string]map[string]string // commit sha -> path -> content
 }
 
 // Issue is an issue or a pull request in a Repo.
@@ -62,6 +68,7 @@ type Issue struct {
 	Pull        *Pull // set on pull requests only
 	Comments    []Comment
 	UpdatedAt   time.Time
+	Author      string // login of an issue's author: the user who opened it through the API, or one a test sets
 }
 
 // Pull is what a pull request has beyond the issue GitHub's issue list shows for it.
@@ -122,6 +129,9 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("GET /repositories/{id}/pulls", f.listPulls)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls/{number}", f.getPull)
 	f.mux.HandleFunc("GET /repositories/{id}/collaborators/{login}/permission", f.permission)
+	f.mux.HandleFunc("GET /repositories/{id}/contents/{path...}", f.contents)
+	f.mux.HandleFunc("GET /repositories/{id}/tarball/{sha}", f.tarball)
+	f.mux.HandleFunc("GET "+codeload+"/{owner}/{name}/legacy.tar.gz/{sha}", f.codeload)
 	f.mux.HandleFunc("POST /graphql", f.graphql)
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Server.Close)
@@ -184,6 +194,20 @@ func (r *Repo) Rename(owner, name string) {
 	r.f.mu.Lock()
 	defer r.f.mu.Unlock()
 	r.Owner, r.Name = owner, name
+}
+
+// AddFile puts a file with content at name, a slash-separated path, in commit sha, for the contents API and the
+// commit's tarball. Every commit exists, with the files AddFile gave it, so one given none has an empty tarball.
+func (r *Repo) AddFile(sha, name, content string) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	if r.files == nil {
+		r.files = map[string]map[string]string{}
+	}
+	if r.files[sha] == nil {
+		r.files[sha] = map[string]string{}
+	}
+	r.files[sha][name] = content
 }
 
 // AddIssue opens an issue with these labels and returns its number.
@@ -329,9 +353,14 @@ func (r *Repo) json(is *Issue) map[string]any {
 	if is.Body != "" {
 		body = is.Body
 	}
+	author := is.Author
+	if is.Pull != nil {
+		author = is.Pull.Author
+	}
+	user, _ := r.f.byLogin(author)
 	out := map[string]any{
 		"id": is.ID, "number": is.Number, "title": is.Title, "body": body, "state": is.State,
-		"labels": labels, "updated_at": is.UpdatedAt.UTC().Format(time.RFC3339),
+		"labels": labels, "updated_at": is.UpdatedAt.UTC().Format(time.RFC3339), "user": user,
 	}
 	if is.Pull != nil {
 		out["pull_request"] = map[string]any{}
@@ -552,7 +581,9 @@ func (f *Fake) createIssue(w http.ResponseWriter, r *http.Request) {
 		Labels []string `json:"labels"`
 	}
 	json.NewDecoder(r.Body).Decode(&in)
-	writeJSON(w, http.StatusCreated, rp.json(rp.add(in.Title, in.Body, in.Labels, false)))
+	is := rp.add(in.Title, in.Body, in.Labels, false)
+	is.Author = f.users[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")].Login
+	writeJSON(w, http.StatusCreated, rp.json(is))
 }
 
 func (f *Fake) getIssue(w http.ResponseWriter, r *http.Request) {
@@ -682,6 +713,73 @@ func (f *Fake) permission(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"permission": perm, "user": u})
 }
 
+// contents serves GET /repositories/{id}/contents/{path...} at the commit its ref parameter names: the file itself
+// when asked for application/vnd.github.raw+json, else GitHub's JSON with the content in base64, or 404 for a file
+// the commit lacks. The fake has no default branch, so a request without a ref finds nothing.
+func (f *Fake) contents(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, false)
+	if !ok {
+		return
+	}
+	p := r.PathValue("path")
+	content, found := rp.files[r.URL.Query().Get("ref")][p]
+	if !found {
+		notFound(w)
+		return
+	}
+	if r.Header.Get("Accept") == "application/vnd.github.raw+json" {
+		w.Write([]byte(content))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"type": "file", "name": path.Base(p), "path": p, "size": len(content),
+		"encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content))})
+}
+
+// codeload stands in for codeload.github.com, where GitHub redirects tarball downloads. Server.Client() sends every
+// request for a host under example.com to the fake, and Go's client drops Authorization on the way to another host.
+const codeload = "codeload.example.com"
+
+// tarball serves GET /repositories/{id}/tarball/{sha} like GitHub: a redirect to the commit's archive on codeload.
+func (f *Fake) tarball(w http.ResponseWriter, r *http.Request) {
+	if rp, _, ok := f.repo(w, r, false); ok {
+		http.Redirect(w, r, "http://"+codeload+"/"+url.PathEscape(rp.Owner)+"/"+url.PathEscape(rp.Name)+
+			"/legacy.tar.gz/"+url.PathEscape(r.PathValue("sha")), http.StatusFound)
+	}
+}
+
+// codeload serves a commit's archive like GitHub's: a .tar.gz of the files AddFile put at the commit, in one
+// owner-repo-sha/ folder, after a pax global header holding the commit id. It refuses a request carrying
+// Authorization, so a client that sends the token off the API fails its test.
+// shortcut: it serves any repository to anyone, where GitHub's redirect carries a short-lived token; check one when
+// a test needs codeload to refuse.
+func (f *Fake) codeload(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "The GitHub API token reached codeload"})
+		return
+	}
+	i := slices.IndexFunc(f.repos, func(rp *Repo) bool {
+		return strings.EqualFold(rp.Owner, r.PathValue("owner")) && strings.EqualFold(rp.Name, r.PathValue("name"))
+	})
+	if i < 0 {
+		notFound(w)
+		return
+	}
+	rp, sha := f.repos[i], r.PathValue("sha")
+	dir := fmt.Sprintf("%s-%s-%.7s/", rp.Owner, rp.Name, sha)
+	w.Header().Set("Content-Type", "application/x-gzip")
+	gz := gzip.NewWriter(w)
+	tw := tar.NewWriter(gz)
+	tw.WriteHeader(&tar.Header{Typeflag: tar.TypeXGlobalHeader, Name: "pax_global_header", PAXRecords: map[string]string{"comment": sha}})
+	tw.WriteHeader(&tar.Header{Typeflag: tar.TypeDir, Name: dir, Mode: 0o755})
+	files := rp.files[sha]
+	for _, p := range slices.Sorted(maps.Keys(files)) {
+		tw.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: dir + p, Mode: 0o644, Size: int64(len(files[p]))})
+		tw.Write([]byte(files[p]))
+	}
+	tw.Close()
+	gz.Close()
+}
+
 // operation is a GraphQL document's operation name, by which graphql tells the API's operations apart.
 var operation = regexp.MustCompile(`^\s*(?:query|mutation)\s+(\w+)`)
 
@@ -705,6 +803,10 @@ func (f *Fake) graphql(w http.ResponseWriter, r *http.Request) {
 		var ids []string
 		json.Unmarshal(in.Variables["ids"], &ids)
 		f.closingIssues(w, r, ids)
+	case "ConvertToDraft":
+		var id string
+		json.Unmarshal(in.Variables["id"], &id)
+		f.convertToDraft(w, r, id)
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "Unknown operation " + name}}})
 	}
@@ -718,20 +820,12 @@ func (f *Fake) closingIssues(w http.ResponseWriter, r *http.Request, ids []strin
 	var errs []map[string]any
 	for i, id := range ids {
 		var node any
-		for _, rp := range f.repos {
-			if _, granted := rp.roles[token]; !granted {
-				continue
+		if is, _ := f.pullByNode(token, id); is != nil {
+			refs := []map[string]any{}
+			for _, ref := range is.Pull.Closes {
+				refs = append(refs, map[string]any{"number": ref.Number, "repository": map[string]int64{"databaseId": ref.RepoID}})
 			}
-			for _, is := range rp.issues {
-				if is.Pull == nil || nodeID(is) != id {
-					continue
-				}
-				refs := []map[string]any{}
-				for _, ref := range is.Pull.Closes {
-					refs = append(refs, map[string]any{"number": ref.Number, "repository": map[string]int64{"databaseId": ref.RepoID}})
-				}
-				node = map[string]any{"number": is.Number, "closingIssuesReferences": map[string]any{"nodes": refs}}
-			}
+			node = map[string]any{"number": is.Number, "closingIssuesReferences": map[string]any{"nodes": refs}}
 		}
 		if node == nil {
 			errs = append(errs, map[string]any{"type": "NOT_FOUND", "path": []any{"nodes", i},
@@ -744,6 +838,44 @@ func (f *Fake) closingIssues(w http.ResponseWriter, r *http.Request, ids []strin
 		out["errors"] = errs
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// convertToDraft answers ConvertToDraft by making the pull request with node id a draft, or with null and an error
+// for one the token cannot see or cannot push to.
+func (f *Fake) convertToDraft(w http.ResponseWriter, r *http.Request, id string) {
+	is, role := f.pullByNode(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), id)
+	refuse := func(kind, message string) {
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"convertPullRequestToDraft": nil},
+			"errors": []map[string]any{{"type": kind, "path": []any{"convertPullRequestToDraft"}, "message": message}}})
+	}
+	switch {
+	case is == nil:
+		refuse("NOT_FOUND", "Could not resolve to a node with the global id of '"+id+"'")
+	case slices.Index(roles, role) < slices.Index(roles, "push"):
+		refuse("FORBIDDEN", "Resource not accessible by integration")
+	default:
+		is.Pull.Draft = true
+		is.UpdatedAt = time.Now()
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
+			"convertPullRequestToDraft": map[string]any{"pullRequest": map[string]bool{"isDraft": true}}}})
+	}
+}
+
+// pullByNode returns the pull request with GraphQL node id in a repository token has a role on, and that role,
+// or nil.
+func (f *Fake) pullByNode(token, id string) (*Issue, string) {
+	for _, rp := range f.repos {
+		role, granted := rp.roles[token]
+		if !granted {
+			continue
+		}
+		for _, is := range rp.issues {
+			if is.Pull != nil && nodeID(is) == id {
+				return is, role
+			}
+		}
+	}
+	return nil, ""
 }
 
 func (f *Fake) accessToken(w http.ResponseWriter, r *http.Request) {

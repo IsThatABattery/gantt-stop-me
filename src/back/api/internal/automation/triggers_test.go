@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/github/githubtest"
 )
@@ -189,16 +190,25 @@ func (f *fixture) record(number int) *prRecord {
 // move moves issue number's task to the end of the column with key through the move endpoint, as ada.
 func (f *fixture) move(number int, key string) {
 	f.t.Helper()
+	f.moveTo(number, key, nil).Expect(http.StatusOK, "")
+}
+
+// moveTo asks the move endpoint, as ada, to put issue number's task in the column with key, before the task of
+// issue before or at the column's end when before is nil, and returns its answer.
+func (f *fixture) moveTo(number int, key string, before *int) *apptest.Response {
+	f.t.Helper()
 	var id, column int64
 	var version int
+	var beforeID *int64
 	err := f.DB.QueryRow(context.Background(), `
-		select t.id, t.version, c.id from tasks t join columns c on c.project_id = t.project_id
-		where t.project_id = $1 and t.issue_number = $2 and c.key = $3`, f.project, number, key).Scan(&id, &version, &column)
+		select t.id, t.version, c.id, (select id from tasks where project_id = $1 and issue_number = $4)
+		from tasks t join columns c on c.project_id = t.project_id
+		where t.project_id = $1 and t.issue_number = $2 and c.key = $3`, f.project, number, key, before).Scan(&id, &version, &column, &beforeID)
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	f.Do("POST", f.path(fmt.Sprintf("/tasks/%d/move", id)), map[string]any{"columnId": column, "version": version}, f.ada).
-		Expect(http.StatusOK, "")
+	return f.Do("POST", f.path(fmt.Sprintf("/tasks/%d/move", id)),
+		map[string]any{"columnId": column, "beforeTaskId": beforeID, "version": version}, f.ada)
 }
 
 func TestReadyPullRequestStartsARun(t *testing.T) {
@@ -263,8 +273,9 @@ func TestReadyToDraftCancelsTheRun(t *testing.T) {
 			f.repo.EditPull(n, func(p *githubtest.Pull) { p.Draft = true })
 			path.via(f, n)
 			f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "cancelled", Reason: "The pull request went back to draft.", Finished: true})
-			if got := slices.Sorted(maps.Values(f.statuses("workflow_executions"))); !slices.Equal(got, []string{"cancelled", "cancelled", "passed"}) {
-				t.Fatalf("workflow executions = %v, want the running and queued ones cancelled", got)
+			// The running one is the queue worker's to stop, which cancels it once the runner has removed it.
+			if got := slices.Sorted(maps.Values(f.statuses("workflow_executions"))); !slices.Equal(got, []string{"cancelled", "passed", "running"}) {
+				t.Fatalf("workflow executions = %v, want the queued one cancelled", got)
 			}
 			if got := f.task(1); got.Column != "testing" || got.Version != 2 {
 				t.Fatalf("task = %+v, want it left in Testing", got)
@@ -384,6 +395,7 @@ func TestTaskInTestingStaysWhereItIs(t *testing.T) {
 	f.move(1, "testing")
 	f.move(2, "testing")
 	before := f.task(1)
+	before.NeedsAttention = "" // the new run clears the hand move's runner error
 	n := f.pull("ada", false, 1)
 	requests := len(f.GitHub.Requests())
 	f.poll()
@@ -395,7 +407,11 @@ func TestTaskInTestingStaysWhereItIs(t *testing.T) {
 			t.Fatalf("the trigger wrote issue 1 on GitHub: %s", r)
 		}
 	}
-	f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "queued"})
+	f.expectRuns(
+		testRun{Issue: 1, Status: "error", Reason: "No linked pull request.", Finished: true}, // the moves by hand
+		testRun{Issue: 2, Status: "error", Reason: "No linked pull request.", Finished: true},
+		testRun{Issue: 1, PR: n, Head: "a1", Status: "queued"},
+	)
 }
 
 func TestMoreThanOneReadyPullRequestIsARunnerError(t *testing.T) {
