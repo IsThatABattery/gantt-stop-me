@@ -57,9 +57,10 @@ function SessionEnded({ email }: { email: string }) {
   }
 
   return (
-    <Dialog label="Session ended" onClose={leave}>
+    // No onClose: Esc or a click outside must not leave the page it promises to keep.
+    <Dialog label="Session ended">
       <form onSubmit={onSubmit} className="flex flex-col gap-5 p-7">
-        <div className="pr-10">
+        <div>
           <h2 className="m-0 font-heading text-2xl font-semibold">Your session ended</h2>
           <p className="mt-2 mb-0 leading-normal wrap-anywhere text-text-muted-strong">
             Sign in again as <span className="text-text">{email}</span> to carry on. This page keeps what you typed.

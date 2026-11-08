@@ -12,7 +12,7 @@ import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { AgentSettings, Automation, Me, Permission, Provider } from '../../data/api/types'
 import { errorCode, NotFoundError } from '../../data/errors'
 import { keys } from '../../data/keys'
-import { useMe } from '../../data/session'
+import { useSignedInUser } from '../../data/session'
 import {
   agentProblems,
   firstError,
@@ -36,7 +36,7 @@ export function AutomationPage() {
   const { projectId = '' } = useParams()
   const automation = useAutomation(projectId)
   const providers = useProviders()
-  const me = useMe()
+  const me = useSignedInUser()
   // A failed refetch keeps the data, and the form with its edits.
   const failed = [automation, providers, me].find((q) => !q.data && q.error)
 
@@ -134,7 +134,7 @@ function AutomationForm({
       })
       document.getElementById(`${id}-readonly`)?.focus()
       client.invalidateQueries({ queryKey: keys.board(projectId) })
-    } else setFormError(err.message)
+    } else if (errorCode(err) !== 'unauthorized') setFormError(err.message) // a 401 has the session dialog; the edits stay
   }
 
   const openOff = (open: boolean) => {

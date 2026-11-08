@@ -4,12 +4,15 @@ import { Button } from './controls'
 
 /**
  * Asks before leaving the page, or closing the tab, while `when` holds. Hash
- * changes pass, so in-page section links still work. A router allows one
- * blocker, so mount at most one per page.
+ * changes pass, so in-page section links still work, and so does /login: signing
+ * out or switching accounts is a choice to leave. A router allows one blocker,
+ * so mount at most one per page.
  */
 export function UnsavedChangesGuard({ when }: { when: boolean }) {
   const id = useId()
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => when && currentLocation.pathname !== nextLocation.pathname)
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => when && currentLocation.pathname !== nextLocation.pathname && nextLocation.pathname !== '/login',
+  )
   useEffect(() => {
     if (!when) return
     const onUnload = (e: BeforeUnloadEvent) => e.preventDefault()

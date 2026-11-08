@@ -2,6 +2,7 @@
 // scripts can't read, so GET /api/me is the only way to know (docs/accounts.md).
 
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { api } from './api/client'
 import type { Me, SignedInUser } from './api/types'
 import { ApiError } from './errors'
@@ -18,6 +19,17 @@ export async function getMe(): Promise<Me | null> {
 }
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: getMe, staleTime: 60_000 })
+
+/**
+ * useMe for pages built on the user: while the session-ended dialog is up (the user is null), it keeps the last
+ * signed-in user, so the page under it keeps its forms and what was typed in them.
+ */
+export function useSignedInUser() {
+  const me = useMe()
+  const [last, setLast] = useState(me.data)
+  if (me.data && me.data !== last) setLast(me.data)
+  return { ...me, data: me.data ?? last }
+}
 
 export interface Credentials {
   email: string

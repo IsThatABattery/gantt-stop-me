@@ -70,10 +70,10 @@ function TaskFields({ value, onChange, problems, idPrefix, bodyRows }: FieldsPro
   )
 }
 
-/** Errors with no field of their own, such as no permission or GitHub being down. */
+/** Errors with no field of their own, such as no permission or GitHub being down. A 401 has the session dialog. */
 function GeneralError({ error }: { error: Error | null }) {
   const code = errorCode(error)
-  if (!error || code === 'invalid_title' || code === 'invalid_body') return null
+  if (!error || code === 'invalid_title' || code === 'invalid_body' || code === 'unauthorized') return null
   return (
     <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
       {error.message}

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { StatusMessage } from '../../components/StatusMessage'
-import { useMe } from '../../data/session'
+import { useSignedInUser } from '../../data/session'
 import { labels, settingsLabels } from '../../labels/labels'
 import { GitHubSection } from './GitHubSection'
 import { PasswordForm } from './PasswordForm'
@@ -13,7 +13,7 @@ import { sectionIds, sectionNav } from './sections'
 // Settings, from Settings.dc.html, with the sections the API supports: the
 // account, the GitHub link, LLM providers and the planning agents. Each section saves on its own.
 export function SettingsPage() {
-  const { data: me } = useMe()
+  const { data: me } = useSignedInUser()
   const { hash } = useLocation()
   const active = hash.slice(1) || sectionNav[0].id
 

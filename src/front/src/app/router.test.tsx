@@ -47,6 +47,35 @@ describe('session ends mid-use', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Session ended' })).not.toBeInTheDocument())
     expect(router.state.location.pathname).toBe('/projects/1/tasks/7/edit')
     expect(screen.getByLabelText('Title')).toHaveValue(`${fake.tasks[0].title} v2`)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument() // the 401 was the dialog's to explain
+  })
+
+  it('stays up on Esc, and leaves a page with unsaved edits for another account at once', async () => {
+    const { router } = renderApp('/projects/1/tasks/7/edit')
+    await userEvent.type(await screen.findByLabelText('Title'), ' v2')
+    fake.signedInId = null
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Session ended' })
+
+    await userEvent.keyboard('{Escape}')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Title')).toHaveValue(`${fake.tasks[0].title} v2`)
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Use another account' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+  })
+
+  it('keeps the drawer under it on Esc', async () => {
+    const { router, client } = renderApp('/projects/1/tasks/7')
+    await screen.findByRole('dialog', { name: 'Payload' })
+    fake.signedInId = null
+    await client.invalidateQueries({ queryKey: ['task'] })
+    await screen.findByRole('dialog', { name: 'Session ended' })
+
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Payload' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/projects/1/tasks/7')
   })
 
   it('forgets the old session when another account signs in instead', async () => {
@@ -80,6 +109,16 @@ describe('sign out', () => {
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
     expect(fake.signedInId).toBeNull()
+  })
+
+  it('leaves a page with unsaved edits, as a choice to leave', async () => {
+    const { router } = renderApp('/projects/1/tasks/7/edit')
+    await userEvent.type(await screen.findByLabelText('Title'), ' v2')
+    await userEvent.click(screen.getByRole('button', { name: /Account menu, signed in as ada@example.com/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(screen.queryByRole('dialog', { name: 'Session ended' })).not.toBeInTheDocument()
   })
 })
 
