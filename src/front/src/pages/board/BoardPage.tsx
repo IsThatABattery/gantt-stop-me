@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { Outlet } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { StatusMessage } from '../../components/StatusMessage'
+import { Button } from '../../components/controls'
 import type { Task } from '../../data/api/types'
 import { ConflictError } from '../../data/errors'
 import { COLUMN_ORDER, type ColumnKey } from '../../data/types'
@@ -35,10 +36,15 @@ import { drawTrail } from './trail'
 // payload drawer and the create dialogs over the board.
 export function BoardPage() {
   const project = useProjectContext()
-  const { data: board, isPending, error } = useBoard(String(project.id))
+  const { data: board, isPending, error, refetch } = useBoard(String(project.id))
 
   if (isPending) return <StatusMessage title={`Loading ${labels.board.toLowerCase()}…`} />
-  if (error) return <StatusMessage title="Something went wrong" body={error.message} />
+  if (error && !board)
+    return (
+      <StatusMessage title="Something went wrong" body={error.message}>
+        <Button onClick={() => refetch()}>Try again</Button>
+      </StatusMessage>
+    )
   return <BoardView board={board} />
 }
 

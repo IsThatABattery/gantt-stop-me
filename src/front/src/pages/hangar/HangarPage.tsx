@@ -1,5 +1,6 @@
 import { Link, Outlet, useParams } from 'react-router'
 import { StatusMessage } from '../../components/StatusMessage'
+import { Button } from '../../components/controls'
 import { useBoard } from '../../data/views/board'
 import { labels, runStatusLabels } from '../../labels/labels'
 
@@ -8,7 +9,7 @@ const lower = (s: string) => s.toLowerCase()
 /** The Hangar tab: the Hangar (Backlog) column as a list, in board order. The drawer opens over it. */
 export function HangarPage() {
   const { projectId = '' } = useParams()
-  const { data: board, isPending, error } = useBoard(projectId)
+  const { data: board, isPending, error, refetch } = useBoard(projectId)
   const tasks = board?.columns.find((c) => c.key === 'backlog')?.tasks ?? []
 
   return (
@@ -19,8 +20,10 @@ export function HangarPage() {
         </header>
         {isPending ? (
           <StatusMessage title={`Loading ${lower(labels.backlog)}…`} />
-        ) : error ? (
-          <StatusMessage title="Something went wrong" body={error.message} />
+        ) : error && !board ? (
+          <StatusMessage title="Something went wrong" body={error.message}>
+            <Button onClick={() => refetch()}>Try again</Button>
+          </StatusMessage>
         ) : tasks.length === 0 ? (
           <p role="status" className="m-0 py-10 text-center text-text-muted-strong">
             The {labels.backlog} is empty. New {lower(labels.tasks)} wait here until they launch.
