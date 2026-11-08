@@ -1,9 +1,9 @@
 create table project_automation (
   project_id         bigint primary key references projects on delete cascade,
   owner_id           bigint not null references users on delete cascade,
-  decision_provider  bigint not null references providers on delete cascade,
+  decision_provider  bigint not null references providers, -- a provider in use cannot be deleted
   decision_model     text not null,
-  chat_provider      bigint not null references providers on delete cascade,
+  chat_provider      bigint not null references providers,
   chat_model         text not null,
   paused_reason      text,               -- null while running
   webhook_secret_enc bytea,              -- sealed with secret.Box
