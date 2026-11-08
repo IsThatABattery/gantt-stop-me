@@ -92,7 +92,13 @@ services:
       GOCACHE: /go/cache
       RUN_PREFIX: gantt-test
       RUNNER_DOCKER_TESTS: "1"
-    command: go test ./internal/runner/...
+      TEST_DATABASE_URL: postgres://gantt:gantt@test-db:5432/gantt?sslmode=disable
+    # One package after the other, since both remove every container with the prefix when they start. -count=1:
+    # Go's test cache cannot see Docker, so a cached pass would prove nothing.
+    command: sh -c "go test -count=1 ./internal/runner/... && go test -count=1 -run TestRunOnDocker ./internal/automation"
+    depends_on:
+      test-db:
+        condition: service_healthy
 
   # Throwaway Postgres for tests, kept in memory and apart from db.
   test-db:
