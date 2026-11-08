@@ -23,6 +23,7 @@ Run and Debug entries:
 - **Full stack**: DB + API + Web; stopping one stops all.
 - **DB**: starts the `db` container and tails its logs; stopping it stops `db`.
 - **API**: Go under Delve on :8080; starts `db` first.
+- **Runner**: the runner under Delve on :8081 with prefix `gantt-dev`, driving the host's Docker. The API entry reaches it at `RUNNER_URL`.
 - **Web**: Vite on :5173, proxying `/api` to :8080, opened in your default browser.
 - **Web (Chrome debug)**: as Web, with Chrome attached for breakpoints. Needs Chrome on the host.
 
@@ -41,3 +42,4 @@ Run it after every change to `src/back/api`. Done when it exits 0.
 - Tests and every `go` command run in the `api-test` container, so the host needs only Docker. Append a command to run something else: `docker compose run --rm api-test go test ./internal/accounts -run Login`, or `docker compose run --rm --no-deps api-test go mod tidy`.
 - Every endpoint's handler file has a test file beside it: `signup.go`, `signup_test.go`. Endpoint tests start the whole API with `apptest.New(t)`, which gives each test its own migrated schema in `test-db`.
 - `test-db` stays up between runs. `docker compose --profile test down` stops it.
+- The runner's Docker tests run only in `runner-test`, which has the Docker socket: `docker compose --profile test run --rm runner-test`. Run it after every change to `internal/runner` or `cmd/runner`. Done when it exits 0.

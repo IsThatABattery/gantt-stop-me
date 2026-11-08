@@ -14,6 +14,12 @@ services:
       # The browser opens Vite on :5173, which proxies /api, so writes arrive with that Origin.
       PUBLIC_URL: http://localhost:5173
       ENCRYPTION_KEY: rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=
+      # The Runner entry listens here, and the API entry reaches it with the same dev token.
+      RUNNER_URL: http://localhost:8081
+      RUNNER_TOKEN: nfxt5flPAKJ4penhSSAOvDKmN8MHofVxJjJ6YE/PUfQ=
+    # Source checkouts for the Runner entry, writable by the vscode user.
+    tmpfs:
+      - /work:mode=1777
     # Delve needs ptrace.
     cap_add:
       - SYS_PTRACE

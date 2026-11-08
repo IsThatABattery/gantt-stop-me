@@ -9,6 +9,10 @@ x-postgres: &postgres
     interval: 2s
     retries: 15
 
+# Shared by api and runner. Dev-only default. Set your own in .env for anything beyond local use.
+# "-", not ":-": a blank RUNNER_TOKEN in .env stops the runner instead of falling back to this public token.
+x-runner-token: &runner-token ${RUNNER_TOKEN-nfxt5flPAKJ4penhSSAOvDKmN8MHofVxJjJ6YE/PUfQ=}
+
 services:
   db:
     <<: *postgres
@@ -26,9 +30,27 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       ALLOW_PRIVATE_PROVIDER_URLS: ${ALLOW_PRIVATE_PROVIDER_URLS:-false}
+      RUNNER_URL: ${RUNNER_URL:-http://runner:8081}
+      RUNNER_TOKEN: *runner-token
+      MAX_CONCURRENT_WORKFLOWS: ${MAX_CONCURRENT_WORKFLOWS:-1}
     depends_on:
       db:
         condition: service_healthy
+      runner:
+        condition: service_started
+
+  # Builds and runs test containers. The only service with the Docker socket; the api reaches it over HTTP.
+  runner:
+    build:
+      context: src/back/api
+      target: runner
+    environment:
+      RUNNER_TOKEN: *runner-token
+      RUN_PREFIX: ${RUN_PREFIX:-gantt}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    tmpfs:
+      - /work                 # source checkouts
 
   web:
     build: src/front
@@ -53,6 +75,22 @@ services:
     depends_on:
       test-db:
         condition: service_healthy
+
+  # Runner tests against real Docker: docker compose --profile test run --rm runner-test
+  runner-test:
+    profiles: [test]
+    build:
+      context: src/back/api
+      target: runner-dev      # Go toolchain plus the docker CLI
+    volumes:
+      - ./src/back/api:/src
+      - go-cache:/go
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      GOCACHE: /go/cache
+      RUN_PREFIX: gantt-test
+      RUNNER_DOCKER_TESTS: "1"
+    command: go test ./internal/runner/...
 
   # Throwaway Postgres for tests, kept in memory and apart from db.
   test-db:
