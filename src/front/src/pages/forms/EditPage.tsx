@@ -1,8 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { useProjectContext } from '../../app/projectContext'
+import { useMockProjectContext } from '../../app/projectContext'
 import { Chip, type Tone } from '../../components/Chip'
-import { Eyebrow } from '../../components/Eyebrow'
 import { ProgressBar } from '../../components/ProgressBar'
 import { RadioCard } from '../../components/RadioCard'
 import { StatusMessage } from '../../components/StatusMessage'
@@ -14,11 +13,8 @@ import {
   useFeature,
   useFeatureTasks,
   useFormOptions,
-  useTaskForEdit,
   useUpdateFeature,
-  useUpdateTask,
   type FormOptions,
-  type TaskForEdit,
 } from '../../data/views/forms'
 import type { Assignee, Autonomy, Criterion, Feature, Project, Task } from '../../data/types'
 import {
@@ -32,14 +28,16 @@ import {
   taskStatusLabels,
 } from '../../labels/labels'
 import { CriteriaList } from './CriteriaList'
-import { basicsErrors, featureBasics, taskBasics, toInput, type BasicsValue, type Kind } from './formValue'
+import { basicsErrors, featureBasics, toInput, type BasicsValue, type Kind } from './formValue'
 import { BasicsFields } from './ItemForm'
 
-// Full edit page for an objective or a payload (ObjectiveEditor and
-// PayloadEditor mockups). The form keeps a local copy and Save sends it all.
+// Full edit page for an objective (ObjectiveEditor mockup). The form keeps a
+// local copy and Save sends it all. Mock data only: objectives are hidden until
+// the API has them (docs/implementation/api-gaps.md). Payloads are edited in
+// TaskForm.tsx.
 
 export function FeatureEditPage() {
-  const project = useProjectContext()
+  const project = useMockProjectContext()
   const { featureId = '' } = useParams()
   const feature = useFeature(project.id, featureId)
   const options = useFormOptions(project.id)
@@ -48,18 +46,6 @@ export function FeatureEditPage() {
   if (error) return <LoadError error={error} kind="feature" />
   if (!feature.data || !options.data) return <StatusMessage title="Loading…" />
   return <FeatureEditor key={feature.data.id} project={project} feature={feature.data} options={options.data} />
-}
-
-export function TaskEditPage() {
-  const project = useProjectContext()
-  const { taskId = '' } = useParams()
-  const detail = useTaskForEdit(project.id, taskId)
-  const options = useFormOptions(project.id)
-  const error = detail.error ?? options.error
-
-  if (error) return <LoadError error={error} kind="task" />
-  if (!detail.data || !options.data) return <StatusMessage title="Loading…" />
-  return <TaskEditor key={detail.data.task.id} project={project} detail={detail.data} options={options.data} />
 }
 
 function LoadError({ error, kind }: { error: Error; kind: Kind }) {
@@ -85,7 +71,6 @@ function FeatureEditor({ project, feature, options }: { project: Project; featur
   const tasks = useFeatureTasks(project.id, feature.id)
   const save = useUpdateFeature(project.id, feature.id)
   const archive = useArchiveFeature(project.id, feature.id)
-  const epic = options.epics.find((e) => e.id === feature.epicId)
   const inherited = project.defaultAutonomy
 
   return (
@@ -98,7 +83,6 @@ function FeatureEditor({ project, feature, options }: { project: Project; featur
         { label: labels.features, to: `/projects/${project.id}` },
         { label: feature.name },
       ]}
-      eyebrow={[formLabels.feature.eyebrowEdit, feature.key, `${labels.epic}: ${epic?.name ?? '—'}`]}
       status={feature.status === 'archived' ? featureStatusLabels.archived : null}
       inherited={{ label: labels.inheritProject, level: inherited }}
       onSave={(edit) => save.mutateAsync(edit)}
@@ -189,81 +173,6 @@ function ownerName(a: Assignee | null, options: FormOptions) {
   return options.users.find((x) => x.id === a.id)?.initials ?? labels.user
 }
 
-// ---- Payload ----
-
-function TaskEditor({ project, detail, options }: { project: Project; detail: TaskForEdit; options: FormOptions }) {
-  const { task, subtasks } = detail
-  const save = useUpdateTask(project.id, task.id)
-  const feature = options.features.find((f) => f.id === task.featureId)
-  const inherited = feature?.defaultAutonomy ?? project.defaultAutonomy
-  const t = formLabels.task
-  const done = subtasks.filter((s) => s.done).length
-
-  return (
-    <Editor
-      kind="task"
-      project={project}
-      options={options}
-      initial={{ basics: taskBasics(task), criteria: task.acceptanceCriteria, autonomy: task.autonomyOverride }}
-      crumbs={[
-        feature ? { label: feature.name, to: `/projects/${project.id}/features/${feature.id}/edit` } : { label: labels.tasks },
-        { label: task.key },
-      ]}
-      eyebrow={[t.eyebrowEdit, task.key, `${labels.feature}: ${feature?.name ?? '—'}`]}
-      inherited={{ label: labels.inheritFeature, level: inherited }}
-      onSave={(edit) => save.mutateAsync(edit)}
-      saving={save.isPending}
-      saveError={save.error}
-      side={
-        <SideCard
-          heading={t.sideHeading}
-          total={subtasks.length}
-          progress={{ label: t.progressLabel, value: done, max: subtasks.length }}
-          chips={
-            <>
-              <Chip tone="neutral" shape="tag">
-                {columnLabels[task.column].name} · {taskStatusLabels[task.status]}
-              </Chip>
-              {task.prNumber && (
-                <Chip tone="neutral" shape="tag">
-                  PR #{task.prNumber}
-                </Chip>
-              )}
-            </>
-          }
-          actions={
-            <>
-              <Button disabled title="Needs real GitHub data" className={DISABLED}>
-                {actionLabels.linkPr}
-              </Button>
-              <Button disabled title="Not built yet" className={DISABLED}>
-                {actionLabels.addSubtask}
-              </Button>
-            </>
-          }
-        >
-          {subtasks.length === 0 ? (
-            <p className="m-0 text-[13px] text-text-muted-strong">No {labels.subtask.toLowerCase()}s yet.</p>
-          ) : (
-            <ul className="m-0 flex list-none flex-col gap-2 p-0">
-              {subtasks.map((s, i) => (
-                <li key={s.id} className="flex flex-col gap-1 rounded-control border border-line-soft bg-surface p-3">
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-text-muted">M-{i + 1}</span>
-                    <Chip tone={s.done ? 'good' : 'neutral'}>{s.done ? 'Done' : 'Open'}</Chip>
-                  </span>
-                  <span className="font-medium">{s.title}</span>
-                  <span className="text-xs text-text-muted">{ownerName(s.assignee, options)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </SideCard>
-      }
-    />
-  )
-}
-
 // ---- Shared layout ----
 
 interface EditValue {
@@ -278,7 +187,6 @@ interface EditorProps {
   options: FormOptions
   initial: EditValue
   crumbs: { label: string; to?: string }[]
-  eyebrow: string[]
   /** A status word shown beside the heading, e.g. Archived */
   status?: string | null
   inherited: { label: string; level: Autonomy }
@@ -289,7 +197,7 @@ interface EditorProps {
   side: ReactNode
 }
 
-function Editor({ kind, project, options, initial, crumbs, eyebrow, status, inherited, onSave, saving, saveError, onArchive, side }: EditorProps) {
+function Editor({ kind, project, options, initial, crumbs, status, inherited, onSave, saving, saveError, onArchive, side }: EditorProps) {
   const navigate = useNavigate()
   const t = formLabels[kind]
   const [value, setValue] = useState(initial)
@@ -331,8 +239,7 @@ function Editor({ kind, project, options, initial, crumbs, eyebrow, status, inhe
 
       <header className="flex flex-wrap items-end gap-4">
         <div className="mr-auto">
-          <Eyebrow>{eyebrow.join(' · ').toUpperCase()}</Eyebrow>
-          <h1 className="mt-1.5 mb-0 flex items-center gap-3 font-heading text-[28px] font-semibold">
+          <h1 className="m-0 flex items-center gap-3 font-heading text-[28px] font-semibold">
             {t.titleEdit}
             {status && <Chip tone="neutral">{status}</Chip>}
           </h1>

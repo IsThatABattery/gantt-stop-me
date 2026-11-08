@@ -6,10 +6,7 @@ export function PlannerStub({ step, branch, doc }: { step: number; branch: strin
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <div className="eyebrow">
-          Step {step + 1} · {plannerLabels.steps[step]}
-        </div>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{plannerLabels.steps[step]}</h1>
+        <h1 className="m-0 font-heading text-[26px] font-semibold">{plannerLabels.steps[step]}</h1>
       </div>
       <NotBuilt branch={branch} doc={doc} />
     </div>

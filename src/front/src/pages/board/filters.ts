@@ -1,26 +1,33 @@
-import type { ID, Task } from '../../data/types'
+import type { Task } from '../../data/api/types'
+import type { ColumnKey } from '../../data/types'
 
 /** The three telemetry counters, each also a filter. */
-export type CounterFilter = 'awaiting-approval' | 'blocked' | 'agents-active'
+export type CounterFilter = 'awaiting-approval' | 'needs-attention' | 'tests-running'
 
 export interface BoardFilter {
-  /** Objective; null shows every objective */
-  featureId: ID | null
   counter: CounterFilter | null
 }
 
-export const noFilter: BoardFilter = { featureId: null, counter: null }
+export const noFilter: BoardFilter = { counter: null }
 
-export const isFiltered = (f: BoardFilter) => f.featureId !== null || f.counter !== null
+export const isFiltered = (f: BoardFilter) => f.counter !== null
 
-const counterMatches: Record<CounterFilter, (t: Task) => boolean> = {
-  'awaiting-approval': (t) => t.column === 'user-check' && t.status !== 'landed',
-  blocked: (t) => t.status === 'blocked',
-  'agents-active': (t) => t.assignee?.kind === 'agent' && t.status !== 'landed',
+const counterMatches: Record<CounterFilter, (t: Task, column: ColumnKey) => boolean> = {
+  'awaiting-approval': (_t, column) => column === 'user-check',
+  'needs-attention': (t) => t.needsAttention !== null || t.runStatus === 'failed' || t.runStatus === 'error',
+  'tests-running': (t) => t.runStatus === 'queued' || t.runStatus === 'running',
 }
 
-export function matches(t: Task, f: BoardFilter) {
-  if (f.featureId !== null && t.featureId !== f.featureId) return false
-  if (f.counter !== null && !counterMatches[f.counter](t)) return false
-  return true
+export function matches(t: Task, column: ColumnKey, f: BoardFilter) {
+  return f.counter === null || counterMatches[f.counter](t, column)
+}
+
+/** How many tasks each counter would show. */
+export function countAll(columns: { key: ColumnKey; tasks: Task[] }[]): Record<CounterFilter, number> {
+  const count = (filter: CounterFilter) => columns.reduce((n, c) => n + c.tasks.filter((t) => counterMatches[filter](t, c.key)).length, 0)
+  return {
+    'awaiting-approval': count('awaiting-approval'),
+    'needs-attention': count('needs-attention'),
+    'tests-running': count('tests-running'),
+  }
 }

@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
 import { StatusMessage } from '../../components/StatusMessage'
 import { UserMenu } from '../../components/UserMenu'
 import { buttonClass } from '../../components/buttonClass'
 import { Select, TextInput } from '../../components/controls'
-import { useWorkspace } from '../../data/core'
-import { useSession } from '../../data/session'
+import { useMockSession, useWorkspace } from '../../data/core'
 import { useFavorites, useProjects } from '../../data/views/projects'
 import { labels } from '../../labels/labels'
 import { FILTERS, needsYou, plural, SORTS, visibleProjects, type Filter, type Sort } from './filters'
@@ -30,7 +28,7 @@ const emptyText: Record<Filter, string> = {
 export function ProjectSelectPage() {
   const { data: projects, isPending, error } = useProjects()
   const { data: workspace } = useWorkspace()
-  const session = useSession()
+  const session = useMockSession()
   const { favorites, toggle } = useFavorites(session?.userId)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -42,7 +40,6 @@ export function ProjectSelectPage() {
     [projects, filter, query, sort, session?.userId, favorites],
   )
   const needs = useMemo(() => needsYou(projects ?? []), [projects])
-  const liveCount = projects?.filter((p) => !p.archived).length ?? 0
 
   return (
     <div className="stars min-h-screen bg-background text-text">
@@ -68,10 +65,7 @@ export function ProjectSelectPage() {
       <main className="mx-auto flex max-w-[1240px] flex-col gap-7 px-8 pt-10 pb-16">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex-[1_1_360px]">
-            <Eyebrow>
-              {labels.flightDeck} · {liveCount} {labels.projects}
-            </Eyebrow>
-            <h1 className="mt-1.5 mb-0 font-heading text-[32px] font-semibold">{labels.selectProject}</h1>
+            <h1 className="m-0 font-heading text-[32px] font-semibold">{labels.selectProject}</h1>
           </div>
           <button type="button" onClick={() => setCreating(true)} className={buttonClass('primary', 'min-h-[46px] px-5')}>
             <Icon name="plus" size={16} strokeWidth={2.25} />
@@ -88,7 +82,7 @@ export function ProjectSelectPage() {
               <Icon name="alert" size={16} />
               {labels.needsYou}
             </span>
-            {needs.approval > 0 && <span>{plural(needs.approval, lower(labels.task), lower(labels.tasks))} docking for review</span>}
+            {needs.approval > 0 && <span>{plural(needs.approval, lower(labels.task), lower(labels.tasks))} in mission review</span>}
             {needs.hails > 0 && <span>{plural(needs.hails, lower(labels.hail), lower(labels.hails))} from an {lower(labels.agent)}</span>}
             {needs.blockedProjects > 0 && (
               <span>{plural(needs.blockedProjects, lower(labels.project), lower(labels.projects))} with {lower(labels.blocked)}</span>

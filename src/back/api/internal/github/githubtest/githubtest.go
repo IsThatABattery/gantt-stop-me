@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"cmp"
 	"compress/gzip"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -57,6 +58,24 @@ type Repo struct {
 	issues []*Issue
 	files  map[string]map[string]string // commit sha -> path -> content
 	merges []string                     // the merge methods it allows
+	// branches are the branches the API created, by name, each with the files committed to it; the default branch,
+	// main, keeps its files at ref "".
+	branches map[string]map[string]string
+}
+
+// Branches returns the names of the branches created on the repository, sorted.
+func (r *Repo) Branches() []string {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	return slices.Sorted(maps.Keys(r.branches))
+}
+
+// BranchFile returns a file committed to a branch the API created.
+func (r *Repo) BranchFile(branch, path string) (string, bool) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	content, ok := r.branches[branch][path]
+	return content, ok
 }
 
 // Issue is an issue or a pull request in a Repo.
@@ -135,11 +154,16 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("DELETE /repositories/{id}/issues/{number}/labels/{label}", f.removeLabel)
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/comments", f.createComment)
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/assignees", f.addAssignees)
+	f.mux.HandleFunc("GET /repositories/{id}/assignees", f.listAssignable)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls", f.listPulls)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls/{number}", f.getPull)
 	f.mux.HandleFunc("PUT /repositories/{id}/pulls/{number}/merge", f.mergePull)
 	f.mux.HandleFunc("GET /repositories/{id}/collaborators/{login}/permission", f.permission)
 	f.mux.HandleFunc("GET /repositories/{id}/contents/{path...}", f.contents)
+	f.mux.HandleFunc("PUT /repositories/{id}/contents/{path...}", f.putContents)
+	f.mux.HandleFunc("GET /repositories/{id}/git/ref/heads/{branch...}", f.getRef)
+	f.mux.HandleFunc("POST /repositories/{id}/git/refs", f.createRef)
+	f.mux.HandleFunc("POST /repositories/{id}/pulls", f.createPull)
 	f.mux.HandleFunc("GET /repositories/{id}/tarball/{sha}", f.tarball)
 	f.mux.HandleFunc("GET "+codeload+"/{owner}/{name}/legacy.tar.gz/{sha}", f.codeload)
 	f.mux.HandleFunc("POST /graphql", f.graphql)
@@ -507,7 +531,7 @@ func (f *Fake) getRepo(w http.ResponseWriter, r *http.Request) {
 		permissions[name] = slices.Index(roles, role) > i
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id": rp.ID, "name": rp.Name, "full_name": rp.Owner + "/" + rp.Name, "private": true,
+		"id": rp.ID, "name": rp.Name, "full_name": rp.Owner + "/" + rp.Name, "private": true, "default_branch": "main",
 		"owner": map[string]string{"login": rp.Owner}, "permissions": permissions,
 	})
 }
@@ -625,11 +649,21 @@ func (f *Fake) editIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Title *string `json:"title"`
-		Body  *string `json:"body"`
-		State *string `json:"state"`
+		Title     *string   `json:"title"`
+		Body      *string   `json:"body"`
+		State     *string   `json:"state"`
+		Assignees *[]string `json:"assignees"`
 	}
 	json.NewDecoder(r.Body).Decode(&in)
+	if in.Assignees != nil {
+		// Like GitHub, a login that cannot be assigned is dropped without an error.
+		is.Assignees = []string{}
+		for _, login := range *in.Assignees {
+			if slices.Contains(f.assignable(rp), login) {
+				is.Assignees = append(is.Assignees, login)
+			}
+		}
+	}
 	if in.Title != nil {
 		is.Title = *in.Title
 	}
@@ -691,6 +725,33 @@ func (f *Fake) createComment(w http.ResponseWriter, r *http.Request) {
 	is.UpdatedAt = time.Now()
 	f.lastID++
 	writeJSON(w, http.StatusCreated, map[string]any{"id": f.lastID, "body": in.Body, "user": author})
+}
+
+// assignable returns the logins of the users granted a role on the repository, sorted, as the ones its issues can
+// be assigned to. The caller holds f.mu.
+func (f *Fake) assignable(rp *Repo) []string {
+	logins := []string{}
+	for token := range rp.roles {
+		if u, ok := f.users[token]; ok {
+			logins = append(logins, u.Login)
+		}
+	}
+	slices.Sort(logins)
+	return logins
+}
+
+// listAssignable serves GET /repositories/{id}/assignees.
+func (f *Fake) listAssignable(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, false)
+	if !ok {
+		return
+	}
+	users := []map[string]any{}
+	for _, login := range f.assignable(rp) {
+		u, _ := f.byLogin(login)
+		users = append(users, map[string]any{"id": u.ID, "login": login, "avatar_url": avatarURL(login)})
+	}
+	writePage(w, r, users, 100)
 }
 
 // addAssignees serves POST /repositories/{id}/issues/{number}/assignees, which needs push access, like GitHub.
@@ -813,7 +874,120 @@ func (f *Fake) contents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"type": "file", "name": path.Base(p), "path": p, "size": len(content),
-		"encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content))})
+		"encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content)), "sha": blobSHA(content)})
+}
+
+// getRef serves GET /repositories/{id}/git/ref/heads/{branch}: main, or a branch the API created.
+func (f *Fake) getRef(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, false)
+	if !ok {
+		return
+	}
+	b := r.PathValue("branch")
+	if _, created := rp.branches[b]; b != "main" && !created {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ref": "refs/heads/" + b, "object": map[string]string{"type": "commit", "sha": "head-of-" + b}})
+}
+
+// createRef serves POST /repositories/{id}/git/refs for a branch: 422 when it exists, like GitHub.
+func (f *Fake) createRef(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, true)
+	if !ok {
+		return
+	}
+	var in struct{ Ref, SHA string }
+	json.NewDecoder(r.Body).Decode(&in)
+	name, isBranch := strings.CutPrefix(in.Ref, "refs/heads/")
+	if _, exists := rp.branches[name]; !isBranch || in.SHA == "" || exists || name == "main" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "Reference already exists"})
+		return
+	}
+	if rp.branches == nil {
+		rp.branches = map[string]map[string]string{}
+	}
+	rp.branches[name] = nil // its files are main's until something is committed to it
+	writeJSON(w, http.StatusCreated, map[string]any{"ref": in.Ref, "object": map[string]string{"sha": in.SHA}})
+}
+
+// createPull serves POST /repositories/{id}/pulls from a branch the API created, by the token's user.
+func (f *Fake) createPull(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, true)
+	if !ok {
+		return
+	}
+	login := f.users[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")].Login
+	var in struct{ Title, Body, Head, Base string }
+	json.NewDecoder(r.Body).Decode(&in)
+	if _, created := rp.branches[in.Head]; !created || in.Base != "main" || in.Title == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "Validation Failed"})
+		return
+	}
+	is := rp.add(in.Title, in.Body, nil, true)
+	is.Pull = &Pull{Author: login, HeadSHA: "head-of-" + in.Head, HeadRepo: rp.ID}
+	out := rp.pullJSON(is)
+	out["html_url"] = fmt.Sprintf("https://github.example/%s/%s/pull/%d", rp.Owner, rp.Name, is.Number)
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// blobSHA stands in for a file's blob sha: it changes when the content does.
+func blobSHA(content string) string { return fmt.Sprintf("%x", sha1.Sum([]byte(content))) }
+
+// putContents serves PUT /repositories/{id}/contents/{path...} on the default branch, which the fake keeps as
+// ref "", with GitHub's sha check: 409 when sha is not the file's, and 422 when it is missing for a file that exists.
+func (f *Fake) putContents(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, true)
+	if !ok {
+		return
+	}
+	var in struct{ Message, Content, SHA, Branch string }
+	json.NewDecoder(r.Body).Decode(&in)
+	data, err := base64.StdEncoding.DecodeString(in.Content)
+	if err != nil || in.Message == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "Invalid request."})
+		return
+	}
+	p := r.PathValue("path")
+	files := rp.files[""] // a new branch starts with main's files
+	if in.Branch != "" && in.Branch != "main" {
+		if _, ok := rp.branches[in.Branch]; !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "Branch " + in.Branch + " not found"})
+			return
+		}
+		if rp.branches[in.Branch] == nil {
+			rp.branches[in.Branch] = maps.Clone(files)
+			if rp.branches[in.Branch] == nil {
+				rp.branches[in.Branch] = map[string]string{}
+			}
+		}
+		files = rp.branches[in.Branch]
+	}
+	old, exists := files[p]
+	switch {
+	case exists && in.SHA == "":
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": `"sha" wasn't supplied.`})
+		return
+	case exists && in.SHA != blobSHA(old), !exists && in.SHA != "":
+		writeJSON(w, http.StatusConflict, map[string]string{"message": "is at " + blobSHA(old) + " but expected " + in.SHA})
+		return
+	}
+	if in.Branch != "" && in.Branch != "main" {
+		files[p] = string(data)
+	} else {
+		if rp.files == nil {
+			rp.files = map[string]map[string]string{}
+		}
+		if rp.files[""] == nil {
+			rp.files[""] = map[string]string{}
+		}
+		rp.files[""][p] = string(data)
+	}
+	status := http.StatusOK
+	if !exists {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, map[string]any{"content": map[string]any{"path": p, "sha": blobSHA(string(data))}})
 }
 
 // codeload stands in for codeload.github.com, where GitHub redirects tarball downloads. Server.Client() sends every

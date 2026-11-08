@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -14,9 +15,10 @@ import (
 
 // Repo is a repository and the calling user's permissions on it.
 type Repo struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Owner struct {
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	DefaultBranch string `json:"default_branch"`
+	Owner         struct {
 		Login string `json:"login"`
 	} `json:"owner"`
 	Permissions struct {
@@ -217,6 +219,83 @@ func (c *Client) WorkflowFile(ctx context.Context, token string, repoID int64, s
 	return io.ReadAll(io.LimitReader(res.Body, maxWorkflowFile))
 }
 
+// WorkflowsPath is where a repository keeps its workflows.
+const WorkflowsPath = ".gantt/workflows.yml"
+
+// DefaultWorkflows returns the repository's workflows file on its default branch and the file's blob sha, both ""
+// when the branch has none.
+func (c *Client) DefaultWorkflows(ctx context.Context, token string, repoID int64) (content, sha string, err error) {
+	var f struct {
+		Content string `json:"content"` // base64, in lines
+		SHA     string `json:"sha"`
+	}
+	_, err = c.do(ctx, http.MethodGet, c.repo(repoID)+"/contents/"+WorkflowsPath, token, nil, nil, &f)
+	var ghErr *Error
+	if errors.As(err, &ghErr) && ghErr.Status == http.StatusNotFound {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(f.Content, "\n", ""))
+	if err != nil {
+		return "", "", fmt.Errorf("github: workflows file: %w", err)
+	}
+	return string(data), f.SHA, nil
+}
+
+// CreateBranch creates branch name at the default branch's head, and returns the default branch's name. A branch
+// that exists already is left as it is, without an error.
+func (c *Client) CreateBranch(ctx context.Context, token string, repoID int64, name string) (string, error) {
+	repo, err := c.RepoByID(ctx, token, repoID)
+	if err != nil {
+		return "", err
+	}
+	var head struct {
+		Object struct {
+			SHA string `json:"sha"`
+		} `json:"object"`
+	}
+	if _, err := c.do(ctx, http.MethodGet, c.repo(repoID)+"/git/ref/heads/"+url.PathEscape(repo.DefaultBranch), token, nil, nil, &head); err != nil {
+		return "", err
+	}
+	_, err = c.do(ctx, http.MethodPost, c.repo(repoID)+"/git/refs", token, nil,
+		map[string]string{"ref": "refs/heads/" + name, "sha": head.Object.SHA}, nil)
+	var ghErr *Error
+	if errors.As(err, &ghErr) && ghErr.Status == http.StatusUnprocessableEntity { // "Reference already exists"
+		err = nil
+	}
+	return repo.DefaultBranch, err
+}
+
+// CreatePullRequest opens a pull request from branch head into base and returns its number and web URL.
+func (c *Client) CreatePullRequest(ctx context.Context, token string, repoID int64, title, body, head, base string) (int, string, error) {
+	var out struct {
+		Number  int    `json:"number"`
+		HTMLURL string `json:"html_url"`
+	}
+	_, err := c.do(ctx, http.MethodPost, c.repo(repoID)+"/pulls", token, nil,
+		map[string]string{"title": title, "body": body, "head": head, "base": base}, &out)
+	return out.Number, out.HTMLURL, err
+}
+
+// PutWorkflows commits content as the workflows file on branch with message, replacing the blob sha, or creating the
+// file when sha is "". A sha that is no longer the file's fails with *Error{Status: 409}, and creating a file that
+// exists with *Error{Status: 422}. It returns the new blob's sha.
+func (c *Client) PutWorkflows(ctx context.Context, token string, repoID int64, branch, content, sha, message string) (string, error) {
+	in := map[string]string{"message": message, "content": base64.StdEncoding.EncodeToString([]byte(content)), "branch": branch}
+	if sha != "" {
+		in["sha"] = sha
+	}
+	var out struct {
+		Content struct {
+			SHA string `json:"sha"`
+		} `json:"content"`
+	}
+	_, err := c.do(ctx, http.MethodPut, c.repo(repoID)+"/contents/"+WorkflowsPath, token, nil, in, &out)
+	return out.Content.SHA, err
+}
+
 // Tarball streams the repository's source at commit sha: GitHub's .tar.gz, with everything in one owner-repo-sha/
 // folder after a pax global header. The caller closes it. It has no time limit of its own, since a large repository
 // takes longer than any one limit to download: ctx bounds it. GitHub redirects it to codeload.github.com, and the
@@ -231,10 +310,20 @@ func (c *Client) Tarball(ctx context.Context, token string, repoID int64, sha st
 }
 
 // UpdateIssue sets an issue's fields, any of "title", "body" and "state".
-func (c *Client) UpdateIssue(ctx context.Context, token string, repoID int64, number int, fields map[string]string) (Issue, error) {
+func (c *Client) UpdateIssue(ctx context.Context, token string, repoID int64, number int, fields map[string]any) (Issue, error) {
 	var is Issue
 	_, err := c.do(ctx, http.MethodPatch, c.issue(repoID, number), token, nil, fields, &is)
 	return is, err
+}
+
+// Assignable lists the users the repository's issues can be assigned to.
+func (c *Client) Assignable(ctx context.Context, token string, repoID int64) ([]User, error) {
+	users := []User{}
+	_, err := pages(ctx, c, token, c.repo(repoID)+"/assignees?per_page=100", "", func(page []User) bool {
+		users = append(users, page...)
+		return true
+	})
+	return users, err
 }
 
 // AddAssignees assigns logins to an issue and returns the issue as it is now.

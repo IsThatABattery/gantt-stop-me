@@ -4,8 +4,7 @@ import { Chip, type Tone } from '../../../components/Chip'
 import { Icon } from '../../../components/Icon'
 import { StatusMessage } from '../../../components/StatusMessage'
 import { Button, Textarea } from '../../../components/controls'
-import { useUser } from '../../../data/core'
-import { useSession } from '../../../data/session'
+import { useMockSession, useUser } from '../../../data/core'
 import { useAnswerQuestion, useDraft, useDraftDoc, useSkipQuestion } from '../../../data/views/plannerDoc'
 import type { BriefingMessage, DocSection, DocTopicState, FeatureDraft } from '../../../data/types'
 import { labels, plannerLabels, topicStateLabels } from '../../../labels/labels'
@@ -29,8 +28,7 @@ function Briefing({ draft }: { draft: FeatureDraft }) {
     <div className="flex flex-wrap items-start gap-6">
       <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-5">
         <div>
-          <div className="eyebrow">STEP 1 · {plannerLabels.steps[0].toUpperCase()}</div>
-          <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">Tell the {agentWord} about the {labels.feature.toLowerCase()}</h1>
+          <h1 className="m-0 font-heading text-[28px] font-semibold">Tell the {agentWord} about the {labels.feature.toLowerCase()}</h1>
           <p className="mt-2 mb-0 max-w-[640px] leading-normal text-text-muted-strong">
             The briefing {agentWord} asks one question at a time, then drafts an {labels.feature.toLowerCase()} doc for you to approve. Nothing is
             added to the board yet.
@@ -107,7 +105,7 @@ function StatusNote({ draft, base }: { draft: FeatureDraft; base: string }) {
 }
 
 function Message({ message: m }: { message: BriefingMessage }) {
-  const session = useSession()
+  const session = useMockSession()
   const { data: user } = useUser(session?.userId)
   if (m.from === 'agent') {
     return (

@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { keys } from '../keys'
-import { db, delay, mustFind, newId, NotFoundError, signedInUserId, useMockMutation } from '../mock/store'
+import { db, delay, mustFind, newId, NotFoundError, signedInUserId } from '../mock/store'
+import { useApiMutation } from '../api/client'
 import type { Agent, Assignee, Autonomy, Criterion, Epic, Feature, ID, Priority, Sprint, Subtask, Task, User } from '../types'
 
 /** Choices for the form's selects. */
@@ -16,7 +17,7 @@ export interface FormOptions {
 
 export function getFormOptions(projectId: ID): Promise<FormOptions> {
   const project = db.projects.find((p) => p.id === projectId)
-  if (!project) return Promise.reject(new NotFoundError('Project'))
+  if (!project) return Promise.reject(new NotFoundError('Project not found'))
   return delay({
     epics: db.epics.filter((e) => e.projectId === projectId),
     features: db.features.filter((f) => f.projectId === projectId),
@@ -28,7 +29,7 @@ export function getFormOptions(projectId: ID): Promise<FormOptions> {
 
 export function getFeature(projectId: ID, featureId: ID): Promise<Feature> {
   const f = db.features.find((x) => x.id === featureId && x.projectId === projectId)
-  return f ? delay(f) : Promise.reject(new NotFoundError('Feature'))
+  return f ? delay(f) : Promise.reject(new NotFoundError('Feature not found'))
 }
 
 /** A feature's tasks, for the list beside the edit form. */
@@ -43,7 +44,7 @@ export interface TaskForEdit {
 
 export function getTaskForEdit(projectId: ID, taskId: ID): Promise<TaskForEdit> {
   const task = db.tasks.find((t) => t.id === taskId && t.projectId === projectId)
-  if (!task) return Promise.reject(new NotFoundError('Task'))
+  if (!task) return Promise.reject(new NotFoundError('Task not found'))
   return delay({ task, subtasks: db.subtasks.filter((s) => s.taskId === taskId) })
 }
 
@@ -242,15 +243,15 @@ const touched = (projectId: ID) => [
 ]
 
 export const useCreateFeature = (projectId: ID) =>
-  useMockMutation((input: ItemInput) => createFeature(projectId, input), touched(projectId))
+  useApiMutation((input: ItemInput) => createFeature(projectId, input), touched(projectId))
 
-export const useCreateTask = (projectId: ID) => useMockMutation((input: ItemInput) => createTask(projectId, input), touched(projectId))
+export const useCreateTask = (projectId: ID) => useApiMutation((input: ItemInput) => createTask(projectId, input), touched(projectId))
 
 export const useUpdateFeature = (projectId: ID, featureId: ID) =>
-  useMockMutation((edit: FeatureEdit) => updateFeature(projectId, featureId, edit), touched(projectId))
+  useApiMutation((edit: FeatureEdit) => updateFeature(projectId, featureId, edit), touched(projectId))
 
 export const useUpdateTask = (projectId: ID, taskId: ID) =>
-  useMockMutation((edit: TaskEdit) => updateTask(projectId, taskId, edit), touched(projectId))
+  useApiMutation((edit: TaskEdit) => updateTask(projectId, taskId, edit), touched(projectId))
 
 export const useArchiveFeature = (projectId: ID, featureId: ID) =>
-  useMockMutation(() => archiveFeature(projectId, featureId), touched(projectId))
+  useApiMutation(() => archiveFeature(projectId, featureId), touched(projectId))

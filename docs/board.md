@@ -33,6 +33,82 @@ Adds a GitHub repository as a project, setting up its board labels and a task pe
 { "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }
 ```
 
+## List projects
+
+Returns the projects the caller has added or opened, most recently visited first, keeping only those their GitHub account still sees. Opening a project's board, which every project page loads, counts as a visit. It never lists other repositories the account can see.
+
+`GET /api/projects`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `projects`, each as [Add project](#add-project) answers it; `[]` for none |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `502` | `github_error` |
+
+A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. Unlinking GitHub forgets every project.
+
+```json
+{ "projects": [{ "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }] }
+```
+
+## List assigned tasks
+
+Returns the open tasks assigned to the caller's GitHub account, grouped by project in [List projects](#list-projects) order, leaving out projects with none.
+
+`GET /api/me/tasks`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `projects`, each a `project` as [Add project](#add-project) answers it and its `tasks` in board order; `[]` for none |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `502` | `github_error` |
+
+Each task is as [Show board](#show-board) gives it, with `column`, the `key` and `name` of the column it is in. Assignees are as the project's last sync read them, so an assignment made on GitHub shows once someone opens that project's board.
+
+```json
+{
+  "projects": [
+    {
+      "project": { "id": 1, "owner": "ada", "name": "gantt", "permission": "write" },
+      "tasks": [
+        {
+          "id": 7,
+          "issueNumber": 12,
+          "columnId": 3,
+          "position": 1,
+          "version": 2,
+          "title": "Draw the timeline",
+          "state": "open",
+          "url": "https://github.com/ada/gantt/issues/12",
+          "runStatus": "running",
+          "needsAttention": null,
+          "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1" }],
+          "column": { "key": "testing", "name": "Testing" }
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## Show board
 
 Returns the project's columns and tasks, syncing the tasks from the repository's issues first when the last sync is over 30 seconds old.
@@ -56,7 +132,7 @@ Returns the project's columns and tasks, syncing the tasks from the repository's
 | `404` | `not_found` |
 | `502` | `github_error` |
 
-Every task, here and wherever an endpoint answers one, has `runStatus`, its latest test run's status as [List test runs](automation.md#list-test-runs) gives it, `null` when it has none, `needsAttention`, why it waits in Testing after a runner error, `null` while clear, and `assignees`, its issue's assignees as each `login` and `avatarUrl`, as last read from GitHub like its title.
+Every task, here and wherever an endpoint answers one, has `runStatus`, its latest test run's status as [List test runs](automation.md#list-test-runs) gives it, `null` when it has none, `needsAttention`, why it waits in Testing after a runner error, `null` while clear, `assignees`, its issue's assignees as each `login` and `avatarUrl`, as last read from GitHub like its title, and `branch`, the branch made for it on GitHub when it first moved to In Progress, `null` until then.
 
 ```json
 {
@@ -214,7 +290,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
 
 ## Edit task
 
-Changes the title or body of a task's issue on GitHub.
+Changes the title, body or assignees of a task's issue on GitHub. GitHub drops an assignee who cannot be assigned to the repository's issues without an error, so the answer's `assignees` show who was.
 
 `PATCH /api/projects/{id}/tasks/{taskID}`
 
@@ -225,8 +301,11 @@ Changes the title or body of a task's issue on GitHub.
 | `session` | cookie | string | required |
 | `id` | path | integer | a project's `id` |
 | `taskID` | path | integer | a task's `id` in the project |
-| `title` | body | string | trimmed, 1 to 256 characters; optional when `body` is sent |
-| `body` | body | string | at most 65536 characters; optional when `title` is sent |
+| `title` | body | string | trimmed, 1 to 256 characters; optional |
+| `body` | body | string | at most 65536 characters; optional |
+| `assignees` | body | string array | optional; GitHub logins, at most 10, each once; replaces the issue's assignees, and `[]` unassigns everyone |
+
+At least one of `title`, `body` and `assignees` is sent.
 
 ```json
 { "title": "Draw the timeline by week", "body": "One bar per task." }
@@ -237,7 +316,7 @@ Changes the title or body of a task's issue on GitHub.
 | Status | Body |
 | --- | --- |
 | `200` | task |
-| `400` | `invalid_title`, `invalid_body`, `bad_request` |
+| `400` | `invalid_title`, `invalid_body`, `invalid_assignees`, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
@@ -257,6 +336,33 @@ Changes the title or body of a task's issue on GitHub.
   "needsAttention": null,
   "assignees": []
 }
+```
+
+## List assignable users
+
+Returns the people the project's tasks can be assigned to, as GitHub lists the repository's assignable users.
+
+`GET /api/projects/{id}/assignees`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `assignees`, each a `login` and `avatarUrl` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+```json
+{ "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }] }
 ```
 
 ## Set tests
@@ -334,7 +440,7 @@ The issue's section is read first. When it changed on GitHub since the task last
 
 ## Move task
 
-Puts a task in a column before another task or at the column's end, relabeling its issue on GitHub when the column changes and closing or reopening it when it enters or leaves Closed.
+Puts a task in a column before another task or at the column's end, relabeling its issue on GitHub when the column changes and closing or reopening it when it enters or leaves Closed. A task's first move into In Progress also makes its branch on GitHub off the default branch's head, `feature/{issue number}-{title}`, with the title in at most 40 lowercase letters, digits and hyphens; a branch of that name already there is kept. A failure to make it is logged and leaves `branch` `null`; the move still happens.
 
 `POST /api/projects/{id}/tasks/{taskID}/move`
 

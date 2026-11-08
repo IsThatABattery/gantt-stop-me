@@ -3,9 +3,11 @@ import type { ID } from './types'
 // Every TanStack Query key in one place, so a write in one view can refresh
 // another (e.g. approving in the drawer refreshes the board).
 export const keys = {
+  me: ['me'] as const,
   workspace: ['workspace'] as const,
   user: (id: ID | undefined) => ['user', id] as const,
   projects: ['projects'] as const,
+  assigned: ['assigned'] as const,
   project: (projectId: ID) => ['project', projectId] as const,
   board: (projectId: ID) => ['board', projectId] as const,
   task: (projectId: ID, taskId: ID) => ['task', projectId, taskId] as const,
@@ -16,4 +18,11 @@ export const keys = {
   draft: (draftId: ID) => ['draft', draftId] as const,
   proposals: (draftId: ID) => ['proposals', draftId] as const,
   settings: ['settings'] as const,
+  providers: ['providers'] as const,
+  planning: ['planning'] as const,
+  automation: (projectId: ID) => ['automation', projectId] as const,
+  plans: (projectId: ID) => ['plans', projectId] as const,
+  plan: (projectId: ID, planId: ID) => ['plans', projectId, planId] as const,
+  runs: (projectId: ID, taskId: ID) => ['runs', projectId, taskId] as const,
+  run: (projectId: ID, runId: ID) => ['run', projectId, runId] as const,
 }

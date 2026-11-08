@@ -1,68 +1,35 @@
-import { useEffect, useState } from 'react'
-import type { Project, Sprint } from '../../data/types'
+import { Icon } from '../../components/Icon'
+import type { Project } from '../../data/api/types'
 import { labels } from '../../labels/labels'
-import { countdown, isFinalDay, shortDate } from '../../lib/time'
 import type { CounterFilter } from './filters'
 
 interface TelemetryBarProps {
   project: Project
-  sprint: Sprint | null
-  counts: { awaitingApproval: number; blocked: number; agentsActive: number }
+  counts: Record<CounterFilter, number>
   /** The counter currently filtering the board */
   active: CounterFilter | null
   /** Clicking the active counter again clears the filter */
   onToggle: (filter: CounterFilter) => void
 }
 
-/** Ticks once a minute so the countdown stays current. */
-function useNow() {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-  return now
-}
-
-// Top bar from Main.dc.html. The three counters double as board filters.
-export function TelemetryBar({ project, sprint, counts, active, onToggle }: TelemetryBarProps) {
-  const now = useNow()
-  const finalDay = sprint ? isFinalDay(sprint.end, now) : false
-
+// Top bar from Main.dc.html: the repository, then three counters that double
+// as board filters. The launch-window countdown and burndown wait on sprints
+// in the API (docs/implementation/api-gaps.md).
+export function TelemetryBar({ project, counts, active, onToggle }: TelemetryBarProps) {
+  const repo = `${project.owner}/${project.name}`
   return (
     <header className="flex flex-wrap items-center gap-6 border-b border-line-soft bg-header px-7 py-5">
       <div className="min-w-0 flex-[1_1_320px]">
-        <div className="eyebrow">
-          {labels.project} · {project.name}
-          {sprint && ` · ${labels.sprintName(sprint.number)}`}
-        </div>
-        <h1 className="mt-1.5 mb-0 font-heading text-2xl font-semibold">{sprint ? sprint.goal : project.name}</h1>
-      </div>
-
-      <div className="flex items-center gap-3 rounded-control border border-line bg-surface px-3.5 py-2">
-        {sprint ? (
-          <>
-            <span className="text-xs text-text-muted">{labels.tMinus}</span>
-            <span
-              className={`font-mono text-xl font-medium ${finalDay ? 'text-warning' : ''}`}
-              aria-label={`${countdown(sprint.end, now)} left in ${labels.sprintName(sprint.number).toLowerCase()}`}
-            >
-              {countdown(sprint.end, now)}
-            </span>
-            {/* Static sample burndown until sprint data exists. */}
-            <svg width="96" height="32" viewBox="0 0 96 32" role="img" aria-label="Burndown trending slightly behind ideal">
-              <path d="M2 4L94 28" stroke="var(--color-line)" strokeWidth="1.5" strokeDasharray="3 3" fill="none" />
-              <path d="M2 4L18 7L34 9L50 15L66 17L78 20" stroke="var(--color-ion)" strokeWidth="2" fill="none" />
-            </svg>
-          </>
-        ) : (
-          <span className="text-[13px] text-text-muted-strong">
-            {labels.betweenSprints}
-            {project.nextSprintStart && (
-              <span className="ml-2 font-mono text-text-muted">{labels.nextSprint(shortDate(project.nextSprintStart))}</span>
-            )}
-          </span>
-        )}
+        <h1 className="m-0 font-heading text-2xl font-semibold">{project.name}</h1>
+        <a
+          href={`https://github.com/${repo}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[13px] text-text-muted-strong"
+        >
+          <Icon name="github" size={14} />
+          {repo}
+        </a>
       </div>
 
       <div className="flex flex-wrap gap-2.5">
@@ -70,7 +37,7 @@ export function TelemetryBar({ project, sprint, counts, active, onToggle }: Tele
           <FilterCounter
             key={c.filter}
             tone={c.tone}
-            count={counts[c.count]}
+            count={counts[c.filter]}
             label={c.label}
             pressed={active === c.filter}
             onClick={() => onToggle(c.filter)}
@@ -82,15 +49,15 @@ export function TelemetryBar({ project, sprint, counts, active, onToggle }: Tele
 }
 
 const counters = [
-  { filter: 'awaiting-approval', tone: 'warning', count: 'awaitingApproval', label: labels.awaitingApproval },
-  { filter: 'blocked', tone: 'critical', count: 'blocked', label: labels.blocked },
-  { filter: 'agents-active', tone: 'astronaut', count: 'agentsActive', label: labels.agentsActive },
+  { filter: 'awaiting-approval', tone: 'warning', label: labels.awaitingApproval },
+  { filter: 'needs-attention', tone: 'critical', label: labels.blocked },
+  { filter: 'tests-running', tone: 'ion', label: labels.testsRunning },
 ] as const
 
 const tones = {
   warning: { box: 'border-warning bg-warning/8', on: 'bg-warning/20 ring-2 ring-warning', num: 'text-warning' },
   critical: { box: 'border-critical bg-critical/8', on: 'bg-critical/20 ring-2 ring-critical', num: 'text-critical' },
-  astronaut: { box: 'border-astronaut bg-astronaut/8', on: 'bg-astronaut/20 ring-2 ring-astronaut', num: 'text-astronaut' },
+  ion: { box: 'border-ion bg-ion/8', on: 'bg-ion/20 ring-2 ring-ion', num: 'text-ion' },
 }
 
 // components/Counter with a pressed state. Kept here while the shared

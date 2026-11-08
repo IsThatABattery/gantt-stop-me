@@ -110,6 +110,67 @@ Turns automation off, forgets the project's pull request records, and cancels it
 | `404` | `not_found` |
 | `502` | `github_error` |
 
+## Show workflows
+
+Returns the repository's workflows file, `.gantt/workflows.yml`, on its default branch, and the workflows a test run would use from it. A run reads the file at the commit it tests, so a pull request can change its own workflows.
+
+`GET /api/projects/{id}/workflows`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the workflows file |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+`content` is the file's text, `""` without a file. `sha` is its blob's sha, for [Save workflows](#save-workflows), `null` without a file. `workflows` are each workflow's `name` and `description`: the file's, or without a file the one `default` workflow, which builds the `Dockerfile` at the repository's root. `error` says why the file does not parse, with `workflows` empty, else `null`.
+
+```json
+{
+  "content": "workflows:\n  frontend:\n    description: React UI\n    context: src/front\n",
+  "sha": "3d21ec53a331a6f037a91c368710b99387d012c1",
+  "workflows": [{ "name": "frontend", "description": "React UI" }],
+  "error": null
+}
+```
+
+## Save workflows
+
+Commits a workflows file that parses to a new branch off the default branch, `chore/gantt-workflows-{unix time}`, and opens a pull request of it into the default branch, with the caller's GitHub credential. The default branch keeps its file until the pull request merges.
+
+`PUT /api/projects/{id}/workflows`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `content` | body | string | a workflows file that parses, at most 64 KiB |
+| `sha` | body | string or null | the `sha` [Show workflows](#show-workflows) answered; `null` to create the file |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `branch`, and `pullRequest` with its `number` and `url` |
+| `400` | `invalid_workflows`, whose message names the field and line, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `workflows_changed`: the file changed on GitHub since it was loaded; nothing was saved |
+| `502` | `github_error` |
+
 ## Generate webhook secret
 
 Replaces the secret GitHub signs the project's webhook deliveries with, and returns it this once with the payload URL to enter on GitHub, for `pull_request` events with content type `application/json`.
@@ -457,6 +518,33 @@ A merge stands even when GitHub then fails the move to Closed: the answer is sti
   "approvedAt": "2026-11-08T10:02:31Z"
 }
 ```
+
+## Retest task
+
+Starts a new test run of a task's linked pull request at its head, as a move into Testing does, cancelling the task's queued or running one. The card stays in its column: only a run of a task in Testing moves it.
+
+`POST /api/projects/{id}/tasks/{taskID}/retest`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the task, as [Get task](board.md#get-task) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `automation_off`, `taken_over` |
+| `502` | `github_error` |
+
+With no linked pull request, or more than one, the run ends at once as a runner error saying so, as from a move.
 
 ## Request changes
 

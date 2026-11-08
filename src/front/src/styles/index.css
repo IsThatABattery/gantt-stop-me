@@ -38,6 +38,17 @@
   --radius-dialog: 16px;
 
   --animate-orbit-pulse: orbit-pulse 2.4s ease-in-out infinite;
+  --animate-liftoff: liftoff 0.9s ease-in-out infinite;
+
+  @keyframes liftoff {
+    0%,
+    100% {
+      transform: translateY(1px);
+    }
+    50% {
+      transform: translateY(-1.5px);
+    }
+  }
 
   @keyframes orbit-pulse {
     0%,
@@ -76,6 +87,10 @@
     font-family: var(--font-ui);
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 
   a {

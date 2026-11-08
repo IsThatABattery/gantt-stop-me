@@ -1,6 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
 import type { FeedbackOutcome } from '../data/types'
-import { Eyebrow } from './Eyebrow'
 import { RadioCard } from './RadioCard'
 import { Button, Checkbox, Select, Textarea } from './controls'
 
@@ -66,8 +65,7 @@ export function FeedbackForm({
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
       <div>
-        <Eyebrow>Deny with feedback</Eyebrow>
-        <h2 className="mt-1.5 mb-0 font-heading text-lg font-semibold">{heading}</h2>
+        <h2 className="m-0 font-heading text-lg font-semibold">{heading}</h2>
         <p className="mt-1.5 mb-0 leading-normal text-text-muted-strong">{intro}</p>
       </div>
 

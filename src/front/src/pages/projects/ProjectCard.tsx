@@ -30,11 +30,8 @@ export function ProjectCard({ project: p, favorite, onToggleFavorite }: ProjectC
         to={`/projects/${p.id}`}
         className="flex h-full flex-col gap-4 rounded-[14px] border border-line bg-surface p-5 text-text no-underline transition-[border-color,translate] hover:-translate-y-px hover:border-ion hover:text-text"
       >
-        <div className="flex items-start gap-3.5 pr-10">
-          <span className="inline-flex size-11 flex-none items-center justify-center rounded-card border border-line bg-surface-sunken">
-            <Icon name="orbit" size={26} strokeWidth={1.6} style={{ color: p.color }} />
-          </span>
-          <div className="min-w-0 flex-1">
+        <div className="pr-10">
+          <div className="min-w-0">
             <div className="font-heading text-[19px] font-semibold">{p.name}</div>
             {p.description && <div className="mt-1 text-[13px] leading-[1.45] text-text-muted-strong">{p.description}</div>}
           </div>

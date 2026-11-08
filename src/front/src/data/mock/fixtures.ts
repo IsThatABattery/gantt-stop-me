@@ -87,47 +87,18 @@ export const projects: Project[] = [
     lastActivityAt: at(-1 * HOUR),
     archived: false,
   },
-  {
-    id: 'deep-field',
-    workspaceId: 'ws-1',
-    name: 'Deep Field',
-    description: 'Data pipeline for long-running analysis.',
-    defaultAutonomy: 0,
-    activeSprintId: null,
-    nextSprintStart: at(9 * DAY),
-    memberIds: ['u-ab', 'u-cn', 'u-tv', 'u-mk'],
-    color: '#4ADE80',
-    lastActivityAt: at(-2 * DAY),
-    archived: false,
-  },
-  {
-    id: 'ground-station',
-    workspaceId: 'ws-1',
-    name: 'Ground Station',
-    description: 'Admin console and operator tooling.',
-    defaultAutonomy: 1,
-    activeSprintId: 's-gs-3',
-    nextSprintStart: null,
-    memberIds: ['u-jl', 'u-sr'],
-    color: '#FBBF24',
-    lastActivityAt: at(-3 * HOUR),
-    archived: false,
-  },
 ]
 
 export const sprints: Sprint[] = [
   { id: 's-on-14', projectId: 'orbital-nav', number: 14, goal: 'Ship the astronaut approval flow end to end', start: at(-7 * DAY), end: at(3 * DAY + 6 * HOUR) },
   { id: 's-on-15', projectId: 'orbital-nav', number: 15, goal: 'Realtime board updates', start: at(3 * DAY + 6 * HOUR), end: at(17 * DAY) },
   { id: 's-lr-6', projectId: 'lunar-relay', number: 6, goal: 'Stabilise the ground link under load', start: at(-6 * DAY), end: at(8 * DAY + 2 * HOUR) },
-  { id: 's-gs-3', projectId: 'ground-station', number: 3, goal: 'Operator tooling for roster changes', start: at(-12 * DAY), end: at(1 * DAY + 20 * HOUR) },
 ]
 
 /** Counts the API would return with the project list. */
 export const projectStats: Record<string, ProjectStats> = {
   'orbital-nav': { tasksTotal: 26, tasksLanded: 14, awaitingApproval: 2, blocked: 1, hails: 1, activeAgents: 4 },
   'lunar-relay': { tasksTotal: 18, tasksLanded: 9, awaitingApproval: 1, blocked: 0, hails: 0, activeAgents: 2 },
-  'deep-field': { tasksTotal: 31, tasksLanded: 31, awaitingApproval: 0, blocked: 0, hails: 0, activeAgents: 0 },
-  'ground-station': { tasksTotal: 12, tasksLanded: 5, awaitingApproval: 0, blocked: 0, hails: 0, activeAgents: 1 },
 }
 
 export const epics: Epic[] = [
@@ -230,9 +201,9 @@ const seeds: TaskSeed[] = [
   { key: 'PAY-44', title: 'Generate API client from OpenAPI spec', epicId: 'e-comms', featureId: 'f-realtime', assignee: a('a-1'), estimate: 5, column: 'in-progress', status: 'working' },
   { key: 'PAY-45', title: 'Fix flaky websocket reconnect test', epicId: 'e-comms', featureId: 'f-realtime', assignee: a('a-3'), estimate: 3, column: 'in-progress', status: 'hail' },
   { key: 'PAY-46', title: 'Sprint capacity gauge', epicId: 'e-telemetry', featureId: 'f-telemetry', assignee: u('u-tv'), estimate: 4, column: 'in-progress', status: 'working' },
-  // Static fire · Testing
+  // Flight check · Testing
   { key: 'PAY-43', title: 'Upgrade build to Node 22', epicId: 'e-core', featureId: 'f-build', assignee: a('a-4'), estimate: 3, column: 'testing', status: 'blocked', prNumber: 207, blockedReason: 'CI runner image missing' },
-  // Docking · User Check
+  // Mission review · User Check
   {
     key: 'PAY-41',
     title: 'Pagination for backlog endpoint',

@@ -13,7 +13,7 @@ func TestRetryAFailedTurn(t *testing.T) {
 	f.work() // the fake answers 500 once its replies run out
 
 	pl = f.plan(pl.ID)
-	if pl.Status != "briefing" || pl.Pending != nil || orNull(pl.Error) != "The agent's turn failed: POST /chat/completions answered HTTP 500." ||
+	if pl.Status != "briefing" || pl.Pending != nil || orNull(pl.Error) != "The agent's turn failed: POST /responses answered HTTP 500." ||
 		pl.section("goal").State != "not_yet" || len(pl.Messages) != 0 {
 		t.Fatalf("plan after a failed turn %+v", pl)
 	}

@@ -1,5 +1,7 @@
 import {
   closestCorners,
+  pointerWithin,
+  type CollisionDetection,
   DndContext,
   DragOverlay,
   MouseSensor,
@@ -15,43 +17,44 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { Outlet } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { StatusMessage } from '../../components/StatusMessage'
-import { ConflictError } from '../../data/core'
-import { useBoard, useMoveTask } from '../../data/views/board'
-import { COLUMN_ORDER, type Board, type ColumnKey, type ID, type Task } from '../../data/types'
+import type { Task } from '../../data/api/types'
+import { ConflictError } from '../../data/errors'
+import { COLUMN_ORDER, type ColumnKey } from '../../data/types'
+import { useBoard, useMoveTask, type Board, type BoardColumn as Column } from '../../data/views/board'
 import { columnLabels, labels } from '../../labels/labels'
 import { BoardColumn } from './BoardColumn'
 import { BoardToolbar } from './BoardToolbar'
-import { isFiltered, matches, noFilter, type BoardFilter, type CounterFilter } from './filters'
+import { countAll, isFiltered, matches, noFilter, type BoardFilter, type CounterFilter } from './filters'
 import { TaskCard } from './TaskCard'
 import { TelemetryBar } from './TelemetryBar'
 import { drawTrail } from './trail'
 
-// Mission control, from Main.dc.html. Cards drag between and within columns,
-// the objective select and the telemetry counters filter them, and the
-// keyboard drives it all (AGENT_BRIEF §10). The <Outlet /> renders the
+// Mission control, from Main.dc.html. Cards are the repository's issues. They
+// drag between and within columns, the telemetry counters filter them, and
+// the keyboard drives it all (AGENT_BRIEF §10). The <Outlet /> renders the
 // payload drawer and the create dialogs over the board.
 export function BoardPage() {
   const project = useProjectContext()
-  const { data: board, isPending, error } = useBoard(project.id)
+  const { data: board, isPending, error } = useBoard(String(project.id))
 
   if (isPending) return <StatusMessage title={`Loading ${labels.board.toLowerCase()}…`} />
   if (error) return <StatusMessage title="Something went wrong" body={error.message} />
   return <BoardView board={board} />
 }
 
-/** Card ids per column, as shown. */
-type Layout = Record<ColumnKey, ID[]>
+/** Card ids per column, as shown. Ids are strings here, as drag and drop needs. */
+type Layout = Record<ColumnKey, string[]>
 
 interface DragState {
-  activeId: ID
+  activeId: string
   layout: Layout
   /** Where the card was when the drag started */
-  origin: { column: ColumnKey; before: ID | null; rect: DOMRect | null }
+  origin: { column: ColumnKey; before: string | null; rect: DOMRect | null }
 }
 
 /** A move waiting for the board to show it: then the trail draws and focus follows. */
 interface PendingMove {
-  taskId: ID
+  taskId: string
   column: ColumnKey
   from: DOMRect | null
   refocus: boolean
@@ -60,7 +63,7 @@ interface PendingMove {
 const MOVE_LEFT = '['
 const MOVE_RIGHT = ']'
 
-const isColumnId = (id: ID) => id.startsWith('column:')
+const isColumnId = (id: string) => id.startsWith('column:')
 
 function BoardView({ board }: { board: Board }) {
   const [filter, setFilter] = useState<BoardFilter>(noFilter)
@@ -72,53 +75,51 @@ function BoardView({ board }: { board: Board }) {
 
   const lookup = useMemo(() => {
     const tasks = board.columns.flatMap((c) => c.tasks)
-    const taskIds = new Set(tasks.map((t) => t.id))
     return {
-      task: new Map(tasks.map((t) => [t.id, t])),
-      epic: new Map(board.epics.map((e) => [e.id, e])),
-      feature: new Map(board.features.map((f) => [f.id, f])),
-      user: new Map(board.users.map((u) => [u.id, u])),
-      agent: new Map(board.agents.map((a) => [a.id, a])),
-      counts: {
-        awaitingApproval: tasks.filter((t) => t.column === 'user-check' && t.status !== 'landed').length,
-        blocked: tasks.filter((t) => t.status === 'blocked').length,
-        agentsActive: board.agents.filter((a) => a.state !== 'idle' && a.currentTaskId && taskIds.has(a.currentTaskId))
-          .length,
-      },
+      task: new Map(tasks.map((t) => [String(t.id), t])),
+      column: new Map<ColumnKey, Column>(board.columns.map((c) => [c.key, c])),
+      keyOf: new Map(board.columns.map((c) => [c.id, c.key])),
+      counts: countAll(board.columns),
     }
   }, [board])
+  const columnOf = (t: Task) => lookup.keyOf.get(t.columnId)
 
-  const visible = useMemo(
-    () =>
-      Object.fromEntries(
-        board.columns.map((c) => [c.key, c.tasks.filter((t) => matches(t, filter)).map((t) => t.id)]),
-      ) as Layout,
-    [board, filter],
-  )
+  const visible = useMemo(() => {
+    const ids = (key: ColumnKey) =>
+      (board.columns.find((c) => c.key === key)?.tasks ?? []).filter((t) => matches(t, key, filter)).map((t) => String(t.id))
+    return Object.fromEntries(COLUMN_ORDER.map((key) => [key, ids(key)])) as Layout
+  }, [board, filter])
   const layout = drag?.layout ?? visible
   const filtered = isFiltered(filter)
 
-  const onRejected = useCallback((task: Task, error: Error) => {
-    pending.current = null
-    const back = columnLabels[task.column].name
-    const why = error instanceof ConflictError ? 'someone else changed it first' : error.message
-    setRejection(`${task.key} couldn't move: ${why}. It's back in ${back}.`)
-  }, [])
-  const move = useMoveTask(board.project.id, onRejected)
+  const onRejected = useCallback(
+    (task: Task, error: Error) => {
+      pending.current = null
+      const back = lookup.keyOf.get(task.columnId)
+      const why = error instanceof ConflictError && error.code === 'conflict' ? 'someone else changed it first' : error.message
+      const sentence = /[.!?]$/.test(why) ? why : `${why}.`
+      setRejection(`#${task.issueNumber} couldn't move: ${sentence}${back ? ` It's back in ${columnLabels[back].name}.` : ''}`)
+    },
+    [lookup],
+  )
+  const move = useMoveTask(String(board.project.id), onRejected)
 
-  const cardEl = (id: ID) => gridRef.current?.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`) ?? null
+  const cardEl = (id: string) => gridRef.current?.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`) ?? null
 
-  function requestMove(task: Task, column: ColumnKey, before: ID | null, from: DOMRect | null, refocus: boolean) {
+  function requestMove(task: Task, column: ColumnKey, before: string | null, from: DOMRect | null, refocus: boolean) {
+    const target = lookup.column.get(column)
+    if (!target) return
     setRejection(null)
-    pending.current = { taskId: task.id, column, from: column === task.column ? null : from, refocus }
-    setAnnouncement(`${task.key} moved to ${columnLabels[column].name}.`)
-    move.mutate({ taskId: task.id, column, beforeTaskId: before, version: task.version })
+    pending.current = { taskId: String(task.id), column, from: column === columnOf(task) ? null : from, refocus }
+    setAnnouncement(`#${task.issueNumber} moved to ${columnLabels[column].name}.`)
+    move.mutate({ taskId: task.id, columnId: target.id, beforeTaskId: before === null ? null : Number(before), version: task.version })
   }
 
   // Once the board shows a move: draw the trail and keep focus on the card.
   useEffect(() => {
     const p = pending.current
-    if (!p || lookup.task.get(p.taskId)?.column !== p.column) return
+    const task = p && lookup.task.get(p.taskId)
+    if (!p || !task || lookup.keyOf.get(task.columnId) !== p.column) return
     pending.current = null
     const el = cardEl(p.taskId)
     if (!el) return
@@ -133,7 +134,14 @@ function BoardView({ board }: { board: Board }) {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
   )
 
-  const containerOf = (id: ID, l: Layout): ColumnKey | undefined =>
+  // What's under the pointer wins: closestCorners alone lets nearby cards beat an empty column, whose corners are
+  // far away, so a card could never be dropped into one.
+  const collision: CollisionDetection = (args) => {
+    const hits = pointerWithin(args)
+    return hits.length ? hits : closestCorners(args)
+  }
+
+  const containerOf = (id: string, l: Layout): ColumnKey | undefined =>
     isColumnId(id) ? (id.slice('column:'.length) as ColumnKey) : COLUMN_ORDER.find((k) => l[k].includes(id))
 
   function onDragStart({ active }: DragStartEvent) {
@@ -199,7 +207,7 @@ function BoardView({ board }: { board: Board }) {
     const row = visible[column].indexOf(id)
     const col = COLUMN_ORDER.indexOf(column)
 
-    const focusCard = (target: ID | undefined) => {
+    const focusCard = (target: string | undefined) => {
       if (!target) return
       e.preventDefault()
       cardEl(target)?.focus()
@@ -233,26 +241,7 @@ function BoardView({ board }: { board: Board }) {
 
   // ---- Render ----
 
-  const ownerOf = (t: Task) => {
-    if (!t.assignee) return null
-    if (t.assignee.kind === 'agent') {
-      const agent = lookup.agent.get(t.assignee.id)
-      return agent ? { kind: 'agent' as const, agent } : null
-    }
-    const user = lookup.user.get(t.assignee.id)
-    return user ? { kind: 'user' as const, user } : null
-  }
-
-  const card = (t: Task, overlay = false) => (
-    <TaskCard
-      task={t}
-      epic={lookup.epic.get(t.epicId)}
-      feature={lookup.feature.get(t.featureId)}
-      owner={ownerOf(t)}
-      to={`/projects/${board.project.id}/tasks/${t.id}`}
-      overlay={overlay}
-    />
-  )
+  const card = (t: Task, overlay = false) => <TaskCard task={t} to={`/projects/${board.project.id}/tasks/${t.id}`} overlay={overlay} />
 
   const toggleCounter = (counter: CounterFilter) =>
     setFilter((f) => ({ ...f, counter: f.counter === counter ? null : counter }))
@@ -263,19 +252,12 @@ function BoardView({ board }: { board: Board }) {
     <>
       <TelemetryBar
         project={board.project}
-        sprint={board.sprint}
         counts={lookup.counts}
         active={filter.counter}
         onToggle={toggleCounter}
       />
       <section aria-label={labels.board} className="relative min-w-0 flex-1 overflow-x-auto px-7 py-6">
-        <BoardToolbar
-          projectId={board.project.id}
-          features={board.features}
-          featureId={filter.featureId}
-          onFeatureChange={(featureId) => setFilter((f) => ({ ...f, featureId }))}
-          onClear={filtered ? () => setFilter(noFilter) : undefined}
-        />
+        <BoardToolbar projectId={board.project.id} onClear={filtered ? () => setFilter(noFilter) : undefined} />
         {rejection && (
           <div
             role="alert"
@@ -296,7 +278,7 @@ function BoardView({ board }: { board: Board }) {
         </p>
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={collision}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
@@ -312,7 +294,7 @@ function BoardView({ board }: { board: Board }) {
                 key={key}
                 columnKey={key}
                 tasks={layout[key].flatMap((id) => lookup.task.get(id) ?? [])}
-                total={board.columns.find((c) => c.key === key)?.tasks.length ?? 0}
+                total={lookup.column.get(key)?.tasks.length ?? 0}
                 filtered={filtered}
                 renderCard={(t) => card(t)}
               />
@@ -321,7 +303,8 @@ function BoardView({ board }: { board: Board }) {
           <DragOverlay>{dragged ? card(dragged, true) : null}</DragOverlay>
         </DndContext>
       </section>
-      <Outlet />
+      {/* The drawer and dialogs read the project too. */}
+      <Outlet context={board.project} />
     </>
   )
 }

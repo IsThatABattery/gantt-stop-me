@@ -222,7 +222,7 @@ func TestTaskTurnFailsAndRetries(t *testing.T) {
 	f.llm.Reply(reply(task("Lost", nil, script("make")))) // then the fake answers 500
 	f.work()
 	if pl = f.plan(pl.ID); pl.Status != "approved" || pl.Pending != nil || len(pl.Proposals) != 0 ||
-		orNull(pl.Error) != "The agent's turn failed: POST /chat/completions answered HTTP 500." {
+		orNull(pl.Error) != "The agent's turn failed: POST /responses answered HTTP 500." {
 		t.Fatalf("plan after a failed turn %+v", pl)
 	}
 	if pl = decode(t, f.act(pl.ID, "retry", nil), http.StatusOK); orNull(pl.Pending) != "generate" {

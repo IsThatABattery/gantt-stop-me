@@ -28,8 +28,7 @@ export function PlanDonePage() {
   return (
     <div className="mx-auto flex max-w-[920px] flex-col gap-6 pt-5">
       <div>
-        <div className="eyebrow">STEP 4 · {plannerLabels.steps[3].toUpperCase()}</div>
-        <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">{draft.name} is ready</h1>
+        <h1 className="m-0 font-heading text-[28px] font-semibold">{draft.name} is ready</h1>
         <p className="mt-2 mb-0 leading-normal text-text-muted-strong">
           The {labels.feature.toLowerCase()} doc is approved and the reviewed {labels.tasks.toLowerCase()} are on the board.
         </p>

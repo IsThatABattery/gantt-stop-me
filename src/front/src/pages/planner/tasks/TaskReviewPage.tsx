@@ -33,8 +33,7 @@ export function TaskReviewPage() {
   const list = proposals.data
   const header = (
     <div>
-      <div className="eyebrow">STEP 3 · {plannerLabels.steps[2].toUpperCase()}</div>
-      <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">Review proposed {tasksWord}</h1>
+      <h1 className="m-0 font-heading text-[28px] font-semibold">Review proposed {tasksWord}</h1>
       <p className="mt-2 mb-0 max-w-[680px] leading-normal text-text-muted-strong">
         Approved {tasksWord} go to the {labels.backlog}. Denied ones go back to the planning {agentWord} with your feedback.
       </p>

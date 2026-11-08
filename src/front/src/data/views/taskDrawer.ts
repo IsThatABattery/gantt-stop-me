@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { keys } from '../keys'
-import { db, delay, mustFind, newId, NotFoundError, signedInUserId, useMockMutation } from '../mock/store'
+import { db, delay, mustFind, newId, NotFoundError, signedInUserId } from '../mock/store'
+import { useApiMutation } from '../api/client'
 import type {
   ActivityEvent,
   ActivityVerb,
@@ -39,7 +40,7 @@ export interface TaskDetail {
 
 export function getTaskDetail(projectId: ID, taskId: ID): Promise<TaskDetail> {
   const task = db.tasks.find((t) => t.id === taskId && t.projectId === projectId)
-  if (!task) return Promise.reject(new NotFoundError('Task'))
+  if (!task) return Promise.reject(new NotFoundError('Task not found'))
   const a = task.assignee
   const user = a?.kind === 'user' ? db.users.find((u) => u.id === a.id) : undefined
   const agent = a?.kind === 'agent' ? db.agents.find((g) => g.id === a.id) : undefined
@@ -62,7 +63,7 @@ export function getTaskDetail(projectId: ID, taskId: ID): Promise<TaskDetail> {
 export const useTaskDetail = (projectId: ID, taskId: ID) =>
   useQuery({ queryKey: keys.task(projectId, taskId), queryFn: () => getTaskDetail(projectId, taskId) })
 
-/** True when the task is in Docking and waiting on a human decision. */
+/** True when the task is in Mission review and waiting on a human decision. */
 export const needsApproval = (t: Pick<Task, 'column' | 'status'>) =>
   t.column === 'user-check' && (t.status === 'awaiting-approval' || t.status === 'in-review')
 
@@ -123,7 +124,7 @@ interface TaskRef {
   taskId: ID
 }
 
-/** Approve & land: Docking → Closed, status landed. */
+/** Approve & land: Mission review → Closed, status landed. */
 export function approveTask({ projectId, taskId }: TaskRef): Promise<Task> {
   return write(() => {
     const task = findTask(projectId, taskId)
@@ -182,8 +183,8 @@ export function setSubtaskDone({ projectId, taskId, subtaskId, done }: TaskRef &
 
 const refreshAfter = (projectId: ID, taskId: ID) => [keys.board(projectId), keys.task(projectId, taskId), keys.activity(projectId)]
 
-export const useApproveTask = (projectId: ID, taskId: ID) => useMockMutation(approveTask, refreshAfter(projectId, taskId))
-export const useRequestChanges = (projectId: ID, taskId: ID) => useMockMutation(requestChanges, refreshAfter(projectId, taskId))
-export const useTakeOver = (projectId: ID, taskId: ID) => useMockMutation(takeOver, refreshAfter(projectId, taskId))
+export const useApproveTask = (projectId: ID, taskId: ID) => useApiMutation(approveTask, refreshAfter(projectId, taskId))
+export const useRequestChanges = (projectId: ID, taskId: ID) => useApiMutation(requestChanges, refreshAfter(projectId, taskId))
+export const useTakeOver = (projectId: ID, taskId: ID) => useApiMutation(takeOver, refreshAfter(projectId, taskId))
 export const useSetSubtaskDone = (projectId: ID, taskId: ID) =>
-  useMockMutation(setSubtaskDone, [keys.board(projectId), keys.task(projectId, taskId)])
+  useApiMutation(setSubtaskDone, [keys.board(projectId), keys.task(projectId, taskId)])

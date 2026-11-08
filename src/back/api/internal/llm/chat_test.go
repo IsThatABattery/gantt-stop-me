@@ -163,7 +163,7 @@ func TestChatNudgesOnce(t *testing.T) {
 
 func TestChatProviderFailure(t *testing.T) {
 	f := llmtest.New(t)
-	f.Fail("POST /chat/completions", 500)
+	f.Fail("POST /responses", 500)
 	if steps, err := chat(f, &handled{}); err == nil || steps != nil || strings.Contains(err.Error(), "injected failure") {
 		t.Fatalf("steps %+v, %v; want an error without the provider's answer", steps, err)
 	}

@@ -1,3 +1,4 @@
+import type { RunStatus } from '../data/api/types'
 import type {
   ActivityVerb,
   AgentState,
@@ -40,14 +41,17 @@ export const labels = {
   activity: 'Mission log',
   retro: 'Debrief',
   settings: 'Settings',
+  automation: 'Automation',
+  plans: 'Plan a feature',
 
   allProjects: 'All missions',
+  addProject: 'Add a mission',
   newProject: 'New mission',
+  testsRunning: 'Static fires running',
+  linkGitHub: 'Link GitHub',
   newProjectHint: 'Start from scratch or import a backlog',
   selectProject: 'Select a mission',
   searchProjects: 'Search missions',
-  flightDeck: 'Flight deck',
-  flightDeckAccess: 'Flight deck access',
   newUser: 'New operator?',
   requestAccess: 'Request access',
   needsYou: 'Needs you',
@@ -73,6 +77,8 @@ export const labels = {
   needsAction: 'Needs action',
   docking: 'Docking',
   awaitingReview: 'Awaiting review',
+  assignedToYou: 'Assigned to you',
+  needsAttention: 'Needs attention',
   waitingOnYou: 'Waiting on you',
   unassigned: 'Unassigned',
   notScheduled: 'Not scheduled',
@@ -119,8 +125,6 @@ export const taskTabLabels = {
 /** Shared create/edit form text (NewObjective, ObjectiveEditor mockups). */
 export const formLabels = {
   feature: {
-    eyebrowNew: 'New objective',
-    eyebrowEdit: 'Objective',
     titleNew: 'New objective',
     titleEdit: 'Edit objective',
     intro: 'An objective groups the payloads that deliver one outcome. You can add payloads and success criteria after creating it.',
@@ -136,8 +140,6 @@ export const formLabels = {
     progressLabel: 'Landed',
   },
   task: {
-    eyebrowNew: 'New payload',
-    eyebrowEdit: 'Payload',
     titleNew: 'New payload',
     titleEdit: 'Edit payload',
     intro: 'A payload is one piece of work. It waits in the Hangar until it is scheduled into a launch window.',
@@ -198,6 +200,10 @@ export const plannerLabels = {
 
 /** Settings section names (Settings.dc.html). */
 export const settingsLabels = {
+  account: 'Account',
+  github: 'GitHub',
+  providers: 'LLM providers',
+  providersHelp: 'OpenAI-compatible endpoints your astronauts and test runs can use. Keys are stored encrypted and never shown again.',
   profile: 'Profile',
   autonomy: 'Astronauts and autonomy',
   roles: 'Operators and roles',
@@ -213,6 +219,19 @@ export const settingsLabels = {
   integrationsHelp: 'The AI company that powers your astronauts. Applies to every payload unless overridden.',
   apiKey: 'API key',
   changePassword: 'Change password',
+  agents: 'Agents',
+  agentsHelp: 'The LLM agents that plan your features. Each uses one of your providers.',
+  review: 'Review plan docs before tasks are made',
+  reviewHelp: 'Off: a finished plan doc is approved without review.',
+  saveAgents: 'Save agent settings',
+} as const
+
+/** The LLM agents people configure: name and what each does. */
+export const llmAgentLabels = {
+  interviewer: { name: 'Interviewer', description: 'Asks about a feature one question at a time and writes its plan doc.' },
+  taskAgent: { name: 'Task agent', description: 'Turns an approved plan doc into tasks with tests.' },
+  decision: { name: 'Decision agent', description: 'Picks which workflow runs each test.' },
+  chat: { name: 'Check agent', description: 'Runs LLM checks, using the browser and other tools.' },
 } as const
 
 export const autonomyDescriptions: Record<Autonomy, string> = {
@@ -286,8 +305,8 @@ export const proposalStatusLabels: Record<ProposalStatus, string> = {
 export const columnLabels: Record<ColumnKey, { name: string; plain: string }> = {
   backlog: { name: 'Hangar', plain: 'Backlog' },
   'in-progress': { name: 'In orbit', plain: 'In Progress' },
-  testing: { name: 'Static fire', plain: 'Testing' },
-  'user-check': { name: 'Docking', plain: 'User Check' },
+  testing: { name: 'Flight check', plain: 'Testing' },
+  'user-check': { name: 'Mission review', plain: 'User Check' },
   closed: { name: 'Landed', plain: 'Closed' },
 }
 
@@ -320,4 +339,14 @@ export const agentStateLabels: Record<AgentState, string> = {
 export const roleLabels: Record<UserRole, string> = {
   lead: 'Flight director',
   member: 'Operator',
+}
+
+/** A task's latest test run, as the board card and drawer show it. */
+export const runStatusLabels: Record<RunStatus, string> = {
+  queued: 'Test queued',
+  running: 'Testing',
+  passed: 'Tests passed',
+  failed: 'Tests failed',
+  error: 'Test error',
+  cancelled: 'Test cancelled',
 }

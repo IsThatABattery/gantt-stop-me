@@ -49,8 +49,10 @@ func (b *Board) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/projects/{id}/tasks", b.Accounts.Require(b.createTask))
 	mux.HandleFunc("GET /api/projects/{id}/tasks/{taskID}", b.Accounts.Require(b.getTask))
 	mux.HandleFunc("PATCH /api/projects/{id}/tasks/{taskID}", b.Accounts.Require(b.editTask))
+	mux.HandleFunc("GET /api/projects/{id}/assignees", b.Accounts.Require(b.assignable))
 	mux.HandleFunc("PUT /api/projects/{id}/tasks/{taskID}/tests", b.Accounts.Require(b.setTests))
 	mux.HandleFunc("POST /api/projects/{id}/tasks/{taskID}/move", b.Accounts.Require(b.move))
+	mux.HandleFunc("GET /api/me/tasks", b.Accounts.Require(b.assigned))
 }
 
 type column struct {
@@ -85,11 +87,12 @@ type task struct {
 	// NeedsAttention is why the task waits in Testing after a runner error, nil while clear.
 	NeedsAttention *string             `json:"needsAttention"`
 	Assignees      []projects.Assignee `json:"assignees"` // as the issue had them when last read
+	Branch         *string             `json:"branch"`    // made on GitHub when it first moved to In Progress
 }
 
 // taskColumns selects, from tasks t, what scanTask reads.
 const taskColumns = `t.id, t.issue_number, t.column_id, t.position, t.version, t.title, t.state,
-	(select status from test_runs where task_id = t.id order by id desc limit 1), t.needs_attention, t.assignees`
+	(select status from test_runs where task_id = t.id order by id desc limit 1), t.needs_attention, t.assignees, t.branch`
 
 // taskByID selects the task $1 of the project $2.
 const taskByID = `select ` + taskColumns + ` from tasks t where t.id = $1 and t.project_id = $2`
@@ -98,11 +101,16 @@ const taskByID = `select ` + taskColumns + ` from tasks t where t.id = $1 and t.
 func (b *Board) scanTask(row pgx.Row, p projects.Project, extra ...any) (task, error) {
 	var t task
 	if err := row.Scan(append([]any{&t.ID, &t.IssueNumber, &t.ColumnID, &t.Position, &t.Version, &t.Title, &t.State,
-		&t.RunStatus, &t.NeedsAttention, &t.Assignees}, extra...)...); err != nil {
+		&t.RunStatus, &t.NeedsAttention, &t.Assignees, &t.Branch}, extra...)...); err != nil {
 		return task{}, err
 	}
-	t.URL = fmt.Sprintf("%s/%s/%s/issues/%d", b.GitHub.Web, p.Owner, p.Name, t.IssueNumber)
+	t.URL = b.issueURL(p, t.IssueNumber)
 	return t, nil
+}
+
+// issueURL is the GitHub page of issue number in project p.
+func (b *Board) issueURL(p projects.Project, number int) string {
+	return fmt.Sprintf("%s/%s/%s/issues/%d", b.GitHub.Web, p.Owner, p.Name, number)
 }
 
 // taskID returns the {taskID} path value, or 0, which matches no task, when it is not a number.

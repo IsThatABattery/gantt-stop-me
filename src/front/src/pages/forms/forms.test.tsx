@@ -1,130 +1,73 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { db } from '../../data/mock/store'
+import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
-/** The create dialog, once its form has loaded. */
-async function openDialog(name: string) {
-  const dialog = await screen.findByRole('dialog', { name })
-  await within(dialog).findByRole('button', { name: /^Create/ })
-  return dialog
-}
+describe('new payload', () => {
+  it('creates an issue in the Hangar and opens it', async () => {
+    const { router } = renderApp('/projects/1/new/task')
+    await userEvent.type(await screen.findByLabelText('Title'), '  Print the chart  ')
+    await userEvent.type(screen.getByLabelText('Description (optional)'), 'A4, landscape.')
+    await userEvent.click(screen.getByRole('button', { name: 'Create payload' }))
 
-describe('create dialog', () => {
-  it('creates a payload, opens its edit page, and puts it in the Hangar', async () => {
-    const { router } = renderApp('/projects/orbital-nav/new/task')
-    const dialog = await openDialog('New payload')
-
-    await userEvent.type(within(dialog).getByLabelText('Title'), 'Retry cap for reconnects')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Objective'), 'Realtime sync')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Assignee'), 'Astronaut-1 · Astronaut')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Create payload' }))
-
-    await screen.findByRole('heading', { name: 'Edit payload' })
-    const task = db.tasks.find((t) => t.title === 'Retry cap for reconnects')!
-    expect(task).toMatchObject({ key: 'PAY-63', column: 'backlog', status: 'queued', featureId: 'f-realtime', epicId: 'e-comms' })
-    expect(task.assignee).toEqual({ kind: 'agent', id: 'a-1' })
-    expect(db.activityEvents.some((e) => e.verb === 'created' && e.taskId === task.id)).toBe(true)
-    expect(router.state.location.pathname).toBe(`/projects/orbital-nav/tasks/${task.id}/edit`)
-    expect(screen.getByText(/^PAYLOAD · PAY-63/)).toBeInTheDocument()
-
-    await router.navigate('/projects/orbital-nav')
-    expect(await screen.findByRole('link', { name: /PAY-63/ })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1/tasks/13'))
+    expect(fake.requests.find((r) => r.method === 'POST' && r.path === '/api/projects/1/tasks')?.body).toEqual({
+      title: 'Print the chart',
+      body: 'A4, landscape.',
+    })
+    expect(fake.tasks.find((t) => t.id === 13)).toMatchObject({ title: 'Print the chart', columnId: 1 })
+    expect(await screen.findByRole('link', { name: /^#18: Print the chart/ })).toBeInTheDocument()
   })
 
-  it('blocks an empty title', async () => {
-    renderApp('/projects/orbital-nav/new/task')
-    const dialog = await openDialog('New payload')
-    const count = db.tasks.length
-
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Create payload' }))
-
-    expect(within(dialog).getByText('Give the payload a title.')).toBeInTheDocument()
-    expect(within(dialog).getByLabelText('Title')).toHaveAttribute('aria-invalid', 'true')
-    expect(db.tasks.length).toBe(count)
+  it('blocks an empty title without asking the API', async () => {
+    renderApp('/projects/1/new/task')
+    await userEvent.click(await screen.findByRole('button', { name: 'Create payload' }))
+    expect(screen.getByText('Give it a title.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Title')).toHaveAttribute('aria-invalid', 'true')
+    expect(fake.requests.some((r) => r.method === 'POST')).toBe(false)
   })
 
-  it('creates an objective with the next key', async () => {
-    renderApp('/projects/orbital-nav/new/feature')
-    const dialog = await openDialog('New objective')
-    await userEvent.type(within(dialog).getByLabelText('Name'), 'Offline mode')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Create objective' }))
-
-    await screen.findByRole('heading', { name: 'Edit objective' })
-    expect(db.features.find((f) => f.name === 'Offline mode')?.key).toBe('OBJ-9')
-  })
-
-  it('links the objective dialog to the planner', async () => {
-    const { router } = renderApp('/projects/orbital-nav/new/feature')
-    const dialog = await openDialog('New objective')
-    await userEvent.click(within(dialog).getByRole('link', { name: 'Plan with an astronaut' }))
-
-    expect(router.state.location.pathname).toBe('/projects/orbital-nav/plan/realtime-briefing/briefing')
+  it('shows an API refusal on its field', async () => {
+    failNext('POST /api/projects/1/tasks', { status: 400, code: 'invalid_body', message: 'Keep the description to 65536 characters.' })
+    renderApp('/projects/1/new/task')
+    await userEvent.type(await screen.findByLabelText('Title'), 'Too long')
+    await userEvent.click(screen.getByRole('button', { name: 'Create payload' }))
+    expect(await screen.findByText('Keep the description to 65536 characters.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Description (optional)')).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('cancel closes back to the board', async () => {
-    const { router } = renderApp('/projects/orbital-nav/new/feature')
-    const dialog = await openDialog('New objective')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-
-    expect(router.state.location.pathname).toBe('/projects/orbital-nav')
+    const { router } = renderApp('/projects/1/new/task')
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(router.state.location.pathname).toBe('/projects/1')
   })
 })
 
-describe('edit page', () => {
-  it('adds a success criterion, marks it met, and saves', async () => {
-    renderApp('/projects/orbital-nav/features/f-backlog/edit')
-    await screen.findByRole('heading', { name: 'Edit objective' })
-    expect(screen.getByText('OBJECTIVE · OBJ-7 · MISSION PHASE: CORE')).toBeInTheDocument()
-    expect(screen.getByText('2 / 3 met')).toBeInTheDocument()
+describe('edit payload', () => {
+  it('saves only what changed and writes it to the issue', async () => {
+    renderApp('/projects/1/tasks/7/edit')
+    const title = await screen.findByLabelText('Title')
+    expect(screen.getByLabelText('Description (optional)')).toHaveValue('One bar per task, by week.\n\nSecond paragraph.')
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add criterion' }))
-    await userEvent.type(screen.getByRole('textbox', { name: 'Criterion 4' }), 'Works with 10k payloads')
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Met: Works with 10k payloads' }))
-    expect(screen.getByText('3 / 4 met')).toBeInTheDocument()
-
+    await userEvent.clear(title)
+    await userEvent.type(title, 'Draw the Gantt timeline')
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await screen.findByText('Saved')
-    const f = db.features.find((x) => x.id === 'f-backlog')!
-    expect(f.successCriteria).toHaveLength(4)
-    expect(f.successCriteria[3]).toMatchObject({ text: 'Works with 10k payloads', met: true })
+    expect(await screen.findByText('Saved')).toBeInTheDocument()
+    expect(fake.requests.find((r) => r.method === 'PATCH')?.body).toEqual({ title: 'Draw the Gantt timeline' })
+    expect(fake.tasks.find((t) => t.id === 7)?.title).toBe('Draw the Gantt timeline')
   })
 
-  it('shows a payload with its criteria and modules, and bumps the version on save', async () => {
-    renderApp('/projects/orbital-nav/tasks/t-41/edit')
-    await screen.findByRole('heading', { name: 'Edit payload' })
-
-    expect(screen.getByText('2 / 3 met')).toBeInTheDocument()
-    const modules = screen.getByRole('complementary', { name: 'Modules' })
-    expect(within(modules).getAllByRole('listitem')).toHaveLength(4)
-    expect(within(modules).getByRole('progressbar', { name: 'Done' })).toHaveAttribute('aria-valuenow', '3')
-
-    const before = db.tasks.find((t) => t.id === 't-41')!.version
-    await userEvent.click(screen.getByRole('radio', { name: /Free flight/ }))
-    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-    await screen.findByText('Saved')
-    const t = db.tasks.find((x) => x.id === 't-41')!
-    expect(t.version).toBe(before + 1)
-    expect(t.autonomyOverride).toBe(2)
-  })
-
-  it('archives an objective', async () => {
-    renderApp('/projects/orbital-nav/features/f-backlog/edit')
-    await userEvent.click(await screen.findByRole('button', { name: 'Archive' }))
-
-    await waitFor(() => expect(db.features.find((f) => f.id === 'f-backlog')?.status).toBe('archived'))
-    expect(await screen.findByText('Archived')).toBeInTheDocument()
-  })
-
-  it('shows not found for a missing objective or payload', async () => {
-    renderApp('/projects/orbital-nav/features/nope/edit')
-    expect(await screen.findByRole('heading', { name: 'Objective not found' })).toBeInTheDocument()
+  it('links to the issue on GitHub', async () => {
+    renderApp('/projects/1/tasks/7/edit')
+    expect(await screen.findByRole('link', { name: 'View on GitHub' })).toHaveAttribute('href', 'https://github.com/ada/gantt/issues/12')
   })
 
   it('shows not found for a missing payload', async () => {
-    renderApp('/projects/orbital-nav/tasks/nope/edit')
+    renderApp('/projects/1/tasks/999/edit')
     expect(await screen.findByRole('heading', { name: 'Payload not found' })).toBeInTheDocument()
   })
 })

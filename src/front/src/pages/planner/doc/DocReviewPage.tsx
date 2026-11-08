@@ -66,8 +66,7 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <div className="eyebrow">STEP 2 · {plannerLabels.steps[1].toUpperCase()}</div>
-        <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">
+        <h1 className="m-0 font-heading text-[28px] font-semibold">
           {mode === 'deny' ? `Deny the ${featureWord} doc` : `Review the ${featureWord} doc`}
         </h1>
       </div>

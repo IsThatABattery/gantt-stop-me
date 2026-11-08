@@ -62,6 +62,7 @@ type task struct {
 	Position                  float64
 	Title, State, URL         string
 	RunStatus, NeedsAttention *string
+	Branch                    *string
 }
 
 // runs gives issue number's task test runs with these statuses, oldest first, and needs_attention, "" for none.

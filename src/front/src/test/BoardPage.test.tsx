@@ -1,114 +1,151 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { db } from '../data/mock/store'
-import { forceMoveConflict } from '../data/views/board'
+import { fake, failNext } from './fakeApi'
 import { renderApp } from './render'
 
 const column = (name: RegExp) => screen.getByRole('region', { name })
 const cardsIn = (name: RegExp) =>
   within(column(name))
-    .queryAllByRole('link')
+    .queryAllByRole('link', { name: /^#/ })
     .map((l) => l.getAttribute('aria-label')!.split(':')[0])
+const card = (n: number) => screen.getByRole('link', { name: new RegExp(`^#${n}:`) })
+const task = (id: number) => fake.tasks.find((t) => t.id === id)!
+const moves = () => fake.requests.filter((r) => r.path.endsWith('/move'))
 
 async function openBoard() {
-  const utils = renderApp('/projects/orbital-nav')
-  await screen.findByRole('link', { name: /PAY-49/ })
+  const utils = renderApp('/projects/1')
+  await screen.findByRole('link', { name: /^#12:/ })
   return utils
 }
+
+describe('board', () => {
+  it('offers Plan a feature from the board', async () => {
+    await openBoard()
+    // The rail has a link of the same name; this is the board's own.
+    const plan = within(screen.getByRole('region', { name: 'Mission control' })).getByRole('link', { name: 'Plan a feature' })
+    expect(plan).toHaveAttribute('href', '/projects/1/plans')
+  })
+
+  it('shows the repository and each issue in its column', async () => {
+    await openBoard()
+    expect(screen.getByRole('heading', { name: 'gantt' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ada/gantt' })).toHaveAttribute('href', 'https://github.com/ada/gantt')
+    expect(cardsIn(/^Hangar/)).toEqual(['#12', '#13'])
+    expect(cardsIn(/^In orbit/)).toEqual(['#14'])
+    expect(cardsIn(/^Landed/)).toEqual(['#17'])
+    expect(card(15)).toHaveAccessibleName('#15: Flaky login test. Test error')
+    expect(within(card(15)).getByText('The runner could not start the container.')).toBeInTheDocument()
+  })
+
+  it('shows a rocket on the pad for a queued test and lifting off for a running one', async () => {
+    Object.assign(task(8), { runStatus: 'queued' })
+    Object.assign(task(9), { runStatus: 'running' })
+    await openBoard()
+    expect(within(card(13)).getByText('Test queued').querySelector('svg')).not.toHaveClass('motion-safe:animate-liftoff')
+    expect(within(card(14)).getByText('Testing').querySelector('svg')).toHaveClass('motion-safe:animate-liftoff')
+  })
+
+  it('shows only Landed on a closed card, keeping the run in its name', async () => {
+    await openBoard()
+    expect(within(card(17)).getByText('Landed')).toBeInTheDocument()
+    expect(within(card(17)).queryByText('Tests passed')).not.toBeInTheDocument()
+    expect(card(17)).toHaveAccessibleName(/Tests passed/)
+  })
+})
 
 describe('board keyboard', () => {
   it('moves focus between cards with the arrow keys', async () => {
     await openBoard()
-    screen.getByRole('link', { name: /PAY-51/ }).focus()
+    card(12).focus()
 
     await userEvent.keyboard('{ArrowDown}')
-    expect(screen.getByRole('link', { name: /PAY-53/ })).toHaveFocus()
+    expect(card(13)).toHaveFocus()
     await userEvent.keyboard('{ArrowRight}')
-    expect(screen.getByRole('link', { name: /PAY-45/ })).toHaveFocus()
-    await userEvent.keyboard('{ArrowUp}')
-    expect(screen.getByRole('link', { name: /PAY-44/ })).toHaveFocus()
+    expect(card(14)).toHaveFocus()
     await userEvent.keyboard('{ArrowLeft}')
-    expect(screen.getByRole('link', { name: /PAY-51/ })).toHaveFocus()
+    expect(card(12)).toHaveFocus()
   })
 
   it('moves a card one column with ] and [, keeping focus on it', async () => {
     await openBoard()
-    screen.getByRole('link', { name: /PAY-49/ }).focus()
+    card(12).focus()
 
     await userEvent.keyboard(']')
-    expect(cardsIn(/^In orbit/)).toContain('PAY-49')
-    expect(cardsIn(/^Hangar/)).not.toContain('PAY-49')
-    await waitFor(() => expect(screen.getByRole('link', { name: /PAY-49/ })).toHaveFocus())
-    await waitFor(() => expect(db.tasks.find((t) => t.id === 't-49')!.column).toBe('in-progress'))
-    expect(screen.getByText('PAY-49 moved to In orbit.')).toBeInTheDocument()
+    expect(cardsIn(/^In orbit/)).toEqual(['#12', '#14'])
+    expect(cardsIn(/^Hangar/)).toEqual(['#13'])
+    await waitFor(() => expect(task(7).columnId).toBe(2))
+    expect(moves()[0].body).toEqual({ columnId: 2, beforeTaskId: 9, version: 1 })
+    await waitFor(() => expect(card(12)).toHaveFocus())
+    expect(screen.getByText('#12 moved to In orbit.')).toBeInTheDocument()
 
-    await userEvent.keyboard('[[')
-    await waitFor(() => expect(db.tasks.find((t) => t.id === 't-49')!.column).toBe('backlog'))
+    // The next move sends the version the API answered with.
+    await waitFor(() => expect(within(column(/^In orbit/)).getAllByRole('link')).toHaveLength(2))
+    await userEvent.keyboard('[[') // "[[" types one [
+    await waitFor(() => expect(task(7).columnId).toBe(1))
+    expect(moves()[1].body).toMatchObject({ columnId: 1, version: 2 })
   })
 
   it('opens the drawer with Enter', async () => {
     const { router } = await openBoard()
-    screen.getByRole('link', { name: /PAY-49/ }).focus()
+    card(12).focus()
     await userEvent.keyboard('{Enter}')
-    expect(router.state.location.pathname).toBe('/projects/orbital-nav/tasks/t-49')
+    expect(router.state.location.pathname).toBe('/projects/1/tasks/7')
   })
 })
 
 describe('board moves', () => {
-  it('snaps a rejected move back and says why', async () => {
+  it('snaps a stale move back and says why', async () => {
     await openBoard()
-    forceMoveConflict()
-    screen.getByRole('link', { name: /PAY-49/ }).focus()
+    task(7).version = 2 // someone else moved it since the board loaded
+    card(12).focus()
 
     await userEvent.keyboard(']')
-    expect(cardsIn(/^In orbit/)).toContain('PAY-49')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("#12 couldn't move: someone else changed it first. It's back in Hangar.")
+    expect(cardsIn(/^Hangar/)).toContain('#12')
+    expect(cardsIn(/^In orbit/)).not.toContain('#12')
+    expect(task(7).columnId).toBe(1)
+  })
+
+  it("shows automation's reason for refusing a move", async () => {
+    await openBoard()
+    failNext('POST /api/projects/1/tasks/7/move', {
+      status: 409,
+      code: 'not_tested',
+      message: 'Only a task whose tests passed on its latest commit can move to User Check.',
+    })
+    card(12).focus()
+    await userEvent.keyboard(']')
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      "PAY-49 couldn't move: someone else changed it first. It's back in Hangar.",
+      "#12 couldn't move: Only a task whose tests passed on its latest commit can move to User Check. It's back in Hangar.",
     )
-    expect(cardsIn(/^Hangar/)).toContain('PAY-49')
-    expect(cardsIn(/^In orbit/)).not.toContain('PAY-49')
-    expect(db.tasks.find((t) => t.id === 't-49')!.column).toBe('backlog')
   })
 })
 
 describe('board filters', () => {
-  it('narrows to one objective', async () => {
-    await openBoard()
-    await userEvent.selectOptions(screen.getByLabelText('Objective'), 'Realtime sync')
-
-    expect(cardsIn(/^Hangar/)).toEqual(['PAY-60', 'PAY-61', 'PAY-62'])
-    expect(cardsIn(/^In orbit/)).toEqual(['PAY-44', 'PAY-45'])
-    expect(cardsIn(/^Docking/)).toEqual([])
-  })
-
   it('filters by a counter, and clears it on a second click', async () => {
     await openBoard()
-    const blocked = screen.getByRole('button', { name: /Comms down/ })
-    expect(blocked).toHaveAttribute('aria-pressed', 'false')
+    const attention = screen.getByRole('button', { name: /Comms down/ })
+    expect(attention).toHaveAttribute('aria-pressed', 'false')
+    expect(attention).toHaveTextContent('1')
 
-    await userEvent.click(blocked)
-    expect(blocked).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getAllByRole('link', { name: /^PAY-/ }).map((l) => l.getAttribute('aria-label')!.split(':')[0])).toEqual([
-      'PAY-43',
-    ])
+    await userEvent.click(attention)
+    expect(attention).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('link', { name: /^#/ }).map((l) => l.getAttribute('aria-label')!.split(':')[0])).toEqual(['#15'])
 
-    await userEvent.click(blocked)
-    expect(blocked).toHaveAttribute('aria-pressed', 'false')
-    expect(cardsIn(/^Hangar/)).toContain('PAY-49')
+    await userEvent.click(attention)
+    expect(cardsIn(/^Hangar/)).toEqual(['#12', '#13'])
   })
 
-  it('shows only agent-owned, not landed cards for Astronauts active', async () => {
+  it('shows the tasks waiting for approval and the ones being tested', async () => {
     await openBoard()
-    await userEvent.click(screen.getByRole('button', { name: /Astronauts active/ }))
-    const shown = screen.getAllByRole('link', { name: /^PAY-/ })
-    expect(shown.length).toBeGreaterThan(0)
-    for (const link of shown) {
-      const key = link.getAttribute('aria-label')!.split(':')[0]
-      const t = db.tasks.find((x) => x.key === key)!
-      expect(t.assignee?.kind).toBe('agent')
-      expect(t.status).not.toBe('landed')
-    }
+    await userEvent.click(screen.getByRole('button', { name: /Awaiting approval/ }))
+    expect(screen.getAllByRole('link', { name: /^#/ }).map((l) => l.getAttribute('aria-label')!.split(':')[0])).toEqual(['#16'])
+
+    await userEvent.click(screen.getByRole('button', { name: /Clear filters/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Static fires running/ }))
+    expect(screen.getAllByRole('link', { name: /^#/ }).map((l) => l.getAttribute('aria-label')!.split(':')[0])).toEqual(['#14'])
   })
 })

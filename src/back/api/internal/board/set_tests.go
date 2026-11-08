@@ -114,7 +114,7 @@ func (b *Board) setTests(w http.ResponseWriter, r *http.Request) {
 	if !validBody(w, body) {
 		return
 	}
-	is, err = b.GitHub.UpdateIssue(ctx, token, p.RepoID, number, map[string]string{"body": body})
+	is, err = b.GitHub.UpdateIssue(ctx, token, p.RepoID, number, map[string]any{"body": body})
 	if err != nil {
 		github.Fail(w, r, err)
 		return

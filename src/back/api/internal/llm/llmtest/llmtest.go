@@ -47,14 +47,15 @@ type DecisionsRequest struct {
 	Questions []llm.Question
 }
 
-// ChatRequest is a POST /chat/completions the fake received.
+// ChatRequest is a POST /responses the fake received, with its input read back as messages: a function call joins
+// the assistant message before it, or starts one, and a function call output is a tool message.
 type ChatRequest struct {
 	Model    string
-	Messages []llm.Message // an assistant message's null content reads as ""
+	Messages []llm.Message
 	Tools    []llm.Tool
 }
 
-// Reply is one scripted chat completion: the tool calls the model makes, in order, and the text it says, if any.
+// Reply is one scripted response: the tool calls the model makes, in order, and the text it says, if any.
 type Reply struct {
 	Text  string
 	Calls []llm.FunctionCall
@@ -70,7 +71,7 @@ func New(t testing.TB) *Fake {
 	}
 	f.mux.HandleFunc("GET /models", f.serveModels)
 	f.mux.HandleFunc("POST /decisions", f.serveDecisions)
-	f.mux.HandleFunc("POST /chat/completions", f.serveChat)
+	f.mux.HandleFunc("POST /responses", f.serveChat)
 	f.Server = httptest.NewServer(http.StripPrefix("/v1", http.HandlerFunc(f.serve)))
 	f.URL = f.Server.URL + "/v1"
 	t.Cleanup(f.Server.Close)
@@ -85,14 +86,14 @@ func (f *Fake) Decide(answer func(DecisionsRequest) []llm.Answer) {
 	f.decide = answer
 }
 
-// Reply queues the answers to the next chat completions, one each. Once the queue is empty, a chat answers 500.
+// Reply queues the answers to the next chat responses, one each. Once the queue is empty, a chat answers 500.
 func (f *Fake) Reply(replies ...Reply) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.replies = append(f.replies, replies...)
 }
 
-// Fail makes the route pattern, such as "POST /chat/completions", answer status instead of serving the request.
+// Fail makes the route pattern, such as "POST /responses", answer status instead of serving the request.
 // Status 0 serves it again.
 func (f *Fake) Fail(pattern string, status int) {
 	f.mu.Lock()
@@ -107,7 +108,7 @@ func (f *Fake) Decisions() []DecisionsRequest {
 	return slices.Clone(f.decisions)
 }
 
-// Chats returns every chat completions request received so far, in order. Each holds the whole conversation.
+// Chats returns every chat request (POST /responses) received so far, in order. Each holds the whole conversation.
 func (f *Fake) Chats() []ChatRequest {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -181,20 +182,23 @@ func (f *Fake) serveDecisions(w http.ResponseWriter, r *http.Request) {
 
 func (f *Fake) serveChat(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Model    string        `json:"model"`
-		Messages []llm.Message `json:"messages"`
-		Tools    []struct {
-			Type     string   `json:"type"`
-			Function llm.Tool `json:"function"`
+		Model string            `json:"model"`
+		Input []json.RawMessage `json:"input"`
+		Tools []struct {
+			Type string `json:"type"`
+			llm.Tool
 		} `json:"tools"`
+		Store   *bool    `json:"store"`
+		Include []string `json:"include"`
 	}
 	if json.NewDecoder(r.Body).Decode(&in) != nil {
 		fail(w, http.StatusBadRequest, "llmtest: the body is not JSON")
 		return
 	}
-	req := ChatRequest{Model: in.Model, Messages: in.Messages}
+	messages, msg := readInput(in.Input)
+	req := ChatRequest{Model: in.Model, Messages: messages}
 	for _, t := range in.Tools {
-		req.Tools = append(req.Tools, t.Function)
+		req.Tools = append(req.Tools, t.Tool)
 	}
 	f.chats = append(f.chats, req)
 	if !f.listed(w, in.Model) {
@@ -202,11 +206,18 @@ func (f *Fake) serveChat(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, t := range in.Tools {
 		if t.Type != "function" {
-			fail(w, http.StatusBadRequest, fmt.Sprintf("llmtest: tool %q has type %q, not function", t.Function.Name, t.Type))
+			fail(w, http.StatusBadRequest, fmt.Sprintf("llmtest: tool %q has type %q, not function", t.Name, t.Type))
 			return
 		}
 	}
-	if msg := checkMessages(in.Messages); msg != "" {
+	if in.Store == nil || *in.Store || !slices.Contains(in.Include, "reasoning.encrypted_content") {
+		fail(w, http.StatusBadRequest, "llmtest: send store false with the reasoning's encrypted content, since nothing is stored")
+		return
+	}
+	if msg == "" {
+		msg = checkMessages(messages)
+	}
+	if msg != "" {
 		fail(w, http.StatusBadRequest, "llmtest: "+msg)
 		return
 	}
@@ -216,23 +227,71 @@ func (f *Fake) serveChat(w http.ResponseWriter, r *http.Request) {
 	}
 	reply := f.replies[0]
 	f.replies = f.replies[1:]
-	message := map[string]any{"role": "assistant", "content": nil}
+	// A reasoning item comes first, as from a reasoning model, so the loop must send it back.
+	output := []map[string]any{{"type": "reasoning", "id": fmt.Sprintf("rs_%d", len(f.chats)), "summary": []any{}, "encrypted_content": "secret"}}
 	if reply.Text != "" {
-		message["content"] = reply.Text
+		output = append(output, map[string]any{"type": "message", "id": fmt.Sprintf("msg_%d", len(f.chats)), "role": "assistant", "status": "completed",
+			"content": []map[string]any{{"type": "output_text", "text": reply.Text, "annotations": []any{}}}})
 	}
-	finish := "stop"
-	if len(reply.Calls) > 0 {
-		var calls []llm.ToolCall
-		for _, c := range reply.Calls {
-			f.lastCall++
-			calls = append(calls, llm.ToolCall{ID: fmt.Sprintf("call_%d", f.lastCall), Type: "function", Function: c})
+	for _, c := range reply.Calls {
+		f.lastCall++
+		output = append(output, map[string]any{"type": "function_call", "id": fmt.Sprintf("fc_%d", f.lastCall),
+			"call_id": fmt.Sprintf("call_%d", f.lastCall), "name": c.Name, "arguments": c.Arguments, "status": "completed"})
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"id": fmt.Sprintf("resp_%d", len(f.chats)), "object": "response", "model": in.Model, "output": output})
+}
+
+// readInput reads Responses input items back as messages, or says what is wrong with one. Reasoning items are
+// checked for their encrypted content and then left out.
+func readInput(items []json.RawMessage) ([]llm.Message, string) {
+	var messages []llm.Message
+	for i, raw := range items {
+		var item struct {
+			Type             string          `json:"type"`
+			Role             string          `json:"role"`
+			Content          json.RawMessage `json:"content"`
+			CallID           string          `json:"call_id"`
+			Name             string          `json:"name"`
+			Arguments        string          `json:"arguments"`
+			Output           string          `json:"output"`
+			EncryptedContent string          `json:"encrypted_content"`
 		}
-		message["tool_calls"], finish = calls, "tool_calls"
+		if json.Unmarshal(raw, &item) != nil {
+			return nil, fmt.Sprintf("input item %d is malformed", i)
+		}
+		switch item.Type {
+		case "", "message":
+			var text string
+			if json.Unmarshal(item.Content, &text) != nil { // an output message's content is a list of parts
+				var parts []struct {
+					Text string `json:"text"`
+				}
+				if json.Unmarshal(item.Content, &parts) != nil {
+					return nil, fmt.Sprintf("input item %d has malformed content", i)
+				}
+				for _, p := range parts {
+					text += p.Text
+				}
+			}
+			messages = append(messages, llm.Message{Role: item.Role, Content: text})
+		case "function_call":
+			call := llm.ToolCall{ID: item.CallID, Type: "function", Function: llm.FunctionCall{Name: item.Name, Arguments: item.Arguments}}
+			if n := len(messages); n > 0 && messages[n-1].Role == "assistant" {
+				messages[n-1].ToolCalls = append(messages[n-1].ToolCalls, call)
+			} else {
+				messages = append(messages, llm.Message{Role: "assistant", ToolCalls: []llm.ToolCall{call}})
+			}
+		case "function_call_output":
+			messages = append(messages, llm.Message{Role: "tool", Content: item.Output, ToolCallID: item.CallID})
+		case "reasoning":
+			if item.EncryptedContent != "secret" {
+				return nil, fmt.Sprintf("input item %d is reasoning without its encrypted content", i)
+			}
+		default:
+			return nil, fmt.Sprintf("input item %d has type %q", i, item.Type)
+		}
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{
-		"id": fmt.Sprintf("chatcmpl-%d", len(f.chats)), "object": "chat.completion", "model": in.Model,
-		"choices": []map[string]any{{"index": 0, "message": message, "finish_reason": finish}},
-	})
+	return messages, ""
 }
 
 // listed answers 404 like OpenAI, and returns false, when the fake does not list model.

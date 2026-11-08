@@ -53,7 +53,7 @@ func TestASlowProviderDelaysOnlyItsCreatorsPlans(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var slow bool
 		r.URL.Path, slow = strings.CutPrefix(r.URL.Path, "/slow")
-		chat := r.URL.Path == "/v1/chat/completions"
+		chat := r.URL.Path == "/v1/responses"
 		if slow && chat {
 			select {
 			case <-answered:

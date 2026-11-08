@@ -57,7 +57,7 @@ Adds a provider once `GET {baseUrl}/models` accepts the key and lists every chos
 
 | Status | Body |
 | --- | --- |
-| `201` | provider, with the models the provider lists |
+| `201` | provider, with the models the provider lists as `availableModels`, newest first by their `created` time, undated ones last in the order listed |
 | `400` | `invalid_name`, `invalid_base_url`, `invalid_api_key`, `provider_unreachable`, `too_many_models`, `duplicate_model`, `unknown_model`, `bad_request` |
 | `401` | `unauthorized` |
 | `409` | `name_taken` |

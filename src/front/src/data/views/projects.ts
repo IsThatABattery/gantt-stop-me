@@ -3,7 +3,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useSyncExternalStore } from 'react'
 import { keys } from '../keys'
-import { db, delay, useMockMutation } from '../mock/store'
+import { db, delay } from '../mock/store'
+import { useApiMutation } from '../api/client'
 import type { ID, Project, ProjectSummary } from '../types'
 
 export function listProjects(): Promise<ProjectSummary[]> {
@@ -62,7 +63,7 @@ export async function createProject({ name, description, userId }: NewProjectInp
   return delay(project)
 }
 
-export const useCreateProject = () => useMockMutation(createProject, [keys.projects])
+export const useCreateProject = () => useApiMutation(createProject, [keys.projects])
 
 // ---- Favorites ----
 // Not in the data model yet, so kept per user in localStorage. Storage can be
