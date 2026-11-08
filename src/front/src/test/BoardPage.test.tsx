@@ -1,9 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { db } from '../../data/mock/store'
-import { forceMoveConflict } from '../../data/views/board'
-import { renderApp } from '../../test/render'
+import { db } from '../data/mock/store'
+import { forceMoveConflict } from '../data/views/board'
+import { renderApp } from './render'
 
 const column = (name: RegExp) => screen.getByRole('region', { name })
 const cardsIn = (name: RegExp) =>
