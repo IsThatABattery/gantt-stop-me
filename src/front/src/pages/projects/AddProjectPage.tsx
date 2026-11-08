@@ -17,8 +17,8 @@ const reasons: Record<string, string> = {
   forbidden: 'Adding a repository for the first time needs write access to it on GitHub.',
 }
 
-// The landing page. There is no list of projects yet (ARCHITECTURE.md), so a
-// project opens by its repository URL; one added before opens its board.
+// Adds a project by its repository URL; one added before opens its board. The
+// Flight deck shows it, centered, until the user has opened a project.
 export function AddProjectPage() {
   const { data: me } = useMe()
   const navigate = useNavigate()
@@ -34,8 +34,8 @@ export function AddProjectPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 px-8 py-10">
-      <header className="max-w-[640px]">
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 py-10">
+      <header className="w-full max-w-[640px]">
         <Eyebrow>{labels.flightDeck}</Eyebrow>
         <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.addProject}</h1>
         <p className="mt-2 mb-0 leading-normal text-text-muted-strong">
@@ -45,7 +45,7 @@ export function AddProjectPage() {
       </header>
 
       {!linked ? (
-        <div className="max-w-[640px] rounded-[14px] border border-line bg-surface">
+        <div className="w-full max-w-[640px] rounded-[14px] border border-line bg-surface">
           <StatusMessage
             title="Link GitHub first"
             body={`The board reads and writes the repository's issues with your GitHub account, so link it in ${labels.settings}.`}
@@ -57,7 +57,7 @@ export function AddProjectPage() {
           </StatusMessage>
         </div>
       ) : (
-        <form onSubmit={submit} noValidate className="flex max-w-[640px] flex-col gap-4 rounded-[14px] border border-line bg-surface p-6">
+        <form onSubmit={submit} noValidate className="flex w-full max-w-[640px] flex-col gap-4 rounded-[14px] border border-line bg-surface p-6">
           <Field id="repo-url" label="Repository URL">
             <TextInput
               id="repo-url"

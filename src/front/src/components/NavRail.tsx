@@ -57,10 +57,11 @@ export function NavRail({ projectId }: { projectId?: string }) {
       <Link to="/" className="px-2 pb-6 no-underline">
         <Logo />
       </Link>
-      <Link to="/" className={`${itemBase} mb-2 border border-line text-text-muted-strong hover:text-text`}>
+      <Link to="/projects/new" className={`${itemBase} mb-2 border border-line text-text-muted-strong hover:text-text`}>
         <Icon name="plus" />
         {labels.addProject}
       </Link>
+      <RailLink item={{ label: labels.allProjects, to: '/projects', icon: 'hangar', end: true }} />
       {items.map((item) => (
         <RailLink key={item.to} item={item} />
       ))}

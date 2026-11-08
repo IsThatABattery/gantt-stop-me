@@ -9,6 +9,20 @@ async function submit(url: string) {
   await userEvent.click(screen.getByRole('button', { name: 'Open mission' }))
 }
 
+describe('flight deck', () => {
+  it('lists the projects opened before, and opens one', async () => {
+    fake.opened = [fake.project]
+    const { router } = renderApp('/')
+    await userEvent.click(await screen.findByRole('link', { name: /ada\/gantt/ }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1'))
+  })
+
+  it('shows the URL box when none were opened', async () => {
+    renderApp('/')
+    expect(await screen.findByLabelText('Repository URL')).toBeInTheDocument()
+  })
+})
+
 describe('add a project', () => {
   it('opens the board of a repository by its URL', async () => {
     const { router } = renderApp('/')
@@ -16,7 +30,7 @@ describe('add a project', () => {
     await submit('https://github.com/ada/gantt.git')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1'))
-    expect(fake.requests.find((r) => r.path === '/api/projects')?.body).toEqual({ url: 'https://github.com/ada/gantt.git' })
+    expect(fake.requests.find((r) => r.method === 'POST' && r.path === '/api/projects')?.body).toEqual({ url: 'https://github.com/ada/gantt.git' })
   })
 
   it('explains a URL that is not a repository', async () => {

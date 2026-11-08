@@ -33,6 +33,33 @@ Adds a GitHub repository as a project, setting up its board labels and a task pe
 { "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }
 ```
 
+## List projects
+
+Returns the projects the caller has added or opened, most recently used first, keeping only those their GitHub account still sees. It never lists other repositories the account can see.
+
+`GET /api/projects`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `projects`, each as [Add project](#add-project) answers it; `[]` for none |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `502` | `github_error` |
+
+A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. Unlinking GitHub forgets every project.
+
+```json
+{ "projects": [{ "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }] }
+```
+
 ## Show board
 
 Returns the project's columns and tasks, syncing the tasks from the repository's issues first when the last sync is over 30 seconds old.

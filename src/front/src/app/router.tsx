@@ -6,6 +6,7 @@ import { NewTaskDialog, TaskEditPage } from '../pages/forms'
 import { LoginPage } from '../pages/LoginPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { AddProjectPage } from '../pages/projects/AddProjectPage'
+import { FlightDeckPage, ProjectsPage } from '../pages/projects/MyProjects'
 import { SettingsPage } from '../pages/settings'
 import { SignupPage } from '../pages/SignupPage'
 import { TaskDrawerPage } from '../pages/task-drawer'
@@ -30,7 +31,9 @@ export const routes: RouteObject[] = [
           </AppShell>
         ),
         children: [
-          { path: '/', element: <AddProjectPage /> },
+          { path: '/', element: <FlightDeckPage /> },
+          { path: '/projects', element: <ProjectsPage /> },
+          { path: '/projects/new', element: <AddProjectPage /> },
           { path: '/settings', element: <SettingsPage /> },
         ],
       },

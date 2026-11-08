@@ -56,6 +56,8 @@ function fresh() {
     /** The account the session cookie belongs to; null when signed out */
     signedInId: null as number | null,
     github: { login: 'ada', kind: 'pat' } as GitHubLink | null,
+    /** GET /api/projects: what the user has opened */
+    opened: [] as Project[],
     project,
     columns,
     tasks: [
@@ -267,6 +269,11 @@ export const handlers = [
     if (!m) return fail(400, 'invalid_repo_url', 'Use a URL like https://github.com/owner/name.')
     if (m[1] !== fake.project.owner || m[2] !== fake.project.name) return fail(404, 'not_found', 'Not found.')
     return HttpResponse.json(fake.project)
+  }),
+  route('get', '/projects', () => {
+    signedIn()
+    if (!fake.github) return fail(403, 'github_not_linked', 'Link your GitHub account first.')
+    return HttpResponse.json({ projects: fake.opened })
   }),
   route('get', '/projects/:id/board', ({ params }) => {
     projectAccess(params.id)

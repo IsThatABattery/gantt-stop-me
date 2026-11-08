@@ -15,7 +15,7 @@ import (
 	"gantt-stop-me/api/internal/secret"
 )
 
-// Projects serves POST /api/projects and the access check every project route starts with.
+// Projects serves POST and GET /api/projects and the access check every project route starts with.
 type Projects struct {
 	DB       *pgxpool.Pool
 	Accounts *accounts.Accounts // guards every route
@@ -35,6 +35,7 @@ type Project struct {
 // Register adds the projects routes to mux.
 func (p *Projects) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/projects", p.Accounts.Require(p.add))
+	mux.HandleFunc("GET /api/projects", p.Accounts.Require(p.list))
 }
 
 // Lock serializes, until tx ends, the writes that place a project's tasks or write their issues: moves, syncs,
