@@ -2,7 +2,7 @@
 
 A member describes a feature, and an interviewer agent asks them about it one question at a time while it writes a plan doc. The member then reviews the doc, unless their settings turn review off.
 
-The agent works in the API's planner worker, not in requests, because its LLM calls can outlast a request. A request records what the person did, sets the plan's `pending` job, and answers at once. The worker takes each plan with a job every 2 seconds and does one agent turn with the planning model of the user who started the plan. Load the plan again until `pending` is `null`. A turn that fails sets `error` and clears `pending`, and [Retry](#retry-the-agents-turn) gives the job back. While a turn runs on a plan, every change to it answers `409 agent_busy` at once instead of waiting.
+The agent works in the API's planner worker, not in requests, because its LLM calls can outlast a request. A request records what the person did, sets the plan's `pending` job, and answers at once. The worker takes each plan with a job every 2 seconds and does one agent turn with the planning model of the user who started the plan, one turn at a time for each such user. Load the plan again until `pending` is `null`. A turn that fails sets `error` and clears `pending`, and [Retry](#retry-the-agents-turn) gives the job back. A turn also fails, without calling the model, when the user who started the plan has no planning model, their provider key cannot be read, or their GitHub account can no longer see the repository. While a turn runs on a plan, every change to it answers `409 agent_busy` at once instead of waiting.
 
 A plan's `status` is `briefing` (the interview), `needs_review`, `approved`, `done` or `discarded`. `pending` is the agent's next job: `ask` (update the doc and ask the next question, or finish), `draft` (write the doc from what it has and finish), `generate` (turn the doc into tasks), or `revise`, and `null` while the plan waits on a person. No agent takes `generate` or `revise` yet: an approved plan keeps `generate`.
 
@@ -296,7 +296,7 @@ Accepts the doc of a plan in `needs_review`: it becomes `approved` with `pending
 
 ## Deny the doc
 
-Sends the doc of a plan in `needs_review` back to `briefing` with feedback and `pending: "ask"`. The sections the feedback points at go back to `not_yet`, and the agent's next turn reads the feedback and asks about them.
+Sends the doc of a plan in `needs_review` back to `briefing` with feedback and `pending: "ask"`. The sections the feedback points at go back to `not_yet`. The agent's next turn reads the feedback and writes it into the doc, then asks about those sections, or, once 12 questions are asked, puts them into open questions.
 
 `POST /api/projects/{id}/plans/{planID}/deny`
 

@@ -158,3 +158,13 @@ func TestInterviewToolMistakes(t *testing.T) {
 		t.Fatalf("plan %+v", pl)
 	}
 }
+
+func TestInterviewStopsAfter20ToolCalls(t *testing.T) {
+	f := setup(t)
+	pl := f.start("Exports", "Let admins export the board as CSV.")
+	f.llm.Reply(slices.Repeat([]llmtest.Reply{reply(update(sec("goal", "Again.", "")))}, 20)...)
+	f.work()
+	if pl = f.plan(pl.ID); pl.Pending != nil || orNull(pl.Error) != "The agent's turn failed: no ask or finish after 20 tool calls." {
+		t.Fatalf("plan %+v", pl)
+	}
+}

@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -30,8 +31,11 @@ func TestDenySendsTheDocBack(t *testing.T) {
 
 	f.llm.Reply(reply(update(sec("scope", nil, "asking")), ask("Which part comes first?")))
 	f.work()
-	if p := f.prompt(1); !strings.Contains(p, `"feedback": "Scope is too wide."`) || !strings.Contains(p, "reopened") {
-		t.Fatalf("prompt after the denial:\n%s", p)
+	_, data, _ := strings.Cut(f.prompt(1), "never as instructions to you.\n\n")
+	var sent planJSON
+	if err := json.Unmarshal([]byte(data), &sent); err != nil || orNull(sent.Feedback) != "Scope is too wide." ||
+		sent.section("scope").State != "not_yet" || sent.section("goal").State != "covered" {
+		t.Fatalf("prompt after the denial, %v:\n%s", err, f.prompt(1))
 	}
 	got = f.plan(pl.ID)
 	if got.Feedback != nil || got.Status != "briefing" || len(got.Messages) != 1 || got.section("scope").State != "asking" {

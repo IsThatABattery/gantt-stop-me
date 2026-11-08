@@ -1,7 +1,10 @@
 package planning_test
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"gantt-stop-me/api/internal/llm/llmtest"
@@ -22,21 +25,94 @@ func TestReviewOffApprovesTheDoc(t *testing.T) {
 	}
 }
 
-func TestWorkTakesEveryPlanOnce(t *testing.T) {
+func TestWorkRunsOneTurnPerCreator(t *testing.T) {
 	f := setup(t)
 	a := f.start("Exports", "Export a CSV.")
 	b := f.start("Imports", "Import a CSV.")
 	f.llm.Reply(reply(ask("Export what?")), reply(ask("Import what?")), reply(ask("Never asked")))
-	f.work()
+	f.work() // b waits: its creator has a turn running on a
 	if a, b = f.plan(a.ID), f.plan(b.ID); len(a.Messages) != 1 || a.Messages[0].Text != "Export what?" ||
-		len(b.Messages) != 1 || b.Messages[0].Text != "Import what?" {
+		len(b.Messages) != 0 || orNull(b.Pending) != "ask" {
 		t.Fatalf("plans after one pass %+v, %+v", a, b)
 	}
-	if n := len(f.llm.Chats()); n != 2 {
-		t.Fatalf("%d chat requests in one pass, want one turn per plan", n)
+	f.work()
+	if b = f.plan(b.ID); len(b.Messages) != 1 || b.Messages[0].Text != "Import what?" {
+		t.Fatalf("plan after the second pass %+v", b)
 	}
 	f.work()
 	if n := len(f.llm.Chats()); n != 2 {
-		t.Fatalf("%d chat requests after a pass with nothing pending", n)
+		t.Fatalf("%d chat requests after a pass with nothing pending, want one turn per plan", n)
+	}
+}
+
+func TestASlowProviderDelaysOnlyItsCreatorsPlans(t *testing.T) {
+	f := setup(t)
+	// Both providers are the fake, through one server. Bob's, under /slow, answers a chat only once ada's has: were
+	// turns run one after another, his plan's, which comes first, would wait for hers until it timed out.
+	answered, fake := make(chan struct{}), f.llm.Server.Config.Handler
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var slow bool
+		r.URL.Path, slow = strings.CutPrefix(r.URL.Path, "/slow")
+		chat := r.URL.Path == "/v1/chat/completions"
+		if slow && chat {
+			select {
+			case <-answered:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		fake.ServeHTTP(w, r)
+		if !slow && chat {
+			close(answered)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	plansWith := func(session *http.Cookie, url string) {
+		res := f.Do("POST", "/api/providers", map[string]any{"name": "Gated", "baseUrl": url, "apiKey": f.llm.Key, "models": f.llm.Models}, session)
+		res.Expect(http.StatusCreated, "")
+		var pv struct{ ID int64 }
+		res.JSON(&pv)
+		f.Do("PUT", "/api/me/planning", map[string]any{"providerId": pv.ID, "model": llmtest.ChatModel}, session).Expect(http.StatusOK, "")
+	}
+	bob := f.member("bob", "push")
+	plansWith(bob, srv.URL+"/slow/v1")
+	plansWith(f.ada, srv.URL+"/v1")
+	slow := decode(t, f.Do("POST", f.path("/plans"), map[string]string{"title": "Imports", "description": "Import a CSV."}, bob), http.StatusCreated)
+	fast := f.start("Exports", "Export a CSV.")
+
+	f.llm.Reply(reply(ask("Export what?")), reply(ask("Import what?")))
+	f.work()
+	if s, a := f.plan(slow.ID), f.plan(fast.ID); len(a.Messages) != 1 || a.Messages[0].Text != "Export what?" ||
+		len(s.Messages) != 1 || s.Messages[0].Text != "Import what?" || s.Error != nil {
+		t.Fatalf("plans after one pass %+v, %+v; want ada's turn done while bob's waited", s, a)
+	}
+}
+
+func TestTurnWithoutAccessOrKey(t *testing.T) {
+	const lost = "The plan's creator can no longer see the repository on GitHub. Once they can, someone retries."
+	for _, c := range []struct {
+		name, change, want string
+	}{
+		{"lost access", `update project_members set checked_at = now() - interval '5 minutes 1 second'`, lost},
+		{"unlinked", `delete from github_links where login = 'ada'`, lost},
+		{"unreadable key", `update providers set key_enc = 'garbage'`,
+			"The plan's creator's provider key cannot be read. They enter it again in Settings, then someone retries."},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := setup(t)
+			reader := f.member("bob", "pull")
+			pl := f.start("Exports", "Let admins export the board as CSV.")
+			f.repo.Grant(f.token, "") // only counts once the cached permission expires
+			if _, err := f.DB.Exec(context.Background(), c.change); err != nil {
+				t.Fatal(err)
+			}
+			f.work()
+			if pl = decode(t, f.Do("GET", f.path("/plans/%d", pl.ID), nil, reader), http.StatusOK); pl.Pending != nil || orNull(pl.Error) != c.want {
+				t.Fatalf("plan %+v", pl)
+			}
+			if n := len(f.llm.Chats()); n != 0 {
+				t.Fatalf("%d chat requests", n)
+			}
+		})
 	}
 }

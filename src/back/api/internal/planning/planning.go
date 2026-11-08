@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -29,6 +30,9 @@ type Planning struct {
 	Projects *projects.Projects // checks access to the project first
 	Secrets  *secret.Box        // opens the plan creators' provider keys
 	LLM      *http.Client       // calls the plan creators' providers, from llm.HTTPClient
+
+	mu      sync.Mutex
+	running map[int64]bool // the creators whose plans have a turn running
 }
 
 // Register adds the planning routes to mux.
@@ -145,20 +149,21 @@ type plan struct {
 	CreatedAt         time.Time `json:"createdAt"`
 	UpdatedAt         time.Time `json:"updatedAt"`
 
-	asked int // the questions the agent asked
+	asked     int   // the questions the agent asked
+	createdBy int64 // the user who started it, 0 once they are deleted
 }
 
 // planColumns selects, from feature_plans fp, what scanPlan reads.
 const planColumns = `fp.id, fp.project_id, fp.title, fp.description, fp.status, fp.doc, fp.pending, fp.feedback,
 	fp.error, fp.version, fp.created_at, fp.updated_at,
 	(select count(*) from plan_messages where plan_id = fp.id and role = 'user'),
-	(select count(*) from plan_messages where plan_id = fp.id and role = 'agent')`
+	(select count(*) from plan_messages where plan_id = fp.id and role = 'agent'), coalesce(fp.created_by, 0)`
 
 // scanPlan reads a plan from a row of planColumns.
 func scanPlan(row pgx.Row) (plan, error) {
 	var pl plan
 	err := row.Scan(&pl.ID, &pl.ProjectID, &pl.Title, &pl.Description, &pl.Status, &pl.Doc, &pl.Pending, &pl.Feedback,
-		&pl.Error, &pl.Version, &pl.CreatedAt, &pl.UpdatedAt, &pl.Answered, &pl.asked)
+		&pl.Error, &pl.Version, &pl.CreatedAt, &pl.UpdatedAt, &pl.Answered, &pl.asked, &pl.createdBy)
 	pl.ExpectedQuestions = pl.asked
 	if pl.Status == "briefing" {
 		// One more question for each topic the interview has not touched; open questions only collects the rest.
