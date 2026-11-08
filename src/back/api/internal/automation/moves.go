@@ -24,13 +24,16 @@ var (
 // latest test run is queued or running is refused with run_in_progress, and one into User Check with not_tested
 // unless that run passed on its pull request's head as the record has it now. A person's move into Testing starts a
 // test run for the task's linked pull request, whose author it checks on GitHub with token. Any move out of Testing
-// clears needs_attention. It implements board.Rules.
+// clears needs_attention. A task a member took over moves as the API's own moves do: no guard and no test run.
+// It implements board.Rules.
 func (a *Automation) Moving(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64, from, to string, byHand bool) error {
-	var on bool
-	err := tx.QueryRow(ctx, `select exists (select from project_automation where project_id = $1)`, p.ID).Scan(&on)
+	var on, takenOver bool
+	err := tx.QueryRow(ctx, `select exists (select from project_automation where project_id = $1),
+		exists (select from tasks where id = $2 and taken_over_by is not null)`, p.ID, taskID).Scan(&on, &takenOver)
 	if err != nil || !on || a.RunnerURL == "" {
 		return err
 	}
+	byHand = byHand && !takenOver
 	var status string
 	var current bool // the run tested the head its pull request has now
 	err = tx.QueryRow(ctx, `

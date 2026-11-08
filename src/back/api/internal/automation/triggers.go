@@ -158,8 +158,8 @@ func (a *Automation) trigger(ctx context.Context, tx pgx.Tx, p projects.Project,
 
 // ready acts on pr becoming ready for review, closing the issues links: each of their tasks in an open column moves
 // to the end of Testing, unless it is there already, and gets a new test run. A pull request that may not run gets
-// one comment saying why instead, unless refused says it has it, and nothing else happens. A task in Closed is never
-// moved and gets no run.
+// one comment saying why instead, unless refused says it has it, and nothing else happens. A task in Closed, or one a
+// member took over, is never moved and gets no run.
 func (a *Automation) ready(ctx context.Context, tx pgx.Tx, p projects.Project, token string, pr github.PullRequest, links []int, refused bool) error {
 	type linked struct {
 		id     int64
@@ -172,7 +172,7 @@ func (a *Automation) ready(ctx context.Context, tx pgx.Tx, p projects.Project, t
 			where r.project_id = t.project_id and not r.draft and t.issue_number = any(r.linked_issues)
 				and r.head_repo_id = $3 and not r.refused)
 		from tasks t join columns c on c.id = t.column_id
-		where t.project_id = $1 and t.issue_number = any($2) and not c.closes_issue
+		where t.project_id = $1 and t.issue_number = any($2) and not c.closes_issue and t.taken_over_by is null
 		order by t.issue_number`, p.ID, links, p.RepoID)
 	tasks, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (linked, error) {
 		var l linked

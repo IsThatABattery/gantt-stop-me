@@ -24,6 +24,12 @@ func (b *Board) getTask(w http.ResponseWriter, r *http.Request) {
 	b.ServeTask(w, r, p, token, taskID(r))
 }
 
+// member is a user as every member may see them: by GitHub login, never by email.
+type member struct {
+	ID    int64   `json:"id"`
+	Login *string `json:"login"` // nil once they unlink GitHub
+}
+
 // ServeTask answers task id of project p as Get task does, reading its linked pull requests from GitHub with token
 // first when its last read is over 30 seconds old. The caller has checked access.
 func (b *Board) ServeTask(w http.ResponseWriter, r *http.Request, p projects.Project, token string, id int64) {
@@ -46,12 +52,16 @@ func (b *Board) ServeTask(w http.ResponseWriter, r *http.Request, p projects.Pro
 		Tests        []tasktests.Test    `json:"tests"`
 		TestsError   *string             `json:"testsError"`
 		PullRequests []github.LinkedPull `json:"pullRequests"`
+		TakenOverBy  *member             `json:"takenOverBy"` // nil while automation has it
 	}
+	var takerID *int64
+	var takerLogin *string
 	var err error
 	out.task, err = b.scanTask(b.DB.QueryRow(ctx, `
-		select `+taskColumns+`, t.body, t.labels, t.tests, t.tests_error, t.pull_requests
+		select `+taskColumns+`, t.body, t.labels, t.tests, t.tests_error, t.pull_requests, t.taken_over_by,
+			(select login from github_links where user_id = t.taken_over_by)
 		from tasks t where t.id = $1 and t.project_id = $2`,
-		id, p.ID), p, &out.Body, &out.Labels, &out.Tests, &out.TestsError, &out.PullRequests)
+		id, p.ID), p, &out.Body, &out.Labels, &out.Tests, &out.TestsError, &out.PullRequests, &takerID, &takerLogin)
 	if errors.Is(err, pgx.ErrNoRows) {
 		taskNotFound(w)
 		return
@@ -59,6 +69,9 @@ func (b *Board) ServeTask(w http.ResponseWriter, r *http.Request, p projects.Pro
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return
+	}
+	if takerID != nil {
+		out.TakenOverBy = &member{*takerID, takerLogin}
 	}
 	httpx.JSON(w, http.StatusOK, out)
 }

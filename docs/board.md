@@ -163,7 +163,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
 
 | Status | Body |
 | --- | --- |
-| `200` | task, with its issue's body and labels, its tests and `testsError`, and `pullRequests` |
+| `200` | task, with its issue's body and labels, its tests and `testsError`, `pullRequests` and `takenOverBy` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
 | `404` | `not_found` |
@@ -179,7 +179,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
 | `details` | string | a check's indented block, such as its steps, `""` when none or for a script |
 | `workflow` | string or null | the workflow its `[name]` pin names, as written, else `null` for the decision model to pick |
 
-`pullRequests` are the pull requests, open, closed or merged, that close the issue on GitHub, such as with "Closes #12", whether the project's automation is on or off. They are read from GitHub with the caller's credential when the task's last read of them is over 30 seconds old, else answered as last read; a failed read answers `403` or `502` as other GitHub failures do. Each has `number`, `title`, `state` (`open`, `closed` or `merged`), `draft` and `url`.
+`pullRequests` are the pull requests, open, closed or merged, that close the issue on GitHub, such as with "Closes #12", whether the project's automation is on or off. They are read from GitHub with the caller's credential when the task's last read of them is over 30 seconds old, else answered as last read; a failed read answers `403` or `502` as other GitHub failures do. Each has `number`, `title`, `state` (`open`, `closed` or `merged`), `draft` and `url`. `takenOverBy` is the member who [took the task over](automation.md#take-over-task) from automation, by user `id` and GitHub `login` (`null` once they unlink GitHub), else `null`.
 
 ```json
 {
@@ -206,7 +206,8 @@ Returns a task with its issue's title, state, body, labels and assignees as last
   "testsError": null,
   "pullRequests": [
     { "number": 15, "title": "Draw the timeline", "state": "open", "draft": false, "url": "https://github.com/ada/gantt/pull/15" }
-  ]
+  ],
+  "takenOverBy": null
 }
 ```
 
@@ -363,7 +364,7 @@ Puts a task in a column before another task or at the column's end, relabeling i
 | `409` | `conflict`, and the current task; `run_in_progress`, `not_tested` |
 | `502` | `github_error` |
 
-While the project's [automation](automation.md) is on, a move to another column also follows these rules. A reorder within a column is not such a move.
+While the project's [automation](automation.md) is on, a move to another column also follows these rules, unless a member [took the task over](automation.md#take-over-task): then it moves freely and starts no test run. A reorder within a column is not such a move.
 
 | Move | Rule |
 | --- | --- |

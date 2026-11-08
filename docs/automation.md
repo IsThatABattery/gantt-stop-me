@@ -168,7 +168,7 @@ What a pull request's change does, whether the webhook or the poller sees it fir
 
 | Change | Effect |
 | --- | --- |
-| First seen ready, or draft to ready | Each task it closes moves to the end of Testing, unless it is there already, and gets a new test run, which cancels the task's earlier queued or running one. A task in Closed is never moved and gets no run. |
+| First seen ready, or draft to ready | Each task it closes moves to the end of Testing, unless it is there already, and gets a new test run, which cancels the task's earlier queued or running one. A task in Closed, or one a member [took over](#take-over-task), is never moved and gets no run. |
 | Ready to draft | Its queued or running test runs are cancelled. |
 | New head commit while ready | Nothing. |
 | Closed, merged, or gone from the open list | Its record is deleted. |
@@ -490,3 +490,74 @@ Sends a task in User Check back to its author: it posts the caller's feedback on
 
 A comment stands even when GitHub then fails the move: the answer is GitHub's error and the task stays in User Check, so a retry comments again.
 
+## Take over task
+
+Takes a task from automation for the caller to finish by hand. It cancels the task's queued and running test runs, as [Turn off automation](#turn-off-automation) cancels them, with the reason `Taken over by {login}.`, and assigns the caller to its issue on GitHub. While it is taken over, a pull request that becomes ready neither moves it nor starts a run for it, and [Move task](board.md#move-task) moves it freely: no `run_in_progress` or `not_tested`, and no run on entering Testing. A task taken over already, by anyone, is answered as it is. It answers the task as [Get task](board.md#get-task) does, with `takenOverBy` the caller.
+
+`POST /api/projects/{id}/tasks/{taskID}/takeover`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | task, as [Get task](board.md#get-task) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+```json
+{
+  "id": 7,
+  "issueNumber": 12,
+  "columnId": 3,
+  "position": 1,
+  "version": 2,
+  "title": "Draw the timeline",
+  "state": "open",
+  "url": "https://github.com/ada/gantt/issues/12",
+  "runStatus": "cancelled",
+  "needsAttention": null,
+  "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }],
+  "body": "One bar per task, by week.",
+  "labels": [{ "name": "board:testing", "color": "fbca04" }],
+  "tests": [],
+  "testsError": null,
+  "pullRequests": [
+    { "number": 15, "title": "Draw the timeline", "state": "open", "draft": false, "url": "https://github.com/ada/gantt/pull/15" }
+  ],
+  "takenOverBy": { "id": 1, "login": "ada" }
+}
+```
+
+## Give back task
+
+Hands a task taken over back to automation: moves follow the automation rules again and pull requests start runs for it. It starts no test run by itself and leaves the issue's assignees as they are. A task not taken over is answered as it is. It answers the task as [Get task](board.md#get-task) does, with `takenOverBy` `null`.
+
+`DELETE /api/projects/{id}/tasks/{taskID}/takeover`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | task, as [Get task](board.md#get-task) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `502` | `github_error` |

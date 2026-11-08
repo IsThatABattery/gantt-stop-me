@@ -24,7 +24,11 @@ type shownTask struct {
 		State  string
 		Draft  bool
 	}
-	Assignees []struct{ Login string }
+	Assignees   []struct{ Login string }
+	TakenOverBy *struct {
+		ID    int64
+		Login *string
+	}
 }
 
 func TestRequestChanges(t *testing.T) {

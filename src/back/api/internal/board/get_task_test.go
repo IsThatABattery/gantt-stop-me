@@ -181,6 +181,7 @@ func TestGetTaskAssigneesAndPullRequests(t *testing.T) {
 	var got struct {
 		Assignees    []assignee
 		PullRequests []pullRequest
+		TakenOverBy  *struct{}
 	}
 	res.JSON(&got)
 	wantAssignees := []assignee{{"ada-gh", "https://avatars.example.com/ada-gh"}, {"bob-gh", "https://avatars.example.com/bob-gh"}}
@@ -194,6 +195,9 @@ func TestGetTaskAssigneesAndPullRequests(t *testing.T) {
 		pr(closed, "Abandoned fix", "closed", false), pr(merged, "Merged fix", "merged", false)}
 	if !slices.Equal(got.PullRequests, want) {
 		t.Fatalf("pull requests = %+v, want %+v", got.PullRequests, want)
+	}
+	if got.TakenOverBy != nil {
+		t.Fatal("takenOverBy is set on a task nobody took over")
 	}
 	for _, task := range f.boardAssignees() {
 		if task.IssueNumber == 1 && !slices.Equal(task.Assignees, wantAssignees) || task.IssueNumber == 2 && len(task.Assignees) != 0 {

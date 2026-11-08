@@ -147,5 +147,7 @@ func TestAutomationNeedsRunnerURL(t *testing.T) {
 	f.Do("POST", f.path("/runs/1/cancel"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
 	f.Do("POST", f.path("/tasks/1/approve"), map[string]any{}, f.ada).Expect(http.StatusNotFound, "not_found")
 	f.Do("POST", f.path("/tasks/1/request-changes"), map[string]any{}, f.ada).Expect(http.StatusNotFound, "not_found")
+	f.Do("POST", f.path("/tasks/1/takeover"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
+	f.Do("DELETE", f.path("/tasks/1/takeover"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
 	f.Automation.Run(context.Background()) // returns at once instead of polling
 }
