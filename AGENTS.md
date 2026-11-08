@@ -1,6 +1,6 @@
 # Agents
 
-Design lives in `ARCHITECTURE.md`. Code lives in `src/`: `src/front` (React + Vite) and `src/back/api` (Go).
+Design lives in `ARCHITECTURE.md`. Automation (test runs, the runner, approve and merge) lives in `AUTOMATION.md`, which starts with its build order. Terms are in `GLOSSARY.md`. Code lives in `src/`: `src/front` (React + Vite) and `src/back/api` (Go).
 
 ## Starting the stack
 

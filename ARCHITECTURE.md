@@ -2,7 +2,7 @@
 
 A web Kanban board for GitHub repositories. Users sign in to the app, link their GitHub account, and add a repository by its URL. Every task on the board is a GitHub issue. Its column and order on the board are stored in our database.
 
-This document covers three parts only: the frontend, the API and the database. Agents and triggers are out of scope.
+This document covers three parts only: the frontend, the API and the database. Testing and merging tasks automatically is designed in [AUTOMATION.md](AUTOMATION.md).
 
 ## Overview
 
@@ -314,7 +314,7 @@ providers (
 
 ## Not in this design
 
-- Agents, triggers, CI, and anything that acts on a repository by itself.
+- Agents, triggers and CI. See [AUTOMATION.md](AUTOMATION.md).
 - Two-factor authentication, email verification, password reset, and login rate limiting.
 - A list of projects, or searching repositories on GitHub.
 - GitHub webhooks. Sync is pull-based on board load.
