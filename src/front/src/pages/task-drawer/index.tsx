@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
+import { Button } from '../../components/controls'
 import { Drawer } from '../../components/Drawer'
 import { StatusMessage } from '../../components/StatusMessage'
 import { NotFoundError } from '../../data/errors'
@@ -19,12 +20,15 @@ export function TaskDrawerPage() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   // Close back to the page under the drawer: the board, or the Hangar list.
-  const close = () => navigate(pathname.slice(0, pathname.lastIndexOf('/tasks/')))
-  const { data: task, isPending, error } = useTask(projectId, taskId)
+  const under = pathname.slice(0, pathname.lastIndexOf('/tasks/'))
+  const close = () => navigate(under)
+  const { data: task, isPending, error, refetch } = useTask(projectId, taskId)
   const { data: board } = useBoard(projectId)
   const column = board?.columns.find((c) => c.id === task?.columnId)
+  const readOnly = board?.project.permission === 'read'
 
-  if (isPending || error) {
+  // A failed refetch keeps the task that already loaded.
+  if (!task) {
     return (
       <Drawer label={labels.task} onClose={close}>
         {isPending ? (
@@ -34,12 +38,14 @@ export function TaskDrawerPage() {
             title={`${labels.task} not found`}
             body={`There's no ${labels.task.toLowerCase()} with that id in this ${labels.project.toLowerCase()}. It may have been deleted, or the link is wrong.`}
           >
-            <Link to={`/projects/${projectId}`} className={buttonClass('secondary')}>
-              {actionLabels.backToBoard}
+            <Link to={under} className={buttonClass('secondary')}>
+              {under.endsWith('/backlog') ? `Back to ${labels.backlog}` : actionLabels.backToBoard}
             </Link>
           </StatusMessage>
         ) : (
-          <StatusMessage title="Something went wrong" body={error.message} />
+          <StatusMessage title="Something went wrong" body={error?.message}>
+            <Button onClick={() => refetch()}>Try again</Button>
+          </StatusMessage>
         )}
       </Drawer>
     )
@@ -51,7 +57,7 @@ export function TaskDrawerPage() {
   return (
     <Drawer label={labels.task} onClose={close}>
       <div className="h-[3px] bg-ion" />
-      <DrawerHeader projectId={projectId} task={task} column={column?.key} />
+      <DrawerHeader projectId={projectId} task={task} column={column?.key} readOnly={readOnly} />
       <div className="flex flex-col gap-4 px-6 py-5">
         <Assignees projectId={projectId} task={task} />
         {task.branch && (
@@ -84,7 +90,7 @@ export function TaskDrawerPage() {
             <p className="m-0 text-[13px] leading-normal text-text-muted">No description yet.</p>
           )}
         </section>
-        <TestRuns projectId={projectId} task={task} inUserCheck={column?.key === 'user-check'} />
+        <TestRuns projectId={projectId} task={task} inUserCheck={column?.key === 'user-check'} readOnly={readOnly} />
       </div>
     </Drawer>
   )
