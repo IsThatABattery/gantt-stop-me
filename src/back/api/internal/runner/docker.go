@@ -114,10 +114,12 @@ func (s *Server) commandRun(id int64, spec Spec, name, command string) []string 
 	return s.run(id, append([]string{"--name=" + name, "--entrypoint=sh"}, s.testFlags(spec)...), s.testImage(spec), "-c", command)
 }
 
-// browserRun starts the browser, isolated, serving MCP on every interface of its network.
+// browserRun starts the browser, isolated, serving MCP on every interface of its network. --caps=devtools adds the
+// recording tools, which the API calls itself, hiding them and the cap's other tools from the model.
 func (s *Server) browserRun(id int64) []string {
 	return s.run(id, s.service(id, "browser"), browserImage,
-		"--isolated", "--host", "0.0.0.0", "--port", browserPort, "--allowed-hosts", browserHost)
+		"--isolated", "--host", "0.0.0.0", "--port", browserPort, "--allowed-hosts", browserHost,
+		"--caps=devtools", "--output-dir", browserOutput)
 }
 
 // address is container's IPv4 address on execution id's network, where the runner dials it.

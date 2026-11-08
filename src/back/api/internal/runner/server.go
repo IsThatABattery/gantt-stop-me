@@ -69,6 +69,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /executions/{id}/commands", s.exec(s.command))
 	mux.HandleFunc("POST /executions/{id}/http", s.exec(s.request))
 	mux.HandleFunc("POST /executions/{id}/browser", s.exec(s.startBrowser))
+	mux.HandleFunc("GET /executions/{id}/browser/videos/{name}", s.exec(s.video))
 	mux.HandleFunc("/executions/{id}/mcp", s.exec(s.mcp)) // any method: MCP also GETs and DELETEs sessions
 	mux.HandleFunc("DELETE /executions/{id}", s.deleteExecution)
 	mux.HandleFunc("DELETE /executions", s.deleteAll)

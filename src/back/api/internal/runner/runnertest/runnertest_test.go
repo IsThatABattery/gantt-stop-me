@@ -118,6 +118,22 @@ func TestFake(t *testing.T) {
 	if _, _, _, err := c.MCP(ctx, 1, "", "", []byte(`{"jsonrpc": "2.0", "id": 6, "method": "tools/list"}`)); !isError(err, 400, "") {
 		t.Errorf("MCP without a session = %v, want 400", err)
 	}
+	start := `{"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "browser_start_video", "arguments": {"filename": "/tmp/browser/r1.webm"}}}`
+	if _, result := mcp(t, c, session, start); result != `{"content":[{"text":"### Result\nVideo recording started.","type":"text"}]}` {
+		t.Errorf("browser_start_video = %s", result)
+	}
+	if _, result := mcp(t, c, session, start); !strings.Contains(result, `"isError":true`) {
+		t.Errorf("browser_start_video while recording = %s, want an error", result)
+	}
+	if _, result := mcp(t, c, session, `{"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "browser_stop_video", "arguments": {}}}`); !strings.Contains(result, "r1.webm") {
+		t.Errorf("browser_stop_video = %s, want the recording's file", result)
+	}
+	if webm, err := c.Video(ctx, 1, "r1"); err != nil || !bytes.Equal(webm, runnertest.WebM) {
+		t.Errorf("Video() = %q, %v; want WebM", webm, err)
+	}
+	if _, err := c.Video(ctx, 1, "r1"); !isError(err, 404, "not_found") {
+		t.Errorf("Video() again = %v, want 404", err)
+	}
 
 	if err := c.Delete(ctx, 1); err != nil {
 		t.Fatal(err)
@@ -134,7 +150,7 @@ func TestFake(t *testing.T) {
 		endpoints = append(endpoints, r.Endpoint)
 	}
 	want := []string{"command", "prepare", "prepare", "command", "command", "http", "http", "mcp", "browser",
-		"mcp", "mcp", "mcp", "mcp", "mcp", "mcp", "mcp", "delete", "command", "delete all"}
+		"mcp", "mcp", "mcp", "mcp", "mcp", "mcp", "mcp", "mcp", "mcp", "mcp", "video", "video", "delete", "command", "delete all"}
 	if !slices.Equal(endpoints, want) {
 		t.Errorf("endpoints = %v, want %v", endpoints, want)
 	}
@@ -142,7 +158,8 @@ func TestFake(t *testing.T) {
 	if p := reqs[1]; p.ID != 1 || p.Spec.Workflow != "frontend" || *p.Spec.Port != 80 || string(p.Source) != "tarball" {
 		t.Errorf("Prepare was recorded as %+v", p)
 	}
-	if reqs[3].Command != "go test ./..." || reqs[5].HTTP.Body != `{"email": ""}` || !bytes.Contains(reqs[12].MCP, []byte("browser_navigate")) {
+	if reqs[3].Command != "go test ./..." || reqs[5].HTTP.Body != `{"email": ""}` || !bytes.Contains(reqs[12].MCP, []byte("browser_navigate")) ||
+		reqs[19].Video != "r1" {
 		t.Errorf("requests were recorded as %+v", reqs)
 	}
 }

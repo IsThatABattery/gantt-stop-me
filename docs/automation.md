@@ -246,7 +246,7 @@ Returns one test run with its workflow executions and its test results, also aft
 
 Each execution is one workflow running its tests. `logTail` is the last 64 KB of its log: build and start output, then each script's command and output. Its `status` is a run's, from its own results.
 
-Each result is one test, by its `position` in the Tests section. `text` is its line and block. `kind` is `script` or `llm`. `pinned` says it named its workflow. `executionId` and `workflow` are `null` when it went to no workflow. `probabilities` are the decision model's, by workflow name, empty when it made no pick. `status` is `pending`, `passed`, `failed`, `manual` (for the approver to check by hand), `error` (a runner error) or `skipped` (cancelled). `detail` is a script's exit code and output, an LLM check's reason, or the runner error. `transcript` is an LLM check's tool calls with their answers, cut to 64 KB, else `null`. `hasScreenshot` says whether [Show screenshot](#show-screenshot) has one. The `manual` results of a task's latest run are the approver's checklist: [Approve and merge](#approve-and-merge) takes their `id`s.
+Each result is one test, by its `position` in the Tests section. `text` is its line and block. `kind` is `script` or `llm`. `pinned` says it named its workflow. `executionId` and `workflow` are `null` when it went to no workflow. `probabilities` are the decision model's, by workflow name, empty when it made no pick. `status` is `pending`, `passed`, `failed`, `manual` (for the approver to check by hand), `error` (a runner error) or `skipped` (cancelled). `detail` is a script's exit code and output, an LLM check's reason, or the runner error. `transcript` is an LLM check's tool calls with their answers, cut to 64 KB, else `null`. `hasScreenshot` says whether [Show screenshot](#show-screenshot) has one, and `hasVideo` whether [Show video](#show-video) has one. The `manual` results of a task's latest run are the approver's checklist: [Approve and merge](#approve-and-merge) takes their `id`s.
 
 ```json
 {
@@ -283,7 +283,8 @@ Each result is one test, by its `position` in the Tests section. `text` is its l
       "status": "passed",
       "detail": "Exit code 0.\n12 passed\n",
       "transcript": null,
-      "hasScreenshot": false
+      "hasScreenshot": false,
+      "hasVideo": false
     },
     {
       "id": 22,
@@ -300,7 +301,8 @@ Each result is one test, by its `position` in the Tests section. `text` is its l
         { "tool": "browser_navigate", "arguments": "{\"url\": \"http://app:80/signup\"}", "answer": "Page title: Sign up\n…" },
         { "tool": "report", "arguments": "{\"outcome\": \"pass\", \"reason\": \"…\"}", "answer": "Reported." }
       ],
-      "hasScreenshot": true
+      "hasScreenshot": true,
+      "hasVideo": true
     }
   ]
 }
@@ -330,6 +332,38 @@ Returns the screenshot an LLM check took after its report, when it used the brow
 | `403` | `github_not_linked` |
 | `404` | `not_found`, also for a result with no screenshot |
 | `502` | `github_error` |
+
+## Show video
+
+Returns an LLM check's recording of the browser, when it used the browser, also after automation is turned off. It starts just before the check's first browser tool call and ends with the check, whether it reported, made 50 tool calls without a report, or the chat API failed. A check that a cancel or the timeout ended has none, and so does one whose recording the browser or the runner failed to make or hand over: that changes nothing else about its result. Range requests are answered, so a player can seek.
+
+`GET /api/projects/{id}/runs/{runID}/results/{resultID}/video`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+| `runID` | path | integer | a test run's `id` in the project |
+| `resultID` | path | integer | a result's `id` in that run, with `hasVideo` true |
+| `Range` | header | string | optional, such as `bytes=0-` |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the video, as `video/webm`, at most 64 MiB |
+| `206` | the range asked for |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found`, also for a result with no video |
+| `416` | plain text: the range is outside the video |
+| `502` | `github_error` |
+
+A finished run's issue comment links each test's video and screenshot, when it has them, after its line. GitHub's API cannot upload attachments, so the comment links to them rather than embedding them, and opening a link needs an account on the app with read access to the project, as the comment's link to the run does.
+
+The browser makes the recording in its own container, which the PR's pages reach, so code under test can alter it. The check's `transcript` is the authoritative record of what the check did.
 
 ## Cancel test run
 

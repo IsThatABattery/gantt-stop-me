@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"gantt-stop-me/api/internal/llm"
@@ -62,9 +63,21 @@ func (a *Automation) openBrowser(ctx context.Context, e *execution) (*browser, e
 		return nil, err
 	}
 	for _, t := range list.Tools {
-		b.tools = append(b.tools, llm.Tool{Name: t.Name, Description: t.Description, Parameters: t.InputSchema})
+		if !slices.Contains(devtools, t.Name) {
+			b.tools = append(b.tools, llm.Tool{Name: t.Name, Description: t.Description, Parameters: t.InputSchema})
+		}
 	}
 	return b, nil
+}
+
+// devtools are the tools the browser's --caps=devtools adds, which no model gets: the API records the browser itself,
+// and browser_annotate waits for a person to draw on the page, which would hang the check.
+// shortcut: the list is the DevTools section of the README of mcr.microsoft.com/playwright/mcp:v0.0.83, the runner's
+// browser image; compare it with the new README's whenever the image changes, or a new devtools tool reaches models.
+var devtools = []string{
+	"browser_annotate", "browser_hide_highlight", "browser_highlight", "browser_resume", "browser_start_recording",
+	"browser_start_tracing", "browser_start_video", "browser_stop_recording", "browser_stop_tracing", "browser_stop_video",
+	"browser_video_chapter", "browser_video_hide_actions", "browser_video_show_actions",
 }
 
 // content is a tools/call result: what the tool answered, as text and images.
@@ -112,6 +125,43 @@ func (b *browser) screenshot(ctx context.Context) []byte {
 		if png, err := base64.StdEncoding.DecodeString(c.Data); c.Type == "image" && c.MimeType == "image/png" && err == nil {
 			return png
 		}
+	}
+	return nil
+}
+
+// startVideo starts recording the browser's page as name, at 1280x720 and without the animated cursor, which slows
+// every action.
+func (b *browser) startVideo(ctx context.Context, name string) error {
+	return b.record(ctx, "browser_start_video", map[string]any{
+		"filename": runner.VideoFile(name), "size": map[string]int{"width": 1280, "height": 720}, "cursor": false,
+	})
+}
+
+// stopVideo stops the recording startVideo started as name and returns it, as WebM, from the runner, which then
+// deletes it.
+// shortcut: the browser records each open page apart, the first as name and the others as name-1, name-2 and so on,
+// and saves nothing for a page closed before the stop; only name is fetched, so a check that works in a second tab
+// keeps the first tab's recording, or none, and the others stay on the browser's tmpfs until the execution ends.
+// Fetch every file browser_stop_video lists if checks come to use several tabs.
+func (b *browser) stopVideo(ctx context.Context, name string) ([]byte, error) {
+	if err := b.record(ctx, "browser_stop_video", map[string]any{}); err != nil {
+		return nil, err
+	}
+	return b.runner.Video(ctx, b.id, name)
+}
+
+// record calls the browser's recording tool name with arguments. The tool answering an error is a browserError.
+func (b *browser) record(ctx context.Context, name string, arguments map[string]any) error {
+	var res content
+	if err := b.send(ctx, "tools/call", map[string]any{"name": name, "arguments": arguments}, &res); err != nil {
+		return err
+	}
+	if res.IsError {
+		var text []string
+		for _, c := range res.Content {
+			text = append(text, c.Text)
+		}
+		return browserError(name + " failed: " + strings.Join(text, "\n"))
 	}
 	return nil
 }

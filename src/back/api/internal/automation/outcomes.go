@@ -153,9 +153,10 @@ func (a *Automation) commentAll(ctx context.Context) {
 }
 
 // comment posts finished test run runID's one comment on its issue, with the owner's credential: a line per test with
-// its result, its text cut to one line and its workflow, the run's reason, the manual tests for the approver, and a
-// link to the run. It marks the run commented right after, so a failed post is tried again on the next pass and a
-// posted one never twice. GitHub refusing the post in a way no retry mends, such as for a locked issue, gives it up.
+// its result, its text cut to one line, its workflow and links to its video and screenshot when it has them, the run's
+// reason, the manual tests for the approver, and a link to the run. It marks the run commented right after, so a
+// failed post is tried again on the next pass and a posted one never twice. GitHub refusing the post in a way no retry
+// mends, such as for a locked issue, gives it up.
 func (a *Automation) comment(ctx context.Context, runID int64) error {
 	var p projects.Project
 	var taskID int64
@@ -180,14 +181,24 @@ func (a *Automation) comment(ctx context.Context, runID int64) error {
 	}
 	var lines, manual []string
 	rows, _ := a.DB.Query(ctx, `
-		select x.status, x.text, x.detail, coalesce(e.workflow, '') from test_results x
-		left join workflow_executions e on e.id = x.execution_id where x.run_id = $1 order by x.position`, runID)
+		select x.id, x.status, x.text, x.detail, coalesce(e.workflow, ''), x.video is not null, x.screenshot is not null
+		from test_results x left join workflow_executions e on e.id = x.execution_id where x.run_id = $1 order by x.position`, runID)
+	var id int64
 	var result, text, detail, workflow string
-	_, err = pgx.ForEachRow(rows, []any{&result, &text, &detail, &workflow}, func() error {
+	var video, screenshot bool
+	_, err = pgx.ForEachRow(rows, []any{&id, &result, &text, &detail, &workflow, &video, &screenshot}, func() error {
 		line := fmt.Sprintf("- %s: %s (%s)", result, oneLine(text), cmp.Or(workflow, "no workflow"))
 		if result == "error" {
 			first, _, _ := strings.Cut(detail, "\n")
 			line += ": " + first
+		}
+		// Links, since GitHub's API cannot upload attachments. They need an account with read access, as the run's does.
+		at := fmt.Sprintf("%s/api/projects/%d/runs/%d/results/%d/", a.PublicURL, p.ID, runID, id)
+		if video {
+			line += " [video](" + at + "video)"
+		}
+		if screenshot {
+			line += " [screenshot](" + at + "screenshot)"
 		}
 		lines = append(lines, line)
 		if result == "manual" {

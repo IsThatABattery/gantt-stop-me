@@ -38,6 +38,7 @@ type shownResult struct {
 	Detail        string
 	Transcript    json.RawMessage
 	HasScreenshot bool
+	HasVideo      bool
 }
 
 func TestGetRun(t *testing.T) {

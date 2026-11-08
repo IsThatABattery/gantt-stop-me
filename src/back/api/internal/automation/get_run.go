@@ -23,7 +23,7 @@ type runExecution struct {
 	FinishedAt *time.Time `json:"finishedAt"`
 }
 
-// runResult is a test result as getRun shows it: its screenshot only as whether it has one.
+// runResult is a test result as getRun shows it: its screenshot and video only as whether it has them.
 type runResult struct {
 	ID            int64              `json:"id"`
 	Position      int                `json:"position"`
@@ -37,6 +37,7 @@ type runResult struct {
 	Detail        string             `json:"detail"`
 	Transcript    json.RawMessage    `json:"transcript"` // null unless an LLM check made tool calls
 	HasScreenshot bool               `json:"hasScreenshot"`
+	HasVideo      bool               `json:"hasVideo"`
 }
 
 // getRun answers one test run with its workflow executions and test results, also once automation is off.
@@ -72,7 +73,7 @@ func (a *Automation) getRun(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, _ = a.DB.Query(ctx, `
 		select x.id, x.position, x.text, x.kind, x.pinned, x.execution_id, e.workflow, x.probabilities, x.status, x.detail,
-			x.transcript, x.screenshot is not null
+			x.transcript, x.screenshot is not null, x.video is not null
 		from test_results x left join workflow_executions e on e.id = x.execution_id where x.run_id = $1 order by x.position`, out.ID)
 	if out.Results, err = pgx.CollectRows(rows, pgx.RowToStructByPos[runResult]); err != nil {
 		httpx.Internal(w, r, err)

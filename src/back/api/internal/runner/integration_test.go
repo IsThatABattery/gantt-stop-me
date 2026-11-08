@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -133,6 +134,35 @@ func TestDocker(t *testing.T) {
 	}
 	if !strings.Contains(" "+strings.Join(names, " ")+" ", " browser_navigate ") {
 		t.Errorf("tools/list = %v, want browser_navigate among them", names)
+	}
+
+	// A recording, on the browser's tmpfs, comes out once, then it is gone.
+	for i, params := range []string{
+		`{"name": "browser_start_video", "arguments": {"filename": "` + VideoFile("t1") + `"}}`,
+		`{"name": "browser_navigate", "arguments": {"url": "http://app/"}}`,
+		`{"name": "browser_stop_video", "arguments": {}}`,
+	} {
+		msg := fmt.Sprintf(`{"jsonrpc": "2.0", "id": %d, "method": "tools/call", "params": %s}`, 3+i, params)
+		if answer, _, _, err := c.MCP(ctx, 1, session, version, []byte(msg)); err != nil || strings.Contains(string(answer), `"isError":true`) {
+			t.Fatalf("%s = %s, %v", params, answer, err)
+		}
+	}
+	if webm, err := c.Video(ctx, 1, "t1"); err != nil || !bytes.HasPrefix(webm, []byte("\x1a\x45\xdf\xa3")) {
+		t.Errorf("Video() = %d bytes, %v; want a WebM", len(webm), err)
+	}
+	if _, err := c.Video(ctx, 1, "t1"); !isRunnerError(err, 404, "not_found") {
+		t.Errorf("Video() again = %v, want 404 not_found", err)
+	}
+	// One over 64 MiB is refused, and deleted all the same.
+	if _, err := dockerOutput(ctx, "exec", s.container(1, "browser"), "sh", "-c",
+		fmt.Sprintf("head -c %d /dev/zero > %s", maxVideo+1, VideoFile("big"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Video(ctx, 1, "big"); !isRunnerError(err, 413, "too_large") {
+		t.Errorf("Video() of a recording over 64 MiB = %v, want 413 too_large", err)
+	}
+	if _, err := c.Video(ctx, 1, "big"); !isRunnerError(err, 404, "not_found") {
+		t.Errorf("Video() of it again = %v, want 404 not_found", err)
 	}
 
 	// Another project cannot build on this one's test image, which stays on the daemon.

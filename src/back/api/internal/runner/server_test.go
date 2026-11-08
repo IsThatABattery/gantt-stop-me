@@ -21,6 +21,7 @@ func TestAuth(t *testing.T) {
 		{"POST", "/executions/1/commands", "Bearer secret!", 401},
 		{"POST", "/executions/1", "", 401},
 		{"DELETE", "/executions", "", 401},
+		{"GET", "/executions/1/browser/videos/r1", "", 401},
 		{"POST", "/executions/1/mcp", "Bearer wrong", 401},
 		{"POST", "/executions/1/commands", "Bearer secret", 404}, // let in: no such execution
 	}
