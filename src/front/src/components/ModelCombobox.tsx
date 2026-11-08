@@ -11,6 +11,8 @@ interface ModelComboboxProps {
   /** Tick several models, with Select all; otherwise picking one closes the list */
   multiple?: boolean
   placeholder?: string
+  /** The most Select all ticks: the API's cap on the list */
+  max?: number
   disabled?: boolean
   /** Reads quieter, for a field secondary to the one before it */
   quiet?: boolean
@@ -20,14 +22,14 @@ interface ModelComboboxProps {
 }
 
 /** A search box over a list of models, in the site's theme. Type to filter, arrows and Enter to pick. */
-export function ModelCombobox({ id, options, selected, onChange, multiple, placeholder, disabled, quiet, ...aria }: ModelComboboxProps) {
+export function ModelCombobox({ id, options, selected, onChange, multiple, placeholder, max, disabled, quiet, ...aria }: ModelComboboxProps) {
   const listId = useId()
   // null while not searching: the box then shows the choice, or for `multiple` stays empty.
   const [query, setQuery] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const shown = query ? options.filter((m) => m.toLowerCase().includes(query.toLowerCase())) : options
-  const allShownChosen = shown.length > 0 && shown.every((m) => selected.includes(m))
+  const allShownChosen = shown.length > 0 && (shown.every((m) => selected.includes(m)) || (max !== undefined && selected.length >= max))
 
   const close = () => {
     setOpen(false)
@@ -47,7 +49,10 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
     } else if (e.key === 'Enter' && open) {
       e.preventDefault() // don't submit the form
       if (shown[active]) pick(shown[active])
-    } else if (e.key === 'Escape') close()
+    } else if (e.key === 'Escape' && open) {
+      e.stopPropagation() // close the list, not the dialog around it
+      close()
+    }
   }
 
   return (
@@ -91,20 +96,20 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
           {multiple && shown.length > 0 && (
             <div className="flex items-center justify-between border-b border-line-soft px-3 py-1.5 text-xs text-text-muted">
               <span>
-                {selected.length} of {options.length} chosen
+                {selected.length} of {options.length} chosen{max !== undefined && options.length > max && `, up to ${max}`}
               </span>
               <button
                 type="button"
                 className="cursor-pointer border-0 bg-transparent p-1 font-[inherit] text-xs text-ion hover:text-ion-hover"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onChange(allShownChosen ? selected.filter((m) => !shown.includes(m)) : [...selected, ...shown.filter((m) => !selected.includes(m))])}
+                onClick={() => onChange(allShownChosen ? selected.filter((m) => !shown.includes(m)) : [...selected, ...shown.filter((m) => !selected.includes(m))].slice(0, max))}
               >
                 {allShownChosen ? 'Clear all' : 'Select all'}
               </button>
             </div>
           )}
           <ul id={listId} role="listbox" aria-multiselectable={multiple || undefined} className="m-0 max-h-64 list-none overflow-auto p-1">
-            {shown.length === 0 && <li className="px-3 py-2 text-[13px] text-text-muted">No models match.</li>}
+            {shown.length === 0 && <li className="px-3 py-2 text-[13px] text-text-muted">No matches.</li>}
             {shown.map((m, i) => {
               const chosen = selected.includes(m)
               return (
@@ -127,7 +132,7 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
                   ) : (
                     <span className="flex w-4 flex-none justify-center text-ion">{chosen && <Icon name="check" size={14} />}</span>
                   )}
-                  {m}
+                  <span className="min-w-0 wrap-anywhere">{m}</span>
                 </li>
               )
             })}

@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
@@ -291,5 +291,32 @@ describe('workflows', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open a pull request' }))
     expect(await screen.findByRole('link', { name: 'pull request #33' })).toHaveAttribute('href', 'https://github.com/ada/gantt/pull/33')
     expect(fake.requests.find((r) => r.method === 'PUT' && r.path === '/api/projects/1/workflows')?.body).toMatchObject({ sha: null })
+  })
+
+  it('keeps the file just sent in view, and opens no second pull request of it', async () => {
+    fake.automation = enabled
+    renderApp('/projects/1/automation')
+    await userEvent.type(await screen.findByLabelText('Workflows file'), 'workflows:\n  app:\n')
+    await userEvent.click(screen.getByRole('button', { name: 'Open a pull request' }))
+    expect(await screen.findByRole('link', { name: 'pull request #33' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Workflows file')).toHaveValue('workflows:\n  app:\n')
+    expect(screen.getByRole('button', { name: 'Open a pull request' })).toBeDisabled()
+  })
+
+  it('after workflows_changed, saving again sends the sha GitHub has now', async () => {
+    fake.automation = enabled
+    fake.workflows = { content: 'workflows:\n  app:\n', sha: 'old', workflows: [{ name: 'app', description: '' }], error: null }
+    renderApp('/projects/1/automation')
+    const file = await screen.findByLabelText('Workflows file')
+    fake.workflows = { ...fake.workflows, sha: 'new' }
+    failNext('PUT /api/projects/1/workflows', { status: 409, code: 'workflows_changed', message: 'The file changed on GitHub.' })
+    await userEvent.type(file, '  web:\n')
+    await userEvent.click(screen.getByRole('button', { name: 'Open a pull request' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('The file changed on GitHub. Opening a pull request again replaces the newer file with yours.')
+    await waitFor(() => expect(fake.requests.filter((r) => r.method === 'GET' && r.path === '/api/projects/1/workflows')).toHaveLength(2))
+    await userEvent.click(screen.getByRole('button', { name: 'Open a pull request' }))
+    await screen.findByRole('link', { name: 'pull request #33' })
+    const puts = fake.requests.filter((r) => r.method === 'PUT' && r.path === '/api/projects/1/workflows')
+    expect(puts.at(-1)?.body).toMatchObject({ sha: 'new', content: 'workflows:\n  app:\n  web:\n' })
   })
 })
