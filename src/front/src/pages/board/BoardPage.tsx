@@ -97,6 +97,7 @@ function BoardView({ board }: { board: Board }) {
   }, [board, filter])
   const layout = drag?.layout ?? visible
   const filtered = isFiltered(filter)
+  const canWrite = board.project.permission !== 'read'
 
   // `task` is where the card lands: where it was, or for a conflict where the API says it is.
   const onRejected = useCallback(
@@ -242,7 +243,7 @@ function BoardView({ board }: { board: Board }) {
       case MOVE_LEFT:
       case MOVE_RIGHT: {
         const target = COLUMN_ORDER[col + (e.key === MOVE_LEFT ? -1 : 1)]
-        if (!target) return
+        if (!target || !canWrite) return
         e.preventDefault()
         // Lands at the same height in the next column, or at the bottom.
         requestMove(task, target, visible[target][row] ?? null, cardEl(id)?.getBoundingClientRect() ?? null, true)
@@ -269,12 +270,12 @@ function BoardView({ board }: { board: Board }) {
         onToggle={toggleCounter}
       />
       <section aria-label={labels.board} className="relative min-w-0 flex-1 px-7 py-6">
-        <BoardToolbar projectId={board.project.id} onClear={filtered ? () => setFilter(noFilter) : undefined} />
+        <BoardToolbar projectId={board.project.id} canWrite={canWrite} onClear={filtered ? () => setFilter(noFilter) : undefined} />
         <p aria-live="polite" className="sr-only">
           {announcement}
         </p>
         <DndContext
-          sensors={sensors}
+          sensors={canWrite ? sensors : []}
           collisionDetection={collision}
           onDragStart={onDragStart}
           onDragOver={onDragOver}

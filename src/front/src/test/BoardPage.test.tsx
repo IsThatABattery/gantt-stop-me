@@ -48,6 +48,18 @@ describe('board', () => {
     expect(within(card(14)).getByText('Testing').querySelector('svg')).toHaveClass('motion-safe:animate-liftoff')
   })
 
+  it('gives read-only members no create links and no move keys', async () => {
+    fake.project.permission = 'read'
+    await openBoard()
+    const board = within(screen.getByRole('region', { name: 'Mission control' }))
+    expect(board.queryByRole('link', { name: 'Plan a feature' })).not.toBeInTheDocument()
+    expect(board.queryByRole('link', { name: 'New payload' })).not.toBeInTheDocument()
+    card(12).focus()
+    await userEvent.keyboard(']')
+    expect(cardsIn(/^Hangar/)).toContain('#12')
+    expect(moves()).toHaveLength(0)
+  })
+
   it('shows only Landed on a closed card, keeping the run in its name', async () => {
     await openBoard()
     expect(within(card(17)).getByText('Landed')).toBeInTheDocument()
