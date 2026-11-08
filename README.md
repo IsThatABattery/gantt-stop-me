@@ -1,10 +1,8 @@
 # GanttStopMe
 
-A mission-control scrum board for GitHub repositories, where your team and AI agents work the same backlog. Agents pick up tasks and report what they're doing, and nothing they build merges until a person approves it.
+A mission-control scrum board for GitHub repositories, where your team and AI agents work the backlog. Agents are put on tasks to test and review developers' code, reporting what they do back to the user. Testing and review processes are containerized to isolate agents' work and ensure system safety.
 
 ![The board](screenshots/03-board.png)
-
-> **Status:** the Go API, database and test runner are real. The frontend runs on in-memory mock data for now, so sign-in accepts anything and a page refresh resets the sample data.
 
 ## Contents
 
@@ -20,13 +18,13 @@ A mission-control scrum board for GitHub repositories, where your team and AI ag
 
 ## What you need
 
-- **Docker**, with Compose v2 (`docker compose`, not `docker-compose`). On Windows, use Docker Desktop with the WSL 2 backend.
+- **Docker**, with Compose v2 (`docker compose`, not `docker-compose`). On Windows, use Docker Desktop with WSL.
 - **Git.**
 - For the dev container: **VS Code** with the **Dev Containers** extension.
 
-You don't need Go, Node or Postgres on your machine. Everything builds and runs in containers.
+You don't need Go, Node or PostgreSQL on your machine. Everything builds and runs in docker containers.
 
-> **Windows tip:** clone the repo inside your WSL filesystem (for example `~/code/gantt-stop-me`), not under `C:\`. Builds are much faster there, and file watching works.
+> **Windows tip:** clone the repo inside your WSL filesystem (for example `~/code/gantt-stop-me`), not under `C:\`. Builds are much faster there.
 
 ## Run the app with Docker
 
