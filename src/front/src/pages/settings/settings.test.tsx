@@ -95,7 +95,7 @@ describe('settings', () => {
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.getByRole('radio', { name: /Guided/ })).toBeChecked()
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
   })
 
   it('warns before leaving with unsaved changes', async () => {

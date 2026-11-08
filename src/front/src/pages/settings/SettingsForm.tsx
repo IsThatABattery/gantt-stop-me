@@ -265,10 +265,10 @@ export function SettingsForm({ settings, user }: { settings: WorkspaceSettings; 
           {error && <span className="text-critical">{error}</span>}
           {!saved && !error && dirty && <span className="text-text-muted">Unsaved changes</span>}
         </div>
-        <Button onClick={cancel} disabled={!dirty || saving}>
+        <Button onClick={cancel} disabled={saving}>
           {actionLabels.cancel}
         </Button>
-        <Button variant="primary" onClick={save} disabled={!dirty || saving} className="px-[22px]">
+        <Button variant="primary" onClick={save} disabled={saving} className="px-[22px]">
           {actionLabels.save}
         </Button>
       </div>
