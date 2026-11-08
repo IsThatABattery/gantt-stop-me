@@ -18,7 +18,7 @@ describe('account', () => {
     await openSettings()
     expect(within(section('Account')).getByText('ada@example.com')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Account', 'GitHub', 'LLM providers'])
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Account', 'GitHub', 'LLM providers', 'Agents'])
   })
 
   it('checks the password change here, then with the API, and confirms it', async () => {
