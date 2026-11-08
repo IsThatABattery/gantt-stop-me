@@ -47,7 +47,7 @@ export const labels = {
   allProjects: 'All missions',
   addProject: 'Add a mission',
   newProject: 'New mission',
-  testsRunning: 'Static fires running',
+  testsRunning: 'Flight checks running',
   linkGitHub: 'Link GitHub',
   newProjectHint: 'Start from scratch or import a backlog',
   selectProject: 'Select a mission',
@@ -75,7 +75,7 @@ export const labels = {
   operatorsOnly: 'Operators only',
   agentsOnly: 'Astronauts only',
   needsAction: 'Needs action',
-  docking: 'Docking',
+  docking: 'Mission review',
   awaitingReview: 'Awaiting review',
   assignedToYou: 'Assigned to you',
   needsAttention: 'Needs attention',
@@ -261,7 +261,7 @@ export const traceKindLabels: Record<TraceKind, string> = {
   run: 'Tool call · run',
   result: 'Result',
   hail: 'Hail',
-  docking: 'Docking',
+  docking: 'Mission review',
 }
 
 export const activityVerbLabels: Record<ActivityVerb, string> = {
@@ -332,7 +332,7 @@ export const agentStateLabels: Record<AgentState, string> = {
   planning: 'Planning',
   working: 'In orbit',
   hail: 'Hail',
-  docking: 'Docking',
+  docking: 'Mission review',
   blocked: 'Comms down',
 }
 
