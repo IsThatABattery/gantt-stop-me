@@ -61,3 +61,23 @@ func TestListProjectsNeedsLinkedGitHub(t *testing.T) {
 	env.Do("GET", "/api/projects", nil, ada).Expect(http.StatusForbidden, "github_not_linked")
 	env.Do("GET", "/api/projects", nil).Expect(http.StatusUnauthorized, "unauthorized")
 }
+
+func TestListProjectsAfterRelinking(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	repo := env.GitHub.AddRepo("octo", "hello")
+	repo.Grant(env.LinkGitHub(ada, "ada-gh"), "push")
+	env.AddProject(ada, "octo", "hello")
+
+	// Her token expired, so she links the same account again, as github_not_linked tells her to.
+	repo.Grant(env.LinkGitHub(ada, "ada-gh"), "push")
+	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 1 || got[0].Name != "hello" {
+		t.Fatalf("after relinking, ada's projects = %+v, want hello still listed", got)
+	}
+
+	// An account that cannot see the repository does not inherit the old one's access.
+	env.LinkGitHub(ada, "other-gh")
+	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 0 {
+		t.Fatalf("after linking another account, ada's projects = %+v", got)
+	}
+}
