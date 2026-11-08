@@ -52,6 +52,11 @@ func file(fields string) string {
 	return "workflows:\n  ci:\n    description: CI\n    " + strings.ReplaceAll(fields, "\n", "\n    ") + "\n"
 }
 
+// pad returns in with a comment line added to make it n bytes long.
+func pad(in string, n int) string {
+	return in + strings.Repeat("#", n-len(in))
+}
+
 // one parses in, which must hold exactly one workflow.
 func one(t *testing.T, in string) automation.Workflow {
 	t.Helper()
@@ -184,6 +189,9 @@ func TestParseWorkflowsAccepts(t *testing.T) {
 		{"null env", file("env:"), func(w automation.Workflow) any { return w.Env }, map[string]string{}},
 		{"four cache paths", file("cache: [/a, /b, /c/d, /e]"), func(w automation.Workflow) any { return w.Cache }, []string{"/a", "/b", "/c/d", "/e"}},
 		{"null cache", file("cache:"), func(w automation.Workflow) any { return w.Cache }, []string{}},
+		{"cache characters and /tmp below", file("cache: [/a/B.c_d@e+f-9, /tmp/x]"),
+			func(w automation.Workflow) any { return w.Cache }, []string{"/a/B.c_d@e+f-9", "/tmp/x"}},
+		{"largest file", pad(file("port: 80"), 64<<10), func(w automation.Workflow) any { return port(w.Port) }, 80},
 		{"lowest port", file("port: 1"), func(w automation.Workflow) any { return port(w.Port) }, 1},
 		{"highest port", file("port: 65535"), func(w automation.Workflow) any { return port(w.Port) }, 65535},
 		{"null port", file("port:"), func(w automation.Workflow) any { return port(w.Port) }, nil},
@@ -222,10 +230,19 @@ func TestParseWorkflowsKeepsWorkflowOrder(t *testing.T) {
 	}
 }
 
+// A pulled sidecar has no image name of its own, so back's pulled end does not clash with workflow back-end.
+func TestParseWorkflowsPulledSidecarBuildsNoImage(t *testing.T) {
+	in := "workflows:\n  back:\n    description: A\n    services: {end: {image: x}}\n  back-end:\n    description: B\n"
+	if _, err := automation.ParseWorkflows([]byte(in)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParseWorkflowsNames(t *testing.T) {
 	for name, ok := range map[string]bool{
-		"ab": true, "a-1": true, "test-db": true, strings.Repeat("a", 32): true,
+		"ab": true, "a1": true, "a-1": true, "a--b": true, "test-db": true, strings.Repeat("a", 32): true,
 		"a": false, "Backend": false, "1ab": false, "a_b": false, "-ab": false, "a.b": false, strings.Repeat("a", 33): false,
+		"a-": false, "ab-": false, strings.Repeat("a", 31) + "-": false,
 	} {
 		t.Run(name, func(t *testing.T) {
 			for _, in := range []string{
@@ -236,7 +253,7 @@ func TestParseWorkflowsNames(t *testing.T) {
 				if ok != (err == nil) {
 					t.Fatalf("%q: err = %v, want ok %v", in, err, ok)
 				}
-				if !ok && !strings.Contains(err.Error(), "must be 2 to 32 lowercase letters, digits or -, starting with a letter") {
+				if !ok && !strings.Contains(err.Error(), "must be 2 to 32 lowercase letters, digits or -, starting with a letter and ending with a letter or digit") {
 					t.Fatalf("%q: err = %v", in, err)
 				}
 			}
@@ -248,7 +265,8 @@ func TestParseWorkflowsRejects(t *testing.T) {
 	const (
 		outside = "must be a relative path inside the repository"
 		badPort = "must be a port from 1 to 65535"
-		badPath = "must be a clean absolute path other than /"
+		badPath = "must be a clean absolute path of letters, digits and ._@+-, other than / and /tmp"
+		badEnv  = "has a key that is not a variable name"
 		badTime = "must be a duration above 0 and at most 2h, such as 20m"
 	)
 	for _, tc := range []struct {
@@ -270,7 +288,15 @@ func TestParseWorkflowsRejects(t *testing.T) {
 		{"repeated workflow", "workflows:\n  ci: {description: A}\n  ci: {description: B}\n", "workflows.ci: appears twice (line 3)"},
 		{"repeated field", file("description: again"), "workflows.ci.description: appears twice (line 4)"},
 		{"unknown field", file("colour: red"), "workflows.ci.colour: is not a known field (line 4)"},
-		{"merge key", "workflows:\n  ci:\n    <<: {description: CI}\n", "workflows.ci.<<: is not a known field (line 3)"},
+		{"merge key", "workflows:\n  ci:\n    <<: {description: CI}\n", `workflows.ci."<<": is not a known field (line 3)`},
+		{"key with a newline quoted", file(`"a\n- Test 1: passed": 1`), `workflows.ci."a\n- Test 1: passed": is not a known field (line 4)`},
+		{"file over 64 KiB", pad(file("port: 80"), 64<<10+1), "the file: has 65537 bytes, more than 65536"},
+		{"test image named like a built sidecar",
+			"workflows:\n  back:\n    description: A\n    services: {end: {context: x}}\n  back-end:\n    description: B\n",
+			"workflows.back-end: builds an image named back-end, as workflows.back.services.end does (line 5)"},
+		{"built sidecars named alike",
+			"workflows:\n  a1:\n    description: A\n    services: {b-cd: {}}\n  a1-b:\n    description: B\n    services: {cd: {}}\n",
+			"workflows.a1-b.services.cd: builds an image named a1-b-cd, as workflows.a1.services.b-cd does (line 5)"},
 		{"alias", "workflows:\n  ci:\n    description: CI\n    env: &e {A: b}\n  cd:\n    description: CD\n    env: *e\n",
 			"workflows.cd.env: is an alias, which this file cannot use (line 7)"},
 		{"key not a string", file("env: {[a]: b}"), "workflows.ci.env: has a key that is not a string (line 4)"},
@@ -288,11 +314,20 @@ func TestParseWorkflowsRejects(t *testing.T) {
 		{"env value a mapping", file("env:\n  A: {b: c}"), "workflows.ci.env.A: must be a string (line 5)"},
 		{"env value a list", file("env: {A: [1]}"), "workflows.ci.env.A: must be a string (line 4)"},
 		{"repeated env", file("env:\n  A: x\n  A: y"), "workflows.ci.env.A: appears twice (line 6)"},
+		{"empty env key", file("env: {'': x}"), "workflows.ci.env: " + badEnv + " (line 4)"},
+		{"env key with =", file("env: {A=B: c}"), "workflows.ci.env: " + badEnv + " (line 4)"},
+		{"env key with NUL", file(`env: {"A\0": c}`), "workflows.ci.env: " + badEnv + " (line 4)"},
+		{"empty sidecar env key", file("services:\n  db:\n    env: {'': x}"), "workflows.ci.services.db.env: " + badEnv + " (line 6)"},
 		{"cache a string", file("cache: /a"), "workflows.ci.cache: must be a list (line 4)"},
 		{"relative cache", file("cache: [a/b]"), "workflows.ci.cache[0]: " + badPath + " (line 4)"},
 		{"unclean cache", file("cache: [/a, /b/../c]"), "workflows.ci.cache[1]: " + badPath + " (line 4)"},
 		{"cache with trailing slash", file("cache: [/a/]"), "workflows.ci.cache[0]: " + badPath + " (line 4)"},
 		{"cache of /", file("cache: [/]"), "workflows.ci.cache[0]: " + badPath + " (line 4)"},
+		{"cache of /tmp", file("cache: [/a, /tmp]"), "workflows.ci.cache[1]: " + badPath + " (line 4)"},
+		{"cache adding mount options", file("cache:\n  - /x,type=bind,src=/,dst=/host"), "workflows.ci.cache[0]: " + badPath + " (line 5)"},
+		{"cache with a space", file(`cache: ["/a b"]`), "workflows.ci.cache[0]: " + badPath + " (line 4)"},
+		{"cache with an empty segment", file("cache: [//a]"), "workflows.ci.cache[0]: " + badPath + " (line 4)"},
+		{"cache of /.", file("cache: [/.]"), "workflows.ci.cache[0]: " + badPath + " (line 4)"},
 		{"cache a mapping", file("cache: [{a: b}]"), "workflows.ci.cache[0]: must be a string (line 4)"},
 		{"repeated cache", file("cache:\n  - /a\n  - /a"), "workflows.ci.cache[1]: repeats /a (line 6)"},
 		{"five caches", file("cache: [/a, /b, /c, /d, /e]"), "workflows.ci.cache: has 5 paths, more than 4 (line 4)"},
@@ -321,6 +356,8 @@ func TestParseWorkflowsRejects(t *testing.T) {
 		{"image with dockerfile", file("services:\n  db:\n    dockerfile: D\n    image: x"), "workflows.ci.services.db.dockerfile: cannot be set with image (line 6)"},
 		{"image with target", file("services:\n  db:\n    image: x\n    target: run"), "workflows.ci.services.db.target: cannot be set with image (line 7)"},
 		{"image like a flag", file("services:\n  db:\n    image: --privileged"), "workflows.ci.services.db.image: must be an image reference (line 6)"},
+		{"null image", file("services:\n  db:\n    image:\n    health: pg_isready"), "workflows.ci.services.db.image: must be an image reference (line 6)"},
+		{"empty image with context", file("services:\n  db:\n    image: ''\n    context: src"), "workflows.ci.services.db.image: must be an image reference (line 6)"},
 		{"image a mapping", file("services:\n  db:\n    image: {a: b}"), "workflows.ci.services.db.image: must be a string (line 6)"},
 		{"sidecar context outside", file("services:\n  api:\n    context: ../x"), "workflows.ci.services.api.context: " + outside + " (line 6)"},
 		{"sidecar dockerfile outside", file("services:\n  api:\n    context: src\n    dockerfile: ../../D"), "workflows.ci.services.api.dockerfile: " + outside + " (line 7)"},

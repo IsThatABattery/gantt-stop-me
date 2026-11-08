@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,13 +41,23 @@ type Service struct {
 	Port       *int              `json:"port"`             // dialled until it accepts
 }
 
-// namePattern is the rule for workflow and sidecar names, which a test's [name] pin also follows.
-const namePattern = `[a-z][a-z0-9-]{1,31}`
+// namePattern is the rule for workflow and sidecar names, which a test's [name] pin also follows. A name ends in a
+// letter or digit because the runner puts it last in image names and hostnames, where a trailing - is invalid.
+const namePattern = `[a-z][a-z0-9-]{0,30}[a-z0-9]`
 
 var nameRule = regexp.MustCompile(`^` + namePattern + `$`)
 
+// cacheRule is the characters the runner allows in a cache path. The path goes into docker's --mount flag, where
+// a comma or = would add mount options, such as a host bind mount.
+var cacheRule = regexp.MustCompile(`^(/[A-Za-z0-9._@+-]+)+$`)
+
+// plainKey is a key that a field path shows as it is. Others are quoted, so a key cannot carry a newline or
+// Markdown into a message that is posted to GitHub.
+var plainKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
 // Limits from the workflow file's rules.
 const (
+	maxFile        = 64 << 10 // bytes; the whole file becomes nodes before any other check
 	maxCache       = 4
 	maxServices    = 8
 	maxTimeout     = 2 * time.Hour
@@ -72,11 +83,15 @@ func newWorkflow(name string) Workflow {
 // v4 checks unknown and repeated keys only when loading structs and maps, naming Go types instead of field paths.
 // So each rejects both itself.
 func ParseWorkflows(data []byte) ([]Workflow, error) {
+	if len(data) > maxFile {
+		return nil, fmt.Errorf("the file: has %d bytes, more than %d", len(data), maxFile)
+	}
 	var doc yaml.Node
 	if err := yaml.Load(data, &doc); err != nil {
 		return nil, err
 	}
 	var ws []Workflow
+	images := map[string]string{} // image name → the path of the workflow or sidecar the runner builds it for
 	err := each(doc.Content[0], "", func(k, v *yaml.Node, at string) error {
 		if k.Value != "workflows" {
 			return fail(k, at, "is not a known field")
@@ -84,6 +99,9 @@ func ParseWorkflows(data []byte) ([]Workflow, error) {
 		return each(v, at, func(k, v *yaml.Node, at string) error {
 			w, err := parseWorkflow(k, v, at)
 			ws = append(ws, w)
+			if err == nil {
+				err = claimImages(images, k, w, at)
+			}
 			return err
 		})
 	})
@@ -94,6 +112,25 @@ func ParseWorkflows(data []byte) ([]Workflow, error) {
 		return nil, err
 	}
 	return ws, nil
+}
+
+// claimImages records in images the names the runner builds w's images under: {workflow} for its tests and
+// {workflow}-{sidecar} for each built sidecar. Names may contain -, so workflow back's sidecar end and workflow
+// back-end would share one, and when both run at once, one would start the other's image.
+func claimImages(images map[string]string, k *yaml.Node, w Workflow, at string) error {
+	own := [][2]string{{w.Name, at}}
+	for _, s := range w.Services {
+		if s.Image == "" {
+			own = append(own, [2]string{w.Name + "-" + s.Name, join(join(at, "services"), s.Name)})
+		}
+	}
+	for _, im := range own {
+		if other, ok := images[im[0]]; ok {
+			return fail(k, im[1], "builds an image named %s, as %s does", im[0], other)
+		}
+		images[im[0]] = im[1]
+	}
+	return nil
 }
 
 // parseWorkflow parses the workflow named by the key k, whose fields v are at path at.
@@ -163,8 +200,9 @@ func service(k, v *yaml.Node, at string) (Service, error) {
 	err := each(v, at, func(k, v *yaml.Node, at string) (err error) {
 		switch k.Value {
 		case "image":
-			// A leading - would read as a flag on the runner's docker command line.
-			if s.Image, err = text(v, at); err == nil && strings.HasPrefix(s.Image, "-") {
+			// A blank one would build the sidecar instead, and a leading - would read as a flag on the runner's
+			// docker command line.
+			if s.Image, err = text(v, at); err == nil && (strings.TrimSpace(s.Image) == "" || strings.HasPrefix(s.Image, "-")) {
 				err = fail(v, at, "must be an image reference")
 			}
 		case "context", "dockerfile", "target":
@@ -236,22 +274,27 @@ func inside(p string) bool {
 // checkName checks the workflow or sidecar name in the key k, at path at.
 func checkName(k *yaml.Node, at string) error {
 	if !nameRule.MatchString(k.Value) {
-		return fail(k, at, "must be 2 to 32 lowercase letters, digits or -, starting with a letter")
+		return fail(k, at, "must be 2 to 32 lowercase letters, digits or -, starting with a letter and ending with a letter or digit")
 	}
 	return nil
 }
 
-// env parses a string map. Scalars such as 5432 and true count as their text, and null as "".
-func env(n *yaml.Node, at string) (map[string]string, error) {
+// env parses a string map. Scalars such as 5432 and true count as their text, and null as "". A key may not be
+// empty or hold = or NUL, which docker's -e NAME=value cannot pass.
+func env(n *yaml.Node, envAt string) (map[string]string, error) {
 	m := map[string]string{}
-	err := each(n, at, func(k, v *yaml.Node, at string) (err error) {
+	err := each(n, envAt, func(k, v *yaml.Node, at string) (err error) {
+		if k.Value == "" || strings.ContainsAny(k.Value, "=\x00") {
+			return fail(k, envAt, "has a key that is not a variable name")
+		}
 		m[k.Value], err = text(v, at)
 		return err
 	})
 	return m, err
 }
 
-// cache parses a workflow's cache paths: absolute, clean, not /, unique, and at most maxCache of them.
+// cache parses a workflow's cache paths: absolute, clean, in cacheRule, not /tmp, which every container already
+// mounts as a tmpfs, unique, and at most maxCache of them.
 func cache(n *yaml.Node, at string) ([]string, error) {
 	cs := []string{}
 	if isNull(n) {
@@ -269,8 +312,8 @@ func cache(n *yaml.Node, at string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !path.IsAbs(c) || path.Clean(c) != c || c == "/" {
-			return nil, fail(item, at, "must be a clean absolute path other than /")
+		if !cacheRule.MatchString(c) || path.Clean(c) != c || c == "/tmp" {
+			return nil, fail(item, at, "must be a clean absolute path of letters, digits and ._@+-, other than / and /tmp")
 		}
 		if slices.Contains(cs, c) {
 			return nil, fail(item, at, "repeats %s", c)
@@ -353,6 +396,9 @@ func isNull(n *yaml.Node) bool {
 
 // join returns the path of key under at.
 func join(at, key string) string {
+	if !plainKey.MatchString(key) {
+		key = strconv.Quote(key)
+	}
 	if at == "" {
 		return key
 	}
