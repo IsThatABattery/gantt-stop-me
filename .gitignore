@@ -4,3 +4,6 @@ __debug_bin*
 
 # Design doc kept local, out of the repo.
 /AUTOMATION.md
+
+# The live LLM test's screenshots and videos.
+/src/back/api/live-artifacts/

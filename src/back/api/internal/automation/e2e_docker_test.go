@@ -105,6 +105,7 @@ func TestRunOnDocker(t *testing.T) {
 // onDocker starts the real runner on real Docker, skipping the test outside the runner-test container, and returns
 // it with the config that points the API at it.
 func onDocker(t *testing.T) (*runner.Server, func(*app.Config)) {
+	t.Helper()
 	if os.Getenv("RUNNER_DOCKER_TESTS") != "1" {
 		t.Skip("needs Docker; run it with docker compose --profile test run --rm runner-test")
 	}

@@ -1,6 +1,7 @@
 package automation_test
 
 import (
+	"bytes"
 	"cmp"
 	"fmt"
 	"os"
@@ -40,7 +41,7 @@ func TestLiveLLMOnDocker(t *testing.T) {
     description: The nightly invoicing batch job, which serves no pages
 `)
 	f.setTests(1,
-		tasktests.Test{Name: "The home page shows today's special: cardamom buns for 4 euros", Kind: "check"},
+		tasktests.Test{Name: "The home page shows today's special for 4 euros", Kind: "check"},
 		tasktests.Test{Name: "The home page shows today's special: cinnamon rolls for 3 euros", Kind: "check"},
 	)
 	n := f.ready()
@@ -60,23 +61,28 @@ func TestLiveLLMOnDocker(t *testing.T) {
 			tools = append(tools, s.Tool)
 		}
 		t.Logf("test %d %s after %v: %s", i+1, c.Status, tools, c.Detail)
-		// The page's own words, which neither check names wrongly, show the model read it.
-		if !strings.Contains(strings.ToLower(c.Detail), "cardamom") {
-			t.Errorf("test %d detail %q, want it to say what the page shows", i+1, c.Detail)
+		// Only a browser tool takes a screenshot, so http_request alone fails this.
+		if !bytes.HasPrefix(c.Screenshot, []byte("\x89PNG\r\n\x1a\n")) {
+			t.Errorf("test %d screenshot = %d bytes, want a PNG from the browser", i+1, len(c.Screenshot))
 		}
 		if dir != "" {
 			save(t, filepath.Join(dir, fmt.Sprintf("check-%d.png", i+1)), c.Screenshot)
 			save(t, filepath.Join(dir, fmt.Sprintf("check-%d.webm", i+1)), c.Video)
 		}
 	}
+	f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "failed", Finished: true}) // says why, when planning failed
 	if len(got) != 2 || got[0].Status != "passed" || got[1].Status != "failed" {
 		t.Fatal("want the first check passed and the second failed")
 	}
-	f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "failed", Finished: true})
+	// Only the page names the special, so the failing check's reason can quote it only from the page.
+	if !strings.Contains(strings.ToLower(got[1].Detail), "cardamom") {
+		t.Errorf("test 2 detail %q, want it to say what the page shows", got[1].Detail)
+	}
 }
 
 // save writes data to path, when there is any.
 func save(t *testing.T, path string, data []byte) {
+	t.Helper()
 	if len(data) == 0 {
 		return
 	}
