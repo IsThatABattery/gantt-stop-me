@@ -7,7 +7,7 @@ import { renderApp } from './render'
 const column = (name: RegExp) => screen.getByRole('region', { name })
 const cardsIn = (name: RegExp) =>
   within(column(name))
-    .queryAllByRole('link')
+    .queryAllByRole('link', { name: /^#/ })
     .map((l) => l.getAttribute('aria-label')!.split(':')[0])
 const card = (n: number) => screen.getByRole('link', { name: new RegExp(`^#${n}:`) })
 const task = (id: number) => fake.tasks.find((t) => t.id === id)!
@@ -20,6 +20,12 @@ async function openBoard() {
 }
 
 describe('board', () => {
+  it('puts Plan a feature on top of the Backlog column', async () => {
+    await openBoard()
+    const plan = within(column(/Backlog/)).getByRole('link', { name: 'Plan a feature' })
+    expect(plan).toHaveAttribute('href', '/projects/1/plans')
+  })
+
   it('shows the repository and each issue in its column', async () => {
     await openBoard()
     expect(screen.getByRole('heading', { name: 'gantt' })).toBeInTheDocument()

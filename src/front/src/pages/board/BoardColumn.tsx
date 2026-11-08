@@ -2,6 +2,9 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ReactNode } from 'react'
+import { Link, useParams } from 'react-router'
+import { buttonClass } from '../../components/buttonClass'
+import { Icon } from '../../components/Icon'
 import type { Task } from '../../data/api/types'
 import type { ColumnKey } from '../../data/types'
 import { columnLabels, labels } from '../../labels/labels'
@@ -22,6 +25,7 @@ export function BoardColumn({ columnKey, tasks, total, filtered, renderCard }: B
   const name = columnLabels[columnKey]
   const { setNodeRef, isOver } = useDroppable({ id: columnDropId(columnKey) })
   const count = filtered ? `${tasks.length} of ${total}` : `${tasks.length}`
+  const { projectId } = useParams()
 
   return (
     <section
@@ -31,6 +35,13 @@ export function BoardColumn({ columnKey, tasks, total, filtered, renderCard }: B
         isOver ? 'border-ion/60' : 'border-line-soft'
       }`}
     >
+      {columnKey === 'backlog' && (
+        // Planning is how work enters Backlog, so its way in sits on top of it.
+        <Link to={`/projects/${projectId}/plans`} className={buttonClass('primary', 'w-full justify-center gap-2')}>
+          <Icon name="target" size={16} />
+          {labels.plans}
+        </Link>
+      )}
       <div className="flex items-baseline justify-between px-1 pt-1 pb-2">
         <div>
           <h2 className="m-0 font-heading text-[15px] font-semibold">{name.name}</h2>
