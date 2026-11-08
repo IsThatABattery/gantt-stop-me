@@ -71,6 +71,8 @@ type outputItem struct {
 func (c *Client) Chat(ctx context.Context, model string, messages []Message, tools []Tool, maxCalls int, handle Handler) ([]Step, error) {
 	type function struct {
 		Type string `json:"type"`
+		// false: strict, the Responses API's default, makes every property required, so the model can leave none out.
+		Strict bool `json:"strict"`
 		Tool
 	}
 	in := struct {
@@ -84,7 +86,7 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, too
 		in.Input = append(in.Input, m)
 	}
 	for _, t := range tools {
-		in.Tools = append(in.Tools, function{"function", t})
+		in.Tools = append(in.Tools, function{Type: "function", Tool: t})
 	}
 	var steps []Step
 	nudged := false
