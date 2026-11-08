@@ -24,13 +24,16 @@ export function UnsavedChangesGuard({ when }: { when: boolean }) {
   if (blocker.state !== 'blocked') return null
   return (
     <div role="alertdialog" aria-labelledby={id} className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
-      <p id={id} className="m-0 flex-1 text-[13px]">
+      {/* min-w-fit and one group for the buttons: where they don't fit beside the text, they go under it together. */}
+      <p id={id} className="m-0 min-w-fit flex-1 text-[13px]">
         You have unsaved changes. Leave without saving?
       </p>
-      <Button id={`${id}-stay`} onClick={() => blocker.reset()}>Stay</Button>
-      <Button onClick={() => blocker.proceed()} className="border-warning text-warning hover:border-warning hover:text-warning">
-        Leave without saving
-      </Button>
+      <div className="flex flex-wrap gap-3">
+        <Button id={`${id}-stay`} onClick={() => blocker.reset()}>Stay</Button>
+        <Button onClick={() => blocker.proceed()} className="border-warning text-warning hover:border-warning hover:text-warning">
+          Leave without saving
+        </Button>
+      </div>
     </div>
   )
 }
