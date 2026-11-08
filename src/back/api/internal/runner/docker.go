@@ -37,9 +37,14 @@ func dockerEnv() []string {
 
 // docker runs the docker CLI with stdout and stderr going to out. Cancelling ctx kills it.
 func docker(ctx context.Context, out io.Writer, args ...string) error {
+	return dockerIn(ctx, nil, out, args...)
+}
+
+// dockerIn is docker with in as its stdin.
+func dockerIn(ctx context.Context, in io.Reader, out io.Writer, args ...string) error {
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Env = dockerEnv()
-	cmd.Stdout, cmd.Stderr = out, out
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = in, out, out
 	return cmd.Run()
 }
 
