@@ -2,8 +2,6 @@
 
 A mission-control scrum board for GitHub repositories, where your team and AI agents work the backlog. Agents are put on tasks to test and review developers' code, reporting what they do back to the user. Testing and review processes are containerized to isolate agents' work and ensure system safety.
 
-![The board](screenshots/03-board.png)
-
 ## Contents
 
 - [What you need](#what-you-need)
