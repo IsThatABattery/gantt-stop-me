@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	apiboard "gantt-stop-me/api/internal/board"
+	"gantt-stop-me/api/internal/github/githubtest"
 )
 
 func TestBranchName(t *testing.T) {
@@ -48,5 +49,22 @@ func TestMoveRecordsNoBranchGitHubRefused(t *testing.T) {
 	res.JSON(&got)
 	if got.Branch != nil {
 		t.Fatalf("task records branch %q, GitHub has %v", *got.Branch, f.repo.Branches())
+	}
+}
+
+func TestReorderInProgressMakesNoBranch(t *testing.T) {
+	f := setup(t, "One", "Two")
+	// Moved to In Progress on GitHub, so the sync puts them there without a branch.
+	for _, n := range []int{1, 2} {
+		f.repo.EditIssue(n, func(is *githubtest.Issue) { is.Labels = []string{"board:in-progress"} })
+	}
+	f.dueSync()
+	if got := f.order("in-progress"); !slices.Equal(got, []int{1, 2}) {
+		t.Fatalf("in-progress = %v", got)
+	}
+	n := len(f.GitHub.Requests())
+	f.move(f.ada, 2, "in-progress", 1).Expect(http.StatusOK, "")
+	if got := f.since(n); len(got) != 0 {
+		t.Fatalf("a reorder within In Progress called GitHub: %v", got)
 	}
 }

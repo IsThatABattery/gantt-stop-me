@@ -78,8 +78,9 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
+	from := t.ColumnID
 	t, err = b.place(ctx, tx, token, p, t, to, in.BeforeTaskID, true)
-	if err == nil && to.Key == "in-progress" && t.Branch == nil {
+	if err == nil && to.Key == "in-progress" && from != to.ID && t.Branch == nil {
 		t.Branch = b.branch(ctx, tx, token, p, t)
 	}
 	if err == nil {
