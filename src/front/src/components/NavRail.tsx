@@ -2,6 +2,7 @@ import { Link, NavLink } from 'react-router'
 import { labels } from '../labels/labels'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
+import { ThemeToggle } from './ThemeToggle'
 
 interface Item {
   label: string
@@ -62,7 +63,10 @@ export function NavRail({ projectId }: { projectId?: string }) {
       {items.map((item) => (
         <RailLink key={item.to} item={item} />
       ))}
-      <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="mt-auto" />
+      <div className="mt-auto flex items-center gap-2">
+        <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1" />
+        <ThemeToggle />
+      </div>
     </nav>
   )
 }
