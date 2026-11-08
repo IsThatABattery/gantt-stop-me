@@ -2,19 +2,19 @@ import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { Eyebrow } from '../../components/Eyebrow'
 import { StatusMessage } from '../../components/StatusMessage'
-import { useUser, useWorkspace } from '../../data/core'
-import { useSession } from '../../data/session'
-import { useSettings } from '../../data/views/settings'
-import { labels } from '../../labels/labels'
-import { sectionNav } from './sections'
-import { SettingsForm } from './SettingsForm'
+import { useMe } from '../../data/session'
+import { labels, settingsLabels } from '../../labels/labels'
+import { GitHubSection } from './GitHubSection'
+import { PasswordForm } from './PasswordForm'
+import { PlanningSection } from './PlanningSection'
+import { ProvidersSection } from './ProvidersSection'
+import { Section } from './Section'
+import { sectionIds, sectionNav } from './sections'
 
-// Settings, from Settings.dc.html. Profile isn't drawn, so it reuses the section-card style.
+// Settings, from Settings.dc.html, with the sections the API supports: the
+// account, the GitHub link, LLM providers and the planning agents. Each section saves on its own.
 export function SettingsPage() {
-  const session = useSession()
-  const settings = useSettings()
-  const user = useUser(session?.userId)
-  const { data: workspace } = useWorkspace()
+  const { data: me } = useMe()
   const { hash } = useLocation()
   const active = hash.slice(1) || sectionNav[0].id
 
@@ -23,14 +23,10 @@ export function SettingsPage() {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView?.({ block: 'start' })
   }, [hash])
 
-  const error = settings.error ?? user.error
-
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
       <header>
-        <Eyebrow>
-          {labels.workspace} · {workspace?.name ?? '…'}
-        </Eyebrow>
+        <Eyebrow>{me?.email ?? '…'}</Eyebrow>
         <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.settings}</h1>
       </header>
 
@@ -50,12 +46,20 @@ export function SettingsPage() {
           ))}
         </nav>
 
-        {error ? (
-          <StatusMessage title="Something went wrong" body={error.message} />
-        ) : !settings.data || !user.data ? (
+        {!me ? (
           <StatusMessage title={`Loading ${labels.settings.toLowerCase()}…`} />
         ) : (
-          <SettingsForm settings={settings.data} user={user.data} />
+          <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-5 lg:max-w-[820px]">
+            <Section id={sectionIds.account} title={settingsLabels.account}>
+              <p className="m-0 text-[13px] text-text-muted-strong">
+                Signed in as <span className="text-text">{me.email}</span>
+              </p>
+              <PasswordForm />
+            </Section>
+            <GitHubSection me={me} />
+            <ProvidersSection />
+            <PlanningSection />
+          </div>
         )}
       </div>
     </div>

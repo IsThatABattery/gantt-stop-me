@@ -1,3 +1,4 @@
+import type { RunStatus } from '../data/api/types'
 import type {
   ActivityVerb,
   AgentState,
@@ -40,9 +41,13 @@ export const labels = {
   activity: 'Mission log',
   retro: 'Debrief',
   settings: 'Settings',
+  automation: 'Automation',
 
   allProjects: 'All missions',
+  addProject: 'Add a mission',
   newProject: 'New mission',
+  testsRunning: 'Static fires running',
+  linkGitHub: 'Link GitHub',
   newProjectHint: 'Start from scratch or import a backlog',
   selectProject: 'Select a mission',
   searchProjects: 'Search missions',
@@ -198,6 +203,10 @@ export const plannerLabels = {
 
 /** Settings section names (Settings.dc.html). */
 export const settingsLabels = {
+  account: 'Account',
+  github: 'GitHub',
+  providers: 'LLM providers',
+  providersHelp: 'OpenAI-compatible endpoints your astronauts and test runs can use. Keys are stored encrypted and never shown again.',
   profile: 'Profile',
   autonomy: 'Astronauts and autonomy',
   roles: 'Operators and roles',
@@ -213,6 +222,19 @@ export const settingsLabels = {
   integrationsHelp: 'The AI company that powers your astronauts. Applies to every payload unless overridden.',
   apiKey: 'API key',
   changePassword: 'Change password',
+  agents: 'Agents',
+  agentsHelp: 'The LLM agents that plan your features. Each uses one of your providers.',
+  review: 'Review plan docs before tasks are made',
+  reviewHelp: 'Off: a finished plan doc is approved without review.',
+  saveAgents: 'Save agent settings',
+} as const
+
+/** The LLM agents people configure: name and what each does. */
+export const llmAgentLabels = {
+  interviewer: { name: 'Interviewer', description: 'Asks about a feature one question at a time and writes its plan doc.' },
+  taskAgent: { name: 'Task agent', description: 'Turns an approved plan doc into tasks with tests.' },
+  decision: { name: 'Decision agent', description: 'Picks which workflow runs each test.' },
+  chat: { name: 'Check agent', description: 'Runs LLM checks, using the browser and other tools.' },
 } as const
 
 export const autonomyDescriptions: Record<Autonomy, string> = {
@@ -320,4 +342,14 @@ export const agentStateLabels: Record<AgentState, string> = {
 export const roleLabels: Record<UserRole, string> = {
   lead: 'Flight director',
   member: 'Operator',
+}
+
+/** A task's latest test run, as the board card and drawer show it. */
+export const runStatusLabels: Record<RunStatus, string> = {
+  queued: 'Test queued',
+  running: 'Testing',
+  passed: 'Tests passed',
+  failed: 'Tests failed',
+  error: 'Test error',
+  cancelled: 'Test cancelled',
 }

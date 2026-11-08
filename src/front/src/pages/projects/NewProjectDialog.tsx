@@ -2,7 +2,7 @@ import { useId, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { Dialog } from '../../components/Dialog'
 import { Button, Field, Textarea, TextInput } from '../../components/controls'
-import { useSession } from '../../data/session'
+import { useMockSession } from '../../data/core'
 import { useCreateProject } from '../../data/views/projects'
 import { labels } from '../../labels/labels'
 
@@ -10,7 +10,7 @@ import { labels } from '../../labels/labels'
 export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const id = useId()
   const navigate = useNavigate()
-  const session = useSession()
+  const session = useMockSession()
   const create = useCreateProject()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')

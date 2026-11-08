@@ -1,127 +1,172 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { db } from '../../data/mock/store'
+import { fake } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
-async function openSettings() {
-  const utils = renderApp('/settings')
-  await screen.findByRole('button', { name: 'Save changes' })
+async function openSettings(path = '/settings') {
+  const utils = renderApp(path)
+  await screen.findByRole('heading', { name: 'Settings' })
+  await screen.findByText('Signed in as', { exact: false })
   return utils
 }
 
-const save = () => userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-const password = () => within(screen.getByRole('form', { name: 'Change password' }))
+const section = (name: string) => screen.getByRole('region', { name })
 
-describe('settings', () => {
-  it('shows the profile of the signed-in operator', async () => {
+describe('account', () => {
+  it('shows who is signed in, and only the sections the API supports', async () => {
     await openSettings()
-    expect(screen.getByLabelText('Name')).toHaveValue('TV')
-    expect(screen.getByLabelText('Email')).toHaveValue('tv@team.dev')
-    expect(screen.getByRole('navigation', { name: 'Settings sections' })).toHaveTextContent(
-      'ProfileAstronauts and autonomyOperators and rolesNotificationsIntegrations',
-    )
+    expect(within(section('Account')).getByText('ada@example.com')).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' })
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Account', 'GitHub', 'LLM providers', 'Agents'])
   })
 
-  it('saves name and email to the user', async () => {
+  it('checks the password change here, then with the API, and confirms it', async () => {
     await openSettings()
-    await userEvent.clear(screen.getByLabelText('Name'))
-    await userEvent.type(screen.getByLabelText('Name'), 'Tess V')
-    await save()
-    expect(await screen.findByText('Settings saved')).toBeInTheDocument()
-    expect(db.users.find((u) => u.id === 'u-tv')!.name).toBe('Tess V')
-  })
+    const s = within(section('Account'))
+    await userEvent.click(s.getByRole('button', { name: 'Change password' }))
+    expect(s.getByText('Enter your current password.')).toBeInTheDocument()
 
-  it('checks the password change and confirms it', async () => {
+    await userEvent.type(s.getByLabelText('Current password'), 'wrong one')
+    await userEvent.type(s.getByLabelText('New password'), 'a new password')
+    await userEvent.type(s.getByLabelText('Confirm new password'), 'a new password')
+    await userEvent.click(s.getByRole('button', { name: 'Change password' }))
+    expect(await s.findByText('Your current password is wrong.')).toBeInTheDocument()
+    expect(s.getByLabelText('Current password')).toHaveAttribute('aria-invalid', 'true')
+
+    await userEvent.clear(s.getByLabelText('Current password'))
+    await userEvent.type(s.getByLabelText('Current password'), 'correct horse')
+    await userEvent.click(s.getByRole('button', { name: 'Change password' }))
+    expect(await s.findByText('Password changed')).toBeInTheDocument()
+    expect(fake.accounts[0].password).toBe('a new password')
+    expect(fake.requests.filter((r) => r.method === 'PATCH').at(-1)?.body).toEqual({ currentPassword: 'correct horse', newPassword: 'a new password' })
+  })
+})
+
+describe('GitHub', () => {
+  it('shows the linked account and unlinks it after a confirm step', async () => {
     await openSettings()
-    const f = password()
-    await userEvent.type(f.getByLabelText('Current password'), 'old-pass')
-    await userEvent.type(f.getByLabelText('New password'), 'short')
-    await userEvent.type(f.getByLabelText('Confirm new password'), 'shorter')
-    await userEvent.click(f.getByRole('button', { name: 'Change password' }))
-    expect(f.getByText('Use 8 or more characters.')).toBeInTheDocument()
-    expect(f.getByText("The new passwords don't match.")).toBeInTheDocument()
-    expect(f.getByLabelText('New password')).toHaveFocus()
+    const s = within(section('GitHub'))
+    expect(s.getByText('ada')).toBeInTheDocument()
+    expect(s.getByText('with a personal access token')).toBeInTheDocument()
 
-    await userEvent.clear(f.getByLabelText('New password'))
-    await userEvent.type(f.getByLabelText('New password'), 'long-enough')
-    await userEvent.clear(f.getByLabelText('Confirm new password'))
-    await userEvent.type(f.getByLabelText('Confirm new password'), 'long-enough')
-    await userEvent.click(f.getByRole('button', { name: 'Change password' }))
-    expect(await f.findByText('Password changed')).toBeInTheDocument()
-    expect(f.getByLabelText('New password')).toHaveValue('')
+    await userEvent.click(s.getByRole('button', { name: 'Unlink' }))
+    expect(s.getByRole('alertdialog')).toHaveTextContent('Unlinking removes your access to every mission')
+    await userEvent.click(s.getByRole('button', { name: 'Unlink GitHub' }))
+
+    expect(await s.findByRole('link', { name: 'Link with GitHub' })).toHaveAttribute('href', '/api/github/link')
+    expect(fake.github).toBeNull()
   })
 
-  it('saves autonomy and approval rules, and they stick after navigating away', async () => {
-    const { router } = await openSettings()
-    await userEvent.click(screen.getByRole('radio', { name: /Free flight/ }))
-    await userEvent.click(screen.getByRole('switch', { name: 'Require two approvals on Core phase' }))
-    await save()
-    expect(await screen.findByText('Settings saved')).toBeInTheDocument()
-    expect(db.settings.defaultAutonomy).toBe(2)
-    expect(db.settings.approvalRules.find((r) => r.id === 'rule-two')!.enabled).toBe(true)
-
-    await router.navigate('/')
-    await router.navigate('/settings')
-    await screen.findByRole('button', { name: 'Save changes' })
-    expect(screen.getByRole('radio', { name: /Free flight/ })).toBeChecked()
-    expect(screen.getByRole('switch', { name: 'Require two approvals on Core phase' })).toHaveAttribute('aria-checked', 'true')
-  })
-
-  it('keeps only the last four characters of the API key', async () => {
+  it('links a personal access token, showing a refused one', async () => {
+    fake.github = null
     await openSettings()
-    await userEvent.type(screen.getByLabelText('API key'), 'sk-test-abcd1234')
-    await save()
-    expect(await screen.findByText('•••• 1234')).toBeInTheDocument()
-    expect(screen.getByLabelText('API key')).toHaveValue('')
-    expect(db.settings.provider).toEqual({ name: 'OpenAI', keyLast4: '1234' })
-    expect(JSON.stringify(db.settings)).not.toContain('sk-test')
+    const s = within(section('GitHub'))
+    const field = await s.findByLabelText('Or use a personal access token')
+
+    await userEvent.type(field, 'bad-token')
+    await userEvent.click(s.getByRole('button', { name: 'Link token' }))
+    expect(await s.findByRole('alert')).toHaveTextContent('GitHub did not accept that token.')
+
+    await userEvent.clear(field)
+    await userEvent.type(field, 'ghp_good')
+    await userEvent.click(s.getByRole('button', { name: 'Link token' }))
+    expect(await s.findByText('octo')).toBeInTheDocument()
+    expect(fake.github).toEqual({ login: 'octo', kind: 'pat' })
   })
 
-  it('rejects a payload cap below 1', async () => {
+  it('says how the OAuth link went when GitHub sends the user back', async () => {
+    await openSettings('/settings?github=error')
+    expect(within(section('GitHub')).getByRole('status')).toHaveTextContent("GitHub didn't link.")
+  })
+})
+
+describe('LLM providers', () => {
+  it('lists providers with a masked key and their models', async () => {
     await openSettings()
-    const cap = screen.getByLabelText('Concurrent astronaut payloads')
-    await userEvent.clear(cap)
-    await userEvent.type(cap, '0')
-    await save()
-    expect(screen.getByText('Use a whole number, 1 or more.')).toBeInTheDocument()
-    expect(cap).toHaveFocus()
-    expect(db.settings.agentTaskCap).toBe(4)
+    const s = within(section('LLM providers'))
+    expect(await s.findByText('Local')).toBeInTheDocument()
+    expect(s.getByText('•••• abcd')).toBeInTheDocument()
+    expect(s.getByText('llama3')).toBeInTheDocument()
   })
 
-  it('Cancel puts the form back', async () => {
+  it('adds a provider, then picks its models', async () => {
     await openSettings()
-    await userEvent.click(screen.getByRole('radio', { name: /Tethered/ }))
-    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.getByRole('radio', { name: /Guided/ })).toBeChecked()
-    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
+    const s = within(section('LLM providers'))
+    await userEvent.click(await s.findByRole('button', { name: 'Add provider' }))
+    await userEvent.type(s.getByLabelText('Name'), 'OpenAI')
+    await userEvent.type(s.getByLabelText('Base URL'), 'https://api.openai.com/v1')
+    await userEvent.type(s.getByLabelText('API key'), 'sk-secret-1234')
+    await userEvent.click(within(s.getByRole('form', { name: 'Add provider' })).getByRole('button', { name: 'Add provider' }))
+
+    const pick = await s.findByRole('form', { name: 'Pick models for OpenAI' })
+    await userEvent.click(within(pick).getByLabelText('qwen2'))
+    await userEvent.click(within(pick).getByRole('button', { name: 'Save models' }))
+
+    await waitFor(() => expect(fake.providers.find((p) => p.name === 'OpenAI')).toMatchObject({ keyLast4: '1234', models: ['qwen2'] }))
+    expect(await s.findByText('qwen2')).toBeInTheDocument()
   })
 
-  it('warns before leaving with unsaved changes', async () => {
-    const { router } = await openSettings()
-    await userEvent.click(screen.getByRole('radio', { name: /Tethered/ }))
-    await userEvent.click(screen.getAllByRole('link', { name: /Mission control|All missions/ })[0])
-
-    expect(await screen.findByRole('alertdialog')).toHaveTextContent('You have unsaved changes')
-    expect(router.state.location.pathname).toBe('/settings')
-    await userEvent.click(screen.getByRole('button', { name: 'Leave without saving' }))
-    expect(router.state.location.pathname).not.toBe('/settings')
-  })
-
-  it('moves between sections without a warning', async () => {
-    const { router } = await openSettings()
-    await userEvent.click(screen.getByRole('radio', { name: /Tethered/ }))
-    await userEvent.click(screen.getByRole('link', { name: 'Integrations' }))
-    expect(router.state.location.hash).toBe('#integrations')
-    expect(screen.getByRole('link', { name: 'Integrations' })).toHaveAttribute('aria-current', 'true')
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-  })
-
-  it('shows the undesigned sections as not built', async () => {
+  it('shows a taken name on the name field', async () => {
     await openSettings()
-    for (const name of ['Operators and roles', 'Notifications']) {
-      expect(within(screen.getByRole('region', { name })).getByText(/Not built yet/)).toBeInTheDocument()
-    }
+    const s = within(section('LLM providers'))
+    await userEvent.click(await s.findByRole('button', { name: 'Add provider' }))
+    await userEvent.type(s.getByLabelText('Name'), 'Local')
+    await userEvent.type(s.getByLabelText('Base URL'), 'https://example.com/v1')
+    await userEvent.type(s.getByLabelText('API key'), 'key')
+    await userEvent.click(within(s.getByRole('form', { name: 'Add provider' })).getByRole('button', { name: 'Add provider' }))
+
+    expect(await s.findByText('You already have a provider with this name.')).toBeInTheDocument()
+    expect(s.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('edits the models of a provider', async () => {
+    await openSettings()
+    const s = within(section('LLM providers'))
+    await userEvent.click(await s.findByRole('button', { name: 'Edit Local' }))
+    const form = s.getByRole('form', { name: 'Edit Local' })
+    await userEvent.click(await within(form).findByLabelText('mistral'))
+    await userEvent.click(within(form).getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(fake.providers[0].models).toEqual(['llama3', 'mistral']))
+    const saved = fake.requests.filter((r) => r.method === 'PATCH').at(-1)
+    expect(saved?.body).toEqual({ models: ['llama3', 'mistral'] })
+  })
+
+  for (const [what, use] of [
+    ['planning', () => (fake.planning.taskAgent = { providerId: 1, model: 'llama3', instructions: '' })],
+    [
+      'automation',
+      () =>
+        (fake.automation = {
+          enabled: true,
+          owner: { id: 1, login: 'ada' },
+          decisionProviderId: 2,
+          decisionModel: 'gpt-5',
+          decisionInstructions: '',
+          chatProviderId: 1,
+          chatModel: 'llama3',
+          chatInstructions: '',
+          pausedReason: null,
+          payloadUrl: 'https://gantt.example.com/api/github/webhook/1',
+          webhookSecretSet: false,
+        }),
+    ],
+  ] as const) {
+    it(`says why a provider ${what} uses cannot be removed`, async () => {
+      use()
+      await openSettings()
+      const s = within(section('LLM providers'))
+      await userEvent.click(await s.findByRole('button', { name: 'Remove Local' }))
+      expect(await s.findByRole('alert')).toHaveTextContent('Automation or planning uses this provider.')
+      expect(fake.providers).toHaveLength(1)
+    })
+  }
+
+  it('removes a provider nothing uses', async () => {
+    await openSettings()
+    const s = within(section('LLM providers'))
+    await userEvent.click(await s.findByRole('button', { name: 'Remove Local' }))
+    await waitFor(() => expect(fake.providers).toEqual([]))
   })
 })

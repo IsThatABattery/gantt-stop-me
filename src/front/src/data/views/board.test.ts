@@ -1,58 +1,72 @@
 import { describe, expect, it } from 'vitest'
-import { ConflictError, db } from '../mock/store'
-import { forceMoveConflict, getBoard, moveTask } from './board'
+import type { BoardResponse, Task } from '../api/types'
+import { applyMove, toBoard, withCurrentTask } from './board'
 
-const task = (id: string) => db.tasks.find((t) => t.id === id)!
-const order = async (column: string) =>
-  (await getBoard('orbital-nav')).columns.find((c) => c.key === column)!.tasks.map((t) => t.key)
+const task = (id: number, columnId: number, position: number, extra: Partial<Task> = {}): Task => ({
+  id,
+  issueNumber: id + 100,
+  columnId,
+  position,
+  version: 1,
+  title: `Task ${id}`,
+  state: columnId === 3 ? 'closed' : 'open',
+  url: '',
+  runStatus: null,
+  needsAttention: null,
+  ...extra,
+})
 
-describe('moveTask', () => {
-  it('puts the card at the midpoint above beforeTaskId', async () => {
-    const before = task('t-44')
-    const after = task('t-45')
-    await moveTask('orbital-nav', 't-49', { column: 'in-progress', beforeTaskId: 't-45', version: 1 })
-    expect(task('t-49').position).toBe((before.position + after.position) / 2)
-    expect(await order('in-progress')).toEqual(['PAY-44', 'PAY-49', 'PAY-45', 'PAY-46'])
+const response: BoardResponse = {
+  project: { id: 1, owner: 'ada', name: 'gantt', permission: 'write' },
+  // Out of order on purpose: the board sorts columns by position.
+  columns: [
+    { id: 3, key: 'closed', name: 'Closed', position: 2, closesIssue: true },
+    { id: 1, key: 'backlog', name: 'Backlog', position: 0, closesIssue: false },
+    { id: 2, key: 'in-progress', name: 'In Progress', position: 1, closesIssue: false },
+  ],
+  tasks: [task(1, 1, 1), task(2, 1, 2), task(3, 2, 1), task(4, 3, 1)],
+}
+
+const ids = (board: ReturnType<typeof toBoard>) => Object.fromEntries(board.columns.map((c) => [c.key, c.tasks.map((t) => t.id)]))
+
+describe('toBoard', () => {
+  it('groups tasks under their columns, in column order', () => {
+    const board = toBoard(response)
+    expect(board.columns.map((c) => c.key)).toEqual(['backlog', 'in-progress', 'closed'])
+    expect(ids(board)).toEqual({ backlog: [1, 2], 'in-progress': [3], closed: [4] })
+  })
+})
+
+describe('applyMove', () => {
+  it('puts the card above beforeTaskId and bumps its version', () => {
+    const board = applyMove(toBoard(response), { taskId: 2, columnId: 2, beforeTaskId: 3, version: 1 })
+    expect(ids(board)).toEqual({ backlog: [1], 'in-progress': [2, 3], closed: [4] })
+    expect(board.columns[1].tasks[0]).toMatchObject({ columnId: 2, version: 2 })
   })
 
-  it('goes to the top or the bottom of a column', async () => {
-    await moveTask('orbital-nav', 't-49', { column: 'in-progress', beforeTaskId: 't-44', version: 1 })
-    await moveTask('orbital-nav', 't-51', { column: 'in-progress', beforeTaskId: null, version: 1 })
-    expect(await order('in-progress')).toEqual(['PAY-49', 'PAY-44', 'PAY-45', 'PAY-46', 'PAY-51'])
+  it('puts the card at the bottom when beforeTaskId is null', () => {
+    const board = applyMove(toBoard(response), { taskId: 1, columnId: 1, beforeTaskId: null, version: 1 })
+    expect(ids(board).backlog).toEqual([2, 1])
   })
 
-  it('renumbers the column when the gap gets too small', async () => {
-    task('t-45').position = task('t-44').position + 1e-9
-    await moveTask('orbital-nav', 't-49', { column: 'in-progress', beforeTaskId: 't-45', version: 1 })
-    expect(await order('in-progress')).toEqual(['PAY-44', 'PAY-49', 'PAY-45', 'PAY-46'])
+  it('closes the issue in a closing column and reopens it on the way out', () => {
+    const closed = applyMove(toBoard(response), { taskId: 1, columnId: 3, beforeTaskId: null, version: 1 })
+    expect(closed.columns[2].tasks.find((t) => t.id === 1)?.state).toBe('closed')
+    const reopened = applyMove(closed, { taskId: 4, columnId: 1, beforeTaskId: null, version: 1 })
+    expect(reopened.columns[0].tasks.find((t) => t.id === 4)?.state).toBe('open')
   })
 
-  it('bumps the version and logs a moved event', async () => {
-    await moveTask('orbital-nav', 't-49', { column: 'in-progress', beforeTaskId: null, version: 1 })
-    expect(task('t-49').version).toBe(2)
-    expect(db.activityEvents[0]).toMatchObject({ verb: 'moved', taskId: 't-49', detail: 'Moved from Hangar to In orbit' })
+  it('leaves the board alone for an unknown task or column', () => {
+    const board = toBoard(response)
+    expect(applyMove(board, { taskId: 99, columnId: 1, beforeTaskId: null, version: 1 })).toBe(board)
+    expect(applyMove(board, { taskId: 1, columnId: 99, beforeTaskId: null, version: 1 })).toBe(board)
   })
+})
 
-  it('lands a card moved into Closed, and requeues it on the way out', async () => {
-    await moveTask('orbital-nav', 't-46', { column: 'closed', beforeTaskId: null, version: 1 })
-    expect(task('t-46').status).toBe('landed')
-    await moveTask('orbital-nav', 't-46', { column: 'testing', beforeTaskId: null, version: 2 })
-    expect(task('t-46').status).toBe('queued')
-  })
-
-  it('rejects a stale version and changes nothing', async () => {
-    await expect(
-      moveTask('orbital-nav', 't-49', { column: 'in-progress', beforeTaskId: null, version: 0 }),
-    ).rejects.toBeInstanceOf(ConflictError)
-    expect(task('t-49')).toMatchObject({ column: 'backlog', version: 1 })
-  })
-
-  it('rejects when a conflict is forced', async () => {
-    forceMoveConflict()
-    await expect(
-      moveTask('orbital-nav', 't-49', { column: 'in-progress', beforeTaskId: null, version: 1 }),
-    ).rejects.toBeInstanceOf(ConflictError)
-    await moveTask('orbital-nav', 't-49', { column: 'in-progress', beforeTaskId: null, version: 1 })
-    expect(task('t-49').column).toBe('in-progress')
+describe('withCurrentTask', () => {
+  it('places the API copy of a task by its position', () => {
+    const board = withCurrentTask(toBoard(response), task(1, 2, 0.5, { version: 3 }))
+    expect(ids(board)).toEqual({ backlog: [2], 'in-progress': [1, 3], closed: [4] })
+    expect(board.columns[1].tasks[0].version).toBe(3)
   })
 })

@@ -21,7 +21,9 @@ async function loaded() {
   await screen.findByRole('group', { name: 'Astronauts roster' })
 }
 
-describe('astronaut console', () => {
+// Skipped: this screen runs on mock data and isn't routed until its API exists
+// (docs/implementation/api-gaps.md). Unskip it when the screen is wired.
+describe.skip('astronaut console', () => {
   it('shows four tiles, with Astronaut-3 amber and selected for its hail', async () => {
     await loaded()
     const tiles = within(screen.getByRole('group', { name: 'Astronauts roster' })).getAllByRole('button')

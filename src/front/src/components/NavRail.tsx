@@ -2,6 +2,7 @@ import { Link, NavLink } from 'react-router'
 import { labels } from '../labels/labels'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
+import { UserMenu } from './UserMenu'
 
 interface Item {
   label: string
@@ -33,17 +34,17 @@ function RailLink({ item, className = '' }: { item: Item; className?: string }) 
   )
 }
 
-/** Left rail. Without a project it shows only the way back and Settings. */
+/**
+ * Left rail. Without a project it shows only the way back and Settings.
+ * In a project it adds the board and automation.
+ * Backlog, sprints, agents, activity and retro come back once the API has
+ * them (docs/implementation/api-gaps.md).
+ */
 export function NavRail({ projectId }: { projectId?: string }) {
-  const base = projectId ? `/projects/${projectId}` : ''
   const items: Item[] = projectId
     ? [
-        { label: labels.board, to: base, icon: 'board', end: true },
-        { label: labels.backlog, to: `${base}/backlog`, icon: 'hangar' },
-        { label: labels.sprints, to: `${base}/sprints`, icon: 'rocket' },
-        { label: labels.agents, to: `${base}/agents`, icon: 'helmet' },
-        { label: labels.activity, to: `${base}/activity`, icon: 'log' },
-        { label: labels.retro, to: `${base}/retro`, icon: 'debrief' },
+        { label: labels.board, to: `/projects/${projectId}`, icon: 'board', end: true },
+        { label: labels.automation, to: `/projects/${projectId}/automation`, icon: 'orbit' },
       ]
     : []
 
@@ -56,13 +57,16 @@ export function NavRail({ projectId }: { projectId?: string }) {
         <Logo />
       </Link>
       <Link to="/" className={`${itemBase} mb-2 border border-line text-text-muted-strong hover:text-text`}>
-        <Icon name="back" />
-        {labels.allProjects}
+        <Icon name="plus" />
+        {labels.addProject}
       </Link>
       {items.map((item) => (
         <RailLink key={item.to} item={item} />
       ))}
-      <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="mt-auto" />
+      <div className="mt-auto flex items-center gap-2">
+        <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1" />
+        <UserMenu placement="above" />
+      </div>
     </nav>
   )
 }

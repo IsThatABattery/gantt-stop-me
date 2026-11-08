@@ -2,50 +2,51 @@
 
 React + TypeScript (Vite), React Router, TanStack Query and Tailwind CSS v4. The design it follows is in [`docs/ganttstopme-plan/`](../../docs/ganttstopme-plan/README.md).
 
-Phase 1 is done: sign in, pick a mission, see the board with sample cards. `feature/frontend` also holds the foundation the remaining views build on. All data is mock data.
+The app runs on the Go API in `src/back/api`. Sign-in, sign-up, adding a project by repository URL, the board, the payload drawer, creating and editing payloads, and Settings (password, GitHub link, LLM providers) all call `/api`. Screens the API can't serve yet stay in the code on mock data but aren't routed; [docs/implementation/api-gaps.md](../../docs/implementation/api-gaps.md) lists them and what each needs.
 
 ## Run
 
 ```sh
 npm install
-npm run dev      # hot reload at http://localhost:5173
+npm run dev      # hot reload at http://localhost:5173, /api proxied to localhost:8080
 npm run build    # typecheck and production build
 npm run lint
-npm test         # Vitest + Testing Library (npm run test:watch to keep it running)
+npm test         # Vitest + Testing Library against a fake API (npm run test:watch to keep it running)
 ```
 
-In Docker, `docker compose up --build web` from the repo root serves the build at http://localhost:8080.
+`npm run dev` needs the API on `localhost:8080`: the compose stack (`docker compose up --build` from the repo root) or the dev container's **API** launch entry. The Vite proxy presents the API's own origin, so saves pass its `Origin` check.
 
-Sign-in accepts anything and signs you in as the sample flight director. The mock data lives in memory, so a refresh starts over from the sample data.
+In Docker, `docker compose up --build web` serves the production build at http://localhost:8080, with nginx proxying `/api`.
 
-## Working on a view
+To use the board you need an account (sign up at `/signup`) and a linked GitHub account (Settings → GitHub, with OAuth or a personal access token).
 
-The remaining views are split into nine branches, each off `feature/frontend` and merged back into it. Each branch's scope is in `docs/implementation/<view>.md`.
+## Data
 
-| Branch | Page folder | Data module |
-| --- | --- | --- |
-| `feature/frontend-board` | `src/pages/board/` | `src/data/views/board.ts` |
-| `feature/frontend-task-drawer` | `src/pages/task-drawer/` | `src/data/views/taskDrawer.ts` |
-| `feature/frontend-agents` | `src/pages/agents/` | `src/data/views/agents.ts` |
-| `feature/frontend-activity` | `src/pages/activity/` | `src/data/views/activity.ts` |
-| `feature/frontend-settings` | `src/pages/settings/` | `src/data/views/settings.ts` |
-| `feature/frontend-forms` | `src/pages/forms/` | `src/data/views/forms.ts` |
-| `feature/frontend-planner-doc` | `src/pages/planner/doc/` | `src/data/views/plannerDoc.ts` |
-| `feature/frontend-planner-tasks` | `src/pages/planner/tasks/` | `src/data/views/plannerTasks.ts` |
-| `feature/frontend-projects` | `src/pages/projects/` | `src/data/views/projects.ts` |
+| Path | What |
+| --- | --- |
+| `src/data/api/client.ts` | `api(method, path, body)`, the one place that calls `/api`, and `useApiMutation` |
+| `src/data/api/types.ts` | What the API sends, field for field (see `docs/*.md`) |
+| `src/data/errors.ts` | `ApiError`, `NotFoundError` (404), `ConflictError` (409); `errorCode(e)` reads the API's code |
+| `src/data/queryClient.ts` | The query client. Any 401 clears the signed-in user, which sends them to login |
+| `src/data/session.ts` | `useMe()` from `GET /api/me`, sign in, sign up, sign out |
+| `src/data/views/board.ts` | Board and optimistic moves |
+| `src/data/views/tasks.ts` | One task: detail, create, edit |
+| `src/data/views/addProject.ts` | Add a project by repository URL |
+| `src/data/views/settings.ts` | Password, GitHub link, providers |
+| `src/data/views/agentSettings.ts` | Planning agents (`/api/me/planning`) and a project's automation agents |
+| `src/data/keys.ts` | All TanStack Query keys |
 
-Rules that keep the branches from conflicting:
+Pages call hooks from these modules, never `api()` directly. API errors arrive as `ApiError` with the API's `code`, so a form can put each refusal on its field.
 
-- **Own your folder.** A view branch edits only its page folder, its data module, an optional `src/data/mock/<view>.ts` for extra sample data, and tests next to its files.
-- **Shared files are frozen.** These change only through a small PR straight into `feature/frontend`, and both people rebase after it lands:
-  - `src/data/types.ts`, `src/data/keys.ts`, `src/data/core.ts`
-  - `src/data/mock/fixtures.ts`, `src/data/mock/store.ts`
-  - `src/labels/labels.ts`
-  - `src/app/` (router, layouts)
-  - `src/components/`
-  - `src/styles/`
-- **Link, don't import.** Views reach each other by URL. Every route already exists, so a view can link to another before that view is built.
-- **Write through the store.** Read and write `db` from `src/data/mock/store.ts` inside your data module only. Wrap writes in `useMockMutation(fn, [keys.board(id), …])` so other views refresh.
+### Mock data, for the hidden screens
+
+The agents, activity, planner, objective, and project-list screens still read the in-memory mock (`src/data/mock/`) through their own modules in `src/data/views/` (`agents.ts`, `activity.ts`, `plannerDoc.ts`, `plannerTasks.ts`, `forms.ts`, `projects.ts`, `taskDrawer.ts`). They use `useMockSession`, `useMockProject` and `useMockProjectContext`. When a screen's API lands: wire its module to `api()`, route it in `src/app/router.tsx`, add it back to the nav rail, and unskip its tests.
+
+## Tests
+
+Tests render the real routes against a fake API served by MSW: `src/test/fakeApi.ts` holds its data and handlers, which follow the docs' status and error codes. `renderApp(path)` signs in as `ada@example.com` with GitHub linked. Tests read `fake` to check what was saved, `fake.requests` to check what was sent, and `failNext(route, error)` to make one request fail. Any `/api` request without a handler fails the test.
+
+Tests for the hidden screens are `describe.skip`ped with a pointer to `api-gaps.md`.
 
 ## Layout
 
@@ -53,32 +54,23 @@ Rules that keep the branches from conflicting:
 | --- | --- |
 | `src/styles/index.css` | Tailwind theme tokens from `design/tokens.json`, starfield, reduced motion |
 | `src/labels/labels.ts` | Every space display label. Code uses plain names (Project, Task, Agent…) |
-| `src/data/types.ts` | Data model, plain names |
-| `src/data/keys.ts` | All TanStack Query keys |
-| `src/data/core.ts` | Sign-in, user, workspace and project, shared by every view |
-| `src/data/views/` | One data module per view. The place to swap mock calls for the real API later |
-| `src/data/mock/fixtures.ts` | Sample data from the mockups |
-| `src/data/mock/store.ts` | The in-memory `db`, `delay`, errors, `useMockMutation` |
-| `src/data/session.ts` | Mock session in localStorage |
-| `src/components/` | Shared pieces: nav rail, chips, avatars, progress bar, counters, form controls, drawer, dialog, tabs, stepper, radio card, toggle, feedback form |
-| `src/app/` | Router, session guard, app shell, project layout, planner layout |
-| `src/pages/` | One folder per view, plus login, placeholders and not-found |
-| `src/test/` | Test setup and render helpers (`renderApp`, `renderWithProviders`) |
+| `src/data/` | See [Data](#data) |
+| `src/components/` | Shared pieces: nav rail, user menu, chips, avatars, form controls, drawer, dialog, tabs, and more |
+| `src/app/` | Router, session guard, app shell, project layout |
+| `src/pages/` | One folder per view, plus login, sign-up and not-found |
+| `src/test/` | Test setup, the fake API and render helpers (`renderApp`, `renderWithProviders`) |
 
 ## Routes
 
 | Path | View |
 | --- | --- |
-| `/login` | Login |
-| `/` | Mission select |
-| `/settings` | Settings |
+| `/login`, `/signup` | Sign in, create an account |
+| `/` | Add a project by repository URL |
+| `/settings` | Settings: account, GitHub, LLM providers, planning agents |
 | `/projects/:projectId` | Board |
 | `/projects/:projectId/tasks/:taskId` | Payload drawer over the board |
-| `/projects/:projectId/new/feature`, `/new/task` | Create dialogs over the board |
-| `/projects/:projectId/features/:featureId/edit`, `/tasks/:taskId/edit` | Edit pages |
-| `/projects/:projectId/agents` | Astronaut console |
-| `/projects/:projectId/activity` | Mission log |
-| `/projects/:projectId/plan/:draftId/{briefing,doc,tasks,done}` | Planner steps 1–4 |
-| `/projects/:projectId/{backlog,sprints,retro}` | Not designed yet |
+| `/projects/:projectId/new/task` | New payload dialog over the board |
+| `/projects/:projectId/tasks/:taskId/edit` | Edit payload |
+| `/projects/:projectId/automation` | Automation: on or off, and its two agents |
 
-Sample planner drafts: `realtime-briefing` (step 1), `realtime-review` (step 2), `realtime` (steps 3–4).
+Project and task ids are the API's numeric ids.

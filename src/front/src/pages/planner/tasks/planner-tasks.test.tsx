@@ -10,7 +10,9 @@ const queue = () => screen.getByRole('navigation', { name: 'Payload proposals' }
 const selected = () => screen.getByRole('article', { name: 'Selected payload' })
 const pick = (n: number) => userEvent.click(within(queue()).getByRole('button', { name: new RegExp(`Proposal ${n}:`) }))
 
-describe('payload review', () => {
+// Skipped: this screen runs on mock data and isn't routed until its API exists
+// (docs/implementation/api-gaps.md). Unskip it when the screen is wired.
+describe.skip('payload review', () => {
   it('opens on proposal 4 with every field', async () => {
     renderApp(REVIEW)
     const detail = await screen.findByRole('article', { name: 'Selected payload' })

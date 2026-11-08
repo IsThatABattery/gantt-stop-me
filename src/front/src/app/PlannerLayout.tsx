@@ -3,7 +3,7 @@ import { Logo } from '../components/Logo'
 import { StatusMessage } from '../components/StatusMessage'
 import { Stepper } from '../components/Stepper'
 import { buttonClass } from '../components/buttonClass'
-import { NotFoundError, useProject } from '../data/core'
+import { NotFoundError, useMockProject } from '../data/core'
 import { useDraft } from '../data/views/plannerDoc'
 import { plannerLabels } from '../labels/labels'
 
@@ -16,7 +16,7 @@ const STEP_PATHS = ['briefing', 'doc', 'tasks', 'done']
 export function PlannerLayout() {
   const { projectId = '', draftId = '' } = useParams()
   const { pathname } = useLocation()
-  const project = useProject(projectId)
+  const project = useMockProject(projectId)
   const draft = useDraft(draftId)
   const current = Math.max(0, STEP_PATHS.indexOf(pathname.split('/').pop() ?? ''))
   const base = `/projects/${projectId}/plan/${draftId}`

@@ -2,7 +2,8 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ReactNode } from 'react'
-import type { ColumnKey, ID, Task } from '../../data/types'
+import type { Task } from '../../data/api/types'
+import type { ColumnKey } from '../../data/types'
 import { columnLabels, labels } from '../../labels/labels'
 
 /** Droppable id of a column, apart from card ids. */
@@ -39,9 +40,9 @@ export function BoardColumn({ columnKey, tasks, total, filtered, renderCard }: B
           {count}
         </span>
       </div>
-      <SortableContext id={columnDropId(columnKey)} items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext id={columnDropId(columnKey)} items={tasks.map((t) => String(t.id))} strategy={verticalListSortingStrategy}>
         {tasks.map((t) => (
-          <SortableCard key={t.id} id={t.id}>
+          <SortableCard key={t.id} id={String(t.id)}>
             {renderCard(t)}
           </SortableCard>
         ))}
@@ -57,7 +58,7 @@ export function BoardColumn({ columnKey, tasks, total, filtered, renderCard }: B
 
 // Only the pointer listeners are spread: the card's own link stays the one
 // focusable element, and the board handles the keyboard itself.
-function SortableCard({ id, children }: { id: ID; children: ReactNode }) {
+function SortableCard({ id, children }: { id: string; children: ReactNode }) {
   const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id })
   return (
     <div
