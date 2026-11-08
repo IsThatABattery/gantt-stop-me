@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/tasktests"
 )
@@ -308,5 +309,16 @@ func TestValidate(t *testing.T) {
 	}
 	if err := tasktests.Validate(most); err != nil {
 		t.Fatalf("64 tests: %v", err)
+	}
+}
+
+// Render's fences and code spans grow past the longest backtick run in one pass, so Validate refuses a huge run at
+// once, not in time that grows with its square.
+func TestValidateLongBacktickRuns(t *testing.T) {
+	run := strings.Repeat("`", 256<<10)
+	start := time.Now()
+	err := tasktests.Validate([]tasktests.Test{script("x", run), script(run, run)})
+	if took := time.Since(start); fmt.Sprint(err) != "The tests take more than 64 KiB." || took > time.Second {
+		t.Fatalf("Validate = %v after %v, want it refused at once", err, took)
 	}
 }

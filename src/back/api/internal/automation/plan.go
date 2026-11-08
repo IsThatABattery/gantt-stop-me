@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -45,12 +44,12 @@ func (a *Automation) plan(ctx context.Context, runID int64) error {
 	var taskID int64
 	var issue, pr int
 	var head string
-	var read time.Time // before the issue is read
+	var synced *string // the card's tests_synced before the issue is read
 	err := a.DB.QueryRow(ctx, `
 		select p.id, p.github_repo_id, p.owner, p.name, t.id, t.issue_number, coalesce(r.pr_number, 0), coalesce(r.head_sha, ''),
-			clock_timestamp()
+			t.tests_synced
 		from test_runs r join tasks t on t.id = r.task_id join projects p on p.id = t.project_id where r.id = $1`, runID).
-		Scan(&p.ID, &p.RepoID, &p.Owner, &p.Name, &taskID, &issue, &pr, &head, &read)
+		Scan(&p.ID, &p.RepoID, &p.Owner, &p.Name, &taskID, &issue, &pr, &head, &synced)
 	if err != nil {
 		return err
 	}
@@ -77,9 +76,9 @@ func (a *Automation) plan(ctx context.Context, runID int64) error {
 	var tests []tasktests.Test
 	var testsError *string
 	err = pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
-		// A card changed since the read, such as by a tests edit, is newer than the issue read here.
+		// A card that took or wrote a section since the read, by a tests edit or a sync, is newer than the issue read here.
 		var changed bool
-		err := tx.QueryRow(ctx, `select updated_at > $2 from tasks where id = $1 for update`, taskID, read).Scan(&changed)
+		err := tx.QueryRow(ctx, `select tests_synced is distinct from $2 from tasks where id = $1 for update`, taskID, synced).Scan(&changed)
 		if err == nil && !changed {
 			_, err = projects.TakeTests(ctx, tx, taskID, is.Body)
 		}

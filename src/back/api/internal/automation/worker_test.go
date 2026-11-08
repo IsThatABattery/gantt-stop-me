@@ -43,10 +43,16 @@ func (f *fixture) tests(number int, body string) {
 	f.repo.EditIssue(number, func(is *githubtest.Issue) { is.Body = body })
 }
 
-// setTests puts tests on the card of issue number as ada, through the endpoint, which writes them to the issue.
+// setTests puts tests on the card of issue number as ada, from the card's tests as they are now, through the
+// endpoint, which writes them to the issue.
 func (f *fixture) setTests(number int, tests ...tasktests.Test) {
 	f.t.Helper()
-	f.Do("PUT", f.path(fmt.Sprintf("/tasks/%d/tests", f.taskID(number))), map[string]any{"tests": tests}, f.ada).
+	id := f.taskID(number)
+	var base []tasktests.Test
+	if err := f.DB.QueryRow(context.Background(), `select tests from tasks where id = $1`, id).Scan(&base); err != nil {
+		f.t.Fatal(err)
+	}
+	f.Do("PUT", f.path(fmt.Sprintf("/tasks/%d/tests", id)), map[string]any{"tests": tests, "base": base}, f.ada).
 		Expect(http.StatusOK, "")
 }
 

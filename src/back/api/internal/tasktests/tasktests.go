@@ -120,10 +120,7 @@ func Render(tests []Test) string {
 		case t.Kind == "script" && t.Name == t.Command:
 			line, block = codeSpanOf(t.Command), ""
 		case t.Kind == "script":
-			mark := "```"
-			for strings.Contains(t.Command, mark) { // so no line of the command closes the fence
-				mark += "`"
-			}
+			mark := strings.Repeat("`", max(3, backticks(t.Command)+1)) // so no line of the command closes the fence
 			block = mark + "sh\n" + t.Command + "\n" + mark
 		}
 		b.WriteString(line + "\n")
@@ -286,12 +283,24 @@ func codeSpan(text string) (string, bool) {
 // codeSpanOf returns s as one inline code span that codeSpan reads back: between runs of backticks longer than any
 // in s, with a space inside each end when s starts or ends with a backtick.
 func codeSpanOf(s string) string {
-	mark := "`"
-	for strings.Contains(s, mark) {
-		mark += "`"
-	}
+	mark := strings.Repeat("`", backticks(s)+1)
 	if strings.HasPrefix(s, "`") || strings.HasSuffix(s, "`") {
 		s = " " + s + " "
 	}
 	return mark + s + mark
+}
+
+// backticks returns the length of the longest run of backticks in s, in one pass, so a long run costs no more than
+// its length.
+func backticks(s string) int {
+	longest, run := 0, 0
+	for i := range len(s) {
+		if s[i] == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	return longest
 }

@@ -755,6 +755,7 @@ func TestSyncTakesTests(t *testing.T) {
 	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = tooMany })
 	for range 2 {
 		f.dueSync()
+		f.exec(`update projects set issues_etag = null where id = $1`, f.project) // so the second sync reads the issue again
 		f.expectCard(1, "the Tests section has 65 tests, more than 64", script("make"), check("It works", "Look."))
 	}
 	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = tested })

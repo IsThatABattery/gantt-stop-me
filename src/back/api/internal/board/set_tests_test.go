@@ -2,6 +2,7 @@ package board_test
 
 import (
 	"cmp"
+	"context"
 	"net/http"
 	"reflect"
 	"strings"
@@ -22,11 +23,22 @@ func script(command string) tasktests.Test {
 	return tasktests.Test{Name: command, Kind: "script", Command: command}
 }
 
-// setTests puts tests on the card of issue number as session.
+// setTests puts tests on the card of issue number as session, from the card's tests as they are now.
 func (f *fixture) setTests(session *http.Cookie, number int, tests ...tasktests.Test) *apptest.Response {
 	f.t.Helper()
 	id, _ := f.task(number)
-	return f.Do("PUT", f.path("/tasks/%d/tests", id), map[string]any{"tests": append([]tasktests.Test{}, tests...)}, session)
+	var base []tasktests.Test
+	if err := f.DB.QueryRow(context.Background(), `select tests from tasks where id = $1`, id).Scan(&base); err != nil {
+		f.t.Fatal(err)
+	}
+	return f.putTests(session, number, base, tests...)
+}
+
+// putTests puts tests on the card of issue number as session, from base, the tests as it last loaded them.
+func (f *fixture) putTests(session *http.Cookie, number int, base []tasktests.Test, tests ...tasktests.Test) *apptest.Response {
+	f.t.Helper()
+	id, _ := f.task(number)
+	return f.Do("PUT", f.path("/tasks/%d/tests", id), map[string]any{"tests": append([]tasktests.Test{}, tests...), "base": base}, session)
 }
 
 // expectCard fails the test unless GET task answers ada the card of issue number with tests and testsError, "" for
@@ -59,13 +71,16 @@ func TestSetTests(t *testing.T) {
 	tests := []tasktests.Test{script("go test ./..."), check("The board loads", "1. Open it.\n2. Look.")}
 	res := f.setTests(f.ada, 1, tests...)
 	res.Expect(http.StatusOK, "")
-	var got struct{ Tests []tasktests.Test }
-	res.JSON(&got)
-	if !reflect.DeepEqual(got.Tests, tests) {
-		t.Fatalf("answered %+v, want %+v", got.Tests, tests)
+	var got struct {
+		Tests []tasktests.Test
+		Body  string
 	}
+	res.JSON(&got)
 	// Byte for byte outside the section.
 	want := before + "## Tests\n- [ ] `go test ./...`\n- [ ] The board loads\n  1. Open it.\n  2. Look.\n" + after
+	if !reflect.DeepEqual(got.Tests, tests) || got.Body != want {
+		t.Fatalf("answered %+v, body %q; want %+v, the issue's", got.Tests, got.Body, tests)
+	}
 	if is := f.repo.Issue(1); is.Body != want {
 		t.Fatalf("issue body = %q, want %q", is.Body, want)
 	}
@@ -118,15 +133,19 @@ func TestSetTestsWhenGitHubChangedFirst(t *testing.T) {
 	var got struct {
 		Tests      []tasktests.Test
 		TestsError *string
+		Body       string
 	}
 	res.JSON(&got)
-	if !reflect.DeepEqual(got.Tests, []tasktests.Test{script("make")}) || got.TestsError != nil {
-		t.Fatalf("answered %+v, error %v; want GitHub's", got.Tests, orNull(got.TestsError))
+	if !reflect.DeepEqual(got.Tests, []tasktests.Test{script("make")}) || got.TestsError != nil || got.Body != "## Tests\n- [ ] `make`\n" {
+		t.Fatalf("answered %+v, error %v, body %q; want GitHub's", got.Tests, orNull(got.TestsError), got.Body)
 	}
 	if is := f.repo.Issue(1); is.Body != "## Tests\n- [ ] `make`\n" {
 		t.Fatalf("issue body = %q, want GitHub's kept", is.Body)
 	}
 	f.expectCard(1, "", script("make"))
+	if body, _ := f.details(1); body != "## Tests\n- [ ] `make`\n" {
+		t.Fatalf("stored body = %q, want GitHub's", body)
+	}
 
 	// The card has seen GitHub's version now, so the same edit goes through.
 	f.setTests(f.ada, 1, check("Mine", "")).Expect(http.StatusOK, "")
@@ -136,6 +155,24 @@ func TestSetTestsWhenGitHubChangedFirst(t *testing.T) {
 	if is := f.repo.Issue(1); is.Body != "## Tests\n- [ ] Mine\n- [ ] Two\n" {
 		t.Fatalf("issue body = %q", is.Body)
 	}
+}
+
+// A sync that takes a GitHub edit after the client loaded the card leaves the card's tests other than its base.
+func TestSetTestsAfterASyncTookAGitHubEdit(t *testing.T) {
+	f := setup(t, "One")
+	f.setTests(f.ada, 1, check("Old", "")).Expect(http.StatusOK, "")
+	loaded := []tasktests.Test{check("Old", "")}
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "## Tests\n- [ ] `make`\n" })
+	f.dueSync()
+	f.expectCard(1, "", script("make")) // another viewer's load syncs
+
+	f.putTests(f.ada, 1, loaded, check("Mine", "")).Expect(http.StatusConflict, "tests_changed")
+	if is := f.repo.Issue(1); is.Body != "## Tests\n- [ ] `make`\n" {
+		t.Fatalf("issue body = %q, want GitHub's kept", is.Body)
+	}
+	f.expectCard(1, "", script("make"))
+	f.putTests(f.ada, 1, []tasktests.Test{script("make")}, check("Mine", "")).Expect(http.StatusOK, "")
+	f.expectCard(1, "", check("Mine", ""))
 }
 
 // A section that does not parse can never be taken, so after one 409 that shows why, a card edit replaces it.
@@ -159,6 +196,14 @@ func TestSetTestsOverASectionThatDoesNotParse(t *testing.T) {
 		t.Fatalf("issue body = %q", is.Body)
 	}
 	f.expectCard(1, "", check("Mine", ""))
+
+	// Mending it on GitHub to the card's tests only clears testsError, which loses nothing, so it does not stop the edit.
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = tooMany })
+	f.dueSync()
+	f.expectCard(1, "the Tests section has 65 tests, more than 64", check("Mine", ""))
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "## Tests\n- [x] Mine\n" })
+	f.setTests(f.ada, 1, check("Mine", ""), check("Two", "")).Expect(http.StatusOK, "")
+	f.expectCard(1, "", check("Mine", ""), check("Two", ""))
 }
 
 func TestSetTestsValidates(t *testing.T) {
@@ -171,9 +216,18 @@ func TestSetTestsValidates(t *testing.T) {
 	if e.Error.Message != "Test 2 needs a name." {
 		t.Fatalf("message = %q", e.Error.Message)
 	}
+	// A name that is only a pin reads back from the issue as no name.
+	for _, test := range []tasktests.Test{check("[backend]", ""), {Name: "[backend] ", Kind: "script", Command: "make"}} {
+		res = f.setTests(f.ada, 1, test)
+		res.Expect(http.StatusBadRequest, "invalid_tests")
+		if res.JSON(&e); e.Error.Message != "Test 1 needs a name." {
+			t.Fatalf("%+v: message = %q", test, e.Error.Message)
+		}
+	}
 	f.Do("PUT", f.path("/tasks/%d/tests", id), "{", f.ada).Expect(http.StatusBadRequest, "bad_request")
-	f.Do("PUT", f.path("/tasks/%d/tests", id), map[string]any{}, f.ada).Expect(http.StatusBadRequest, "invalid_tests")
-	f.Do("PUT", f.path("/tasks/999/tests"), map[string]any{"tests": []any{}}, f.ada).Expect(http.StatusNotFound, "not_found")
+	f.Do("PUT", f.path("/tasks/%d/tests", id), map[string]any{"base": []any{}}, f.ada).Expect(http.StatusBadRequest, "invalid_tests")
+	f.Do("PUT", f.path("/tasks/%d/tests", id), map[string]any{"tests": []any{}}, f.ada).Expect(http.StatusBadRequest, "invalid_tests")
+	f.Do("PUT", f.path("/tasks/999/tests"), map[string]any{"tests": []any{}, "base": []any{}}, f.ada).Expect(http.StatusNotFound, "not_found")
 
 	// Over GitHub's 65536 characters once in the body.
 	long := strings.Repeat("é", 65530)

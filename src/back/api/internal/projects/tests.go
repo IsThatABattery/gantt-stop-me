@@ -13,8 +13,8 @@ import (
 // TakeTests takes the Tests section of body, as GitHub has task id's issue, into the task's card; every read of an
 // issue body calls it. A section the card last saw changes nothing, but clears tests_error. Any other is parsed:
 // valid tests replace the card's, and the card has now seen the section; otherwise the card keeps its tests and
-// records why in tests_error, and the next read tries again. It reports whether the card's tests or tests_error
-// changed.
+// records why in tests_error, and the next read tries again. It reports whether the card's tests changed or the
+// section gave a new tests_error; clearing tests_error loses nothing, so it does not count.
 func TakeTests(ctx context.Context, tx pgx.Tx, id int64, body string) (changed bool, err error) {
 	section := tasktests.Section(body)
 	var synced *string

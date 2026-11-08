@@ -266,12 +266,16 @@ Replaces a task's tests, writing them to the Tests section of its issue on GitHu
 | `tests[].command` | body | string | a script's, not blank; ignored for a check |
 | `tests[].details` | body | string | optional; ignored for a script |
 | `tests[].workflow` | body | string or null | optional; 2 to 32 lowercase letters, digits or `-`, starting with a letter and ending in a letter or digit |
+| `base` | body | array | required: the task's `tests` as you last loaded them, from [Get task](#get-task) or this endpoint's last answer |
 
 ```json
 {
   "tests": [
     { "name": "npm test", "kind": "script", "command": "npm test" },
     { "name": "The timeline shows one bar per task", "kind": "check", "details": "1. Open a board with two tasks.", "workflow": "frontend" }
+  ],
+  "base": [
+    { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null }
   ]
 }
 ```
@@ -280,24 +284,25 @@ Replaces a task's tests, writing them to the Tests section of its issue on GitHu
 
 | Status | Body |
 | --- | --- |
-| `200` | the tests |
+| `200` | the tests, and the issue's `body` as GitHub now has it |
 | `400` | `invalid_tests`, `invalid_body` when the issue body would pass 65536 characters, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
-| `409` | `tests_changed`, and the task's `tests` and `testsError` as they now are |
+| `409` | `tests_changed`, and the task's `tests` and `testsError` as they now are, and the issue's `body` |
 | `502` | `github_error` |
 
-The issue's Tests section becomes the tests as an unticked checklist, each after its `[workflow]` pin: a script whose name is its command as that command in code, any other script as its name over an `sh` code block, and a check as its name over its indented details. The section is appended when the body has none and removed for no tests. The rest of the body stays as it is, byte for byte. The task keeps the tests as the section reads back, so the answer may differ from the input: a check named only by a code span is a script, for one.
+The issue's Tests section becomes the tests as an unticked checklist, each after its `[workflow]` pin: a script whose name is its command as that command in code, any other script as its name over an `sh` code block, and a check as its name over its indented details. The section is appended when the body has none and removed for no tests. The section runs from its `## Tests` line to the next `#` or `##` heading, and all of it is rewritten: text in it that is no test, such as a note after the list, is dropped. The rest of the body stays as it is, byte for byte. The task keeps the tests as the section reads back, so the answer may differ from the input: a check named only by a code span is a script, for one.
 
-When the section changed on GitHub since the task last read it, and taking it changes the task's tests or `testsError`, nothing is written: the task takes GitHub's version, and the answer is `409` with it. Sending the edit again replaces it. A change that leaves the tests as they are, such as a ticked box, does not stop the edit.
+The issue's section is read first. When it changed on GitHub since the task last read it, the task takes it. If that changes the task's tests or gives a new `testsError`, or the task's tests are no longer `base`, such as after a sync took a GitHub edit, nothing is written, and the answer is `409` with the task as it now is. Sending the edit again with those tests as `base` replaces them. A change that leaves the tests as they are, such as a ticked box or a mended section, does not stop the edit. Both answers carry the issue's body: send that, not an older copy, to [Edit task](#edit-task), whose body's Tests section the task takes.
 
 ```json
 {
   "tests": [
     { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null },
     { "name": "The timeline shows one bar per task", "kind": "check", "command": "", "details": "1. Open a board with two tasks.", "workflow": "frontend" }
-  ]
+  ],
+  "body": "One bar per task, by week.\n\n## Tests\n- [ ] `npm test`\n- [ ] [frontend] The timeline shows one bar per task\n  1. Open a board with two tasks.\n"
 }
 ```
 
@@ -310,7 +315,8 @@ When the section changed on GitHub since the task last read it, and taking it ch
   "tests": [
     { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null }
   ],
-  "testsError": null
+  "testsError": null,
+  "body": "One bar per task, by week.\n\n## Tests\n- [x] `npm test`\n"
 }
 ```
 
