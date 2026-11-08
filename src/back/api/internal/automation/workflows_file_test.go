@@ -97,4 +97,10 @@ func TestSaveWorkflowsFailedLeavesNoBranch(t *testing.T) {
 	if b := f.repo.Branches(); len(b) != 0 {
 		t.Fatalf("a save whose pull request failed left branches %v", b)
 	}
+
+	f.GitHub.Fail("PUT /repositories/{id}/contents/{path...}", http.StatusInternalServerError)
+	f.Do("PUT", f.path("/workflows"), map[string]any{"content": frontendFile, "sha": shown.SHA}, f.ada).Expect(http.StatusBadGateway, "github_error")
+	if b := f.repo.Branches(); len(b) != 0 {
+		t.Fatalf("a save whose file write failed left branches %v", b)
+	}
 }

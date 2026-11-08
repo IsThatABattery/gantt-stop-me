@@ -53,7 +53,7 @@ Returns the projects the caller has added or opened, most recently visited first
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
 
-A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. When GitHub fails that check for another reason, such as an outage, the project is left out of this answer only. A credential GitHub no longer accepts answers `github_not_linked`. Unlinking GitHub forgets every project. Linking it again keeps them, and checks each on GitHub again with the new credential.
+A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. When GitHub fails that check for another reason, such as an outage, the project is listed with the permission last checked. A credential GitHub no longer accepts answers `github_not_linked`. Unlinking GitHub forgets every project. Linking it again keeps them, and checks each on GitHub again with the new credential.
 
 ```json
 { "projects": [{ "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }] }

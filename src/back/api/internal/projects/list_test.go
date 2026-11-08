@@ -83,24 +83,22 @@ func TestListProjectsAfterRelinking(t *testing.T) {
 	}
 }
 
-func TestListProjectsLeavesOutAFailedCheck(t *testing.T) {
+func TestListProjectsKeepsAFailedCheck(t *testing.T) {
 	env := apptest.New(t)
 	ada := env.SignUp("ada@example.com", "correct horse")
 	token := env.LinkGitHub(ada, "ada-gh")
 	env.GitHub.AddRepo("octo", "hello").Grant(token, "push")
-	env.AddProject(ada, "octo", "hello")
-	env.GitHub.AddRepo("octo", "other").Grant(token, "push")
-	other := env.AddProject(ada, "octo", "other")
-	// Only other's check is stale, and GitHub fails to answer it.
+	hello := env.AddProject(ada, "octo", "hello")
+	// Her only project's check is stale, and GitHub fails to answer it: it stays listed as last checked.
 	if _, err := env.DB.Exec(context.Background(),
-		`update project_members set checked_at = now() - interval '6 minutes' where project_id = $1`, other); err != nil {
+		`update project_members set checked_at = now() - interval '6 minutes' where project_id = $1`, hello); err != nil {
 		t.Fatal(err)
 	}
 	env.GitHub.Fail("GET /repositories/{id}", http.StatusBadGateway)
 	res := env.Do("GET", "/api/projects", nil, ada)
 	res.Expect(http.StatusOK, "")
-	if got := listed(t, res); len(got) != 1 || got[0].Name != "hello" {
-		t.Fatalf("ada's projects = %+v, want hello", got)
+	if got := listed(t, res); len(got) != 1 || got[0].Name != "hello" || got[0].Permission != "write" {
+		t.Fatalf("ada's projects = %+v, want hello with write", got)
 	}
 	env.Do("GET", "/api/me/tasks", nil, ada).Expect(http.StatusOK, "")
 

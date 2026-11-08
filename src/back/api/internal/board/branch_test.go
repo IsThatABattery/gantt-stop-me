@@ -39,6 +39,17 @@ func TestMoveToInProgressMakesABranch(t *testing.T) {
 	if b := f.repo.Branches(); len(b) != 1 {
 		t.Fatalf("branches = %v", b)
 	}
+
+	// A task without a branch whose name GitHub already has takes that branch.
+	f.exec(`update tasks set branch = null where project_id = $1`, f.project)
+	f.move(f.ada, 1, "backlog", 0).Expect(http.StatusOK, "")
+	res = f.move(f.ada, 1, "in-progress", 0)
+	res.Expect(http.StatusOK, "")
+	got = task{}
+	res.JSON(&got)
+	if got.Branch == nil || *got.Branch != "feature/1-theme-tokens" || len(f.repo.Branches()) != 1 {
+		t.Fatalf("branch = %v, GitHub has %v", got.Branch, f.repo.Branches())
+	}
 }
 
 func TestMoveRecordsNoBranchGitHubRefused(t *testing.T) {
