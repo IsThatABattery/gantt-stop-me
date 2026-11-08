@@ -163,6 +163,7 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("PUT /repositories/{id}/contents/{path...}", f.putContents)
 	f.mux.HandleFunc("GET /repositories/{id}/git/ref/heads/{branch...}", f.getRef)
 	f.mux.HandleFunc("POST /repositories/{id}/git/refs", f.createRef)
+	f.mux.HandleFunc("DELETE /repositories/{id}/git/refs/heads/{branch...}", f.deleteRef)
 	f.mux.HandleFunc("POST /repositories/{id}/pulls", f.createPull)
 	f.mux.HandleFunc("GET /repositories/{id}/tarball/{sha}", f.tarball)
 	f.mux.HandleFunc("GET "+codeload+"/{owner}/{name}/legacy.tar.gz/{sha}", f.codeload)
@@ -913,6 +914,22 @@ func (f *Fake) createRef(w http.ResponseWriter, r *http.Request) {
 	}
 	rp.branches[name] = nil // its files are main's until something is committed to it
 	writeJSON(w, http.StatusCreated, map[string]any{"ref": in.Ref, "object": map[string]string{"sha": in.SHA}})
+}
+
+// deleteRef serves DELETE /repositories/{id}/git/refs/heads/{branch} for a branch the API created: 422 for any
+// other, like GitHub for a ref that does not exist.
+func (f *Fake) deleteRef(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, true)
+	if !ok {
+		return
+	}
+	b := r.PathValue("branch")
+	if _, created := rp.branches[b]; !created {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "Reference does not exist"})
+		return
+	}
+	delete(rp.branches, b)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // createPull serves POST /repositories/{id}/pulls from a branch the API created, by the token's user.

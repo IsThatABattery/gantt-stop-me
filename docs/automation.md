@@ -146,7 +146,7 @@ Returns the repository's workflows file, `.gantt/workflows.yml`, on its default 
 
 ## Save workflows
 
-Commits a workflows file that parses to a new branch off the default branch, `chore/gantt-workflows-{unix time}`, and opens a pull request of it into the default branch, with the caller's GitHub credential. The default branch keeps its file until the pull request merges.
+Commits a workflows file that parses to a new branch off the default branch, `chore/gantt-workflows-{unix time}-{8 random hex digits}`, and opens a pull request of it into the default branch, with the caller's GitHub credential. The default branch keeps its file until the pull request merges. A save that fails once the branch is made deletes the branch again.
 
 `PUT /api/projects/{id}/workflows`
 

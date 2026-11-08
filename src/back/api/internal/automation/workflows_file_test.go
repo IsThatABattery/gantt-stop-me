@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 type workflowsFile struct {
@@ -64,4 +65,36 @@ func TestWorkflowsFile(t *testing.T) {
 	bob, _, _ := f.member("bob", "pull")
 	f.Do("GET", f.path("/workflows"), nil, bob).Expect(http.StatusOK, "")
 	f.Do("PUT", f.path("/workflows"), map[string]any{"content": frontendFile, "sha": sha}, bob).Expect(http.StatusForbidden, "forbidden")
+}
+
+func TestSaveWorkflowsTwiceInOneSecond(t *testing.T) {
+	f := setup(t)
+	for time.Now().Nanosecond() > 200e6 { // early in a second, so both saves fall in it
+		time.Sleep(10 * time.Millisecond)
+	}
+	body := map[string]any{"content": frontendFile, "sha": nil}
+	f.Do("PUT", f.path("/workflows"), body, f.ada).Expect(http.StatusOK, "")
+	// Each save gets a branch of its own, so the second is not told the file changed.
+	f.Do("PUT", f.path("/workflows"), body, f.ada).Expect(http.StatusOK, "")
+	if b := f.repo.Branches(); len(b) != 2 {
+		t.Fatalf("branches = %v, want one per save", b)
+	}
+}
+
+func TestSaveWorkflowsFailedLeavesNoBranch(t *testing.T) {
+	f := setup(t)
+	// Refused: the file appeared on the default branch since it was loaded.
+	f.repo.AddFile("", ".gantt/workflows.yml", frontendFile)
+	f.Do("PUT", f.path("/workflows"), map[string]any{"content": frontendFile, "sha": nil}, f.ada).Expect(http.StatusConflict, "workflows_changed")
+	if b := f.repo.Branches(); len(b) != 0 {
+		t.Fatalf("a refused save left branches %v", b)
+	}
+
+	var shown workflowsFile
+	f.Do("GET", f.path("/workflows"), nil, f.ada).JSON(&shown)
+	f.GitHub.Fail("POST /repositories/{id}/pulls", http.StatusUnprocessableEntity)
+	f.Do("PUT", f.path("/workflows"), map[string]any{"content": frontendFile, "sha": shown.SHA}, f.ada).Expect(http.StatusBadGateway, "github_error")
+	if b := f.repo.Branches(); len(b) != 0 {
+		t.Fatalf("a save whose pull request failed left branches %v", b)
+	}
 }
