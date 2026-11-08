@@ -152,6 +152,8 @@ export function recallAgent({ projectId, agentId }: AgentRef): Promise<Agent> {
     agent.currentTaskId = null
     agent.state = 'idle'
     agent.timeOnTaskMinutes = 0
+    // Recalling is the decision; nothing on this task waits on a human any more.
+    for (const e of db.activityEvents) if (e.taskId === task.id) e.needsAction = false
     logEvent(projectId, task.id, 'recalled', `Recalled ${agent.name} to the Hangar`)
     return agent
   })

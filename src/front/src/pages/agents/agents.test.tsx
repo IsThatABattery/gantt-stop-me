@@ -83,6 +83,7 @@ describe('astronaut console', () => {
     expect(task('t-43')).toMatchObject({ column: 'backlog', status: 'queued' })
     expect(agent('a-4')).toMatchObject({ state: 'idle', currentTaskId: null })
     expect(db.activityEvents.at(-1)).toMatchObject({ verb: 'recalled', taskId: 't-43' })
+    expect(db.activityEvents.find((e) => e.id === 'ev-3')!.needsAction).toBe(false)
     expect(within(tile('Astronaut-4')).getByText('No current payload')).toBeInTheDocument()
     expect(within(panel()).getByRole('button', { name: 'Recall to Hangar' })).toBeDisabled()
   })
