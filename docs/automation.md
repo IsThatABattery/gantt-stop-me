@@ -384,11 +384,12 @@ Merges a task's linked pull request once the caller has checked its manual tests
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
-| `409` | `not_tested`, `head_moved`, `not_mergeable`, `pull_request_closed`, `automation_paused`, `automation_off` |
+| `409` | `not_tested`, `run_in_progress`, `head_moved`, `not_mergeable`, `pull_request_closed`, `automation_paused`, `automation_off` |
 | `422` | `unchecked_manual_tests` |
 | `502` | `github_error` |
 
 - `not_tested`: the task is not in User Check, or its latest test run did not pass.
+- `run_in_progress`: another task linked to the same pull request has a test run queued or running. Merging closes its issue too, so approve once that run ends. Nothing merged.
 - `unchecked_manual_tests`: `checked` misses a manual test or holds an id that is none of the run's. The message names the tests not ticked and the ids that are not the run's.
 - `head_moved`: the pull request has commits newer than the one tested, found before merging or by GitHub refusing the merge. Nothing merged: the task moved back to Testing and a new test run of the new head is queued. When the pull request is a draft again, or its author no longer has write access, that run ends at once as a runner error saying so, as the triggers would refuse it.
 - `not_mergeable`: GitHub will not merge the pull request as it is. Before merging, the API reads GitHub's `mergeable_state` and merges only when it is `clean`, `has_hooks` or `unstable`, so branch protection that the owner may bypass, such as an admin, still holds for the approver: `blocked` (a required review or check), `behind`, `dirty` (conflicts), `draft` and `unknown` (GitHub has not worked it out yet; try again) each answer with their own message. When GitHub then refuses the merge itself, the message is GitHub's. The task stays in User Check.

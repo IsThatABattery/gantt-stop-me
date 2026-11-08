@@ -29,6 +29,9 @@ func (r *refused) Error() string { return "automation: approval refused: " + r.m
 var (
 	// untested refuses approving a task that is not in User Check with a latest test run that passed.
 	untested = &refused{http.StatusConflict, "not_tested", "Only a task in User Check whose latest test run passed can be approved."}
+	// siblingUntested refuses approving a task while another task linked to the same pull request is still being tested.
+	siblingUntested = &refused{http.StatusConflict, "run_in_progress",
+		"Another task linked to this pull request has a test run in progress. Approve once it ends."}
 	// closedPull refuses approving a task whose pull request is closed or merged, maybe by an approval just before.
 	closedPull = &refused{http.StatusConflict, "pull_request_closed", "The linked pull request is closed or merged already."}
 	// headMoved answers an approval that found new commits on the pull request and started a test run of them instead.
@@ -236,24 +239,29 @@ type approval struct {
 
 // approvable returns what approving the project's task taskID with checked merges, reading through db, the pool or a
 // transaction holding the project's lock. The task must be in User Check with a latest test run that passed on a
-// pull request and is not approved yet, and checked must hold exactly that run's manual test results, as a set.
+// pull request and is not approved yet, and checked must hold exactly that run's manual test results, as a set. No
+// other task's test run on that pull request may be queued or running: the merge closes their issues too, and a
+// failure among them turns the pull request back into a draft.
 func approvable(ctx context.Context, db interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, projectID, taskID int64, checked []int64) (approval, error) {
 	var ap approval
 	var column, status string
-	var approved bool
+	var approved, siblingRunning bool
 	var ids []int64
 	var texts []string
 	err := db.QueryRow(ctx, `
 		select c.key, coalesce(r.id, 0), coalesce(r.pr_number, 0), coalesce(r.head_sha, ''), coalesce(r.status, ''),
 			r.approved_at is not null,
+			exists (select from test_runs o join tasks ot on ot.id = o.task_id
+				where ot.project_id = t.project_id and o.task_id <> t.id and o.pr_number = r.pr_number
+					and o.status in ('queued', 'running')),
 			array(select x.id from test_results x where x.run_id = r.id and x.status = 'manual' order by x.position),
 			array(select x.text from test_results x where x.run_id = r.id and x.status = 'manual' order by x.position)
 		from tasks t join columns c on c.id = t.column_id
 		left join lateral (select * from test_runs where task_id = t.id order by id desc limit 1) r on true
 		where t.id = $1 and t.project_id = $2`, taskID, projectID).
-		Scan(&column, &ap.run, &ap.pr, &ap.head, &status, &approved, &ids, &texts)
+		Scan(&column, &ap.run, &ap.pr, &ap.head, &status, &approved, &siblingRunning, &ids, &texts)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return approval{}, &refused{http.StatusNotFound, "not_found", "Task not found."}
@@ -263,6 +271,8 @@ func approvable(ctx context.Context, db interface {
 		return approval{}, closedPull
 	case column != "user-check" || status != "passed" || ap.pr == 0:
 		return approval{}, untested
+	case siblingRunning:
+		return approval{}, siblingUntested
 	}
 	var missing, extra []string
 	for i, id := range ids {
