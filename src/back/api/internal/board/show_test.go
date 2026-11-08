@@ -1,6 +1,7 @@
 package board_test
 
 import (
+	"maps"
 	"net/http"
 	"slices"
 	"testing"
@@ -37,6 +38,19 @@ func TestShowBoard(t *testing.T) {
 	if one.Title != "One" || one.State != "open" || one.Version != 1 || one.Position != 10 || one.ColumnID != f.column("backlog") ||
 		one.URL != f.GitHub.Server.URL+"/octo/hello/issues/1" {
 		t.Fatalf("task = %+v", one)
+	}
+}
+
+func TestShowBoardRunStatus(t *testing.T) {
+	f := setup(t, "One", "Two")
+	f.runs(1, "The build failed. The execution's log says why.", "cancelled", "error")
+	b := f.board()
+	got := map[int]string{}
+	for _, task := range b.Tasks {
+		got[task.IssueNumber] = orNull(task.RunStatus) + ", " + orNull(task.NeedsAttention)
+	}
+	if want := map[int]string{1: "error, The build failed. The execution's log says why.", 2: "null, null"}; !maps.Equal(got, want) {
+		t.Fatalf("latest run status and needs attention by issue = %v, want %v", got, want)
 	}
 }
 

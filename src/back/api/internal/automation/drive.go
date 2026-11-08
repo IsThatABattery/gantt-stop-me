@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/runner"
 )
@@ -24,9 +25,11 @@ type execution struct {
 	spec      runner.Spec
 	timeout   time.Duration // the workflow's, from the claim on
 	claimed   time.Time
-	attempts  int    // claims so far, this one included
-	token     string // the automation owner's GitHub credential
-	log       string // the log tail: build and start output, then each script's, the last 64 KB of it
+	attempts  int           // claims so far, this one included
+	token     string        // the automation owner's GitHub credential
+	log       string        // the log tail: build and start output, then each script's, the last 64 KB of it
+	issue     *github.Issue // the task's issue, read before the first LLM check
+	browser   *browser      // the browser's MCP session, opened before the first LLM check when the app runs
 }
 
 // result is one test of an execution and, once it ends, how it went.
@@ -177,13 +180,6 @@ func (a *Automation) script(ctx context.Context, e *execution, r result) (result
 	if out != "" {
 		r.detail += "\n" + out
 	}
-	return r, nil
-}
-
-// check runs one LLM check of execution e and returns its result. An error stops the execution, as for a script.
-// Every check is a runner error until the tool-calling loop is built here.
-func (a *Automation) check(ctx context.Context, e *execution, r result) (result, error) {
-	r.status, r.detail = "error", "LLM checks are not built yet."
 	return r, nil
 }
 

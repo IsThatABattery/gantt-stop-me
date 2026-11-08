@@ -164,3 +164,188 @@ What a pull request's change does, whether the webhook or the poller sees it fir
 | Closed, merged, or gone from the open list | Its record is deleted. |
 
 Only a pull request from a branch of the repository, by an author with write access or above, runs. Any other that would start a run gets one comment saying why it was not tested, once while it stays open, and nothing else happens. A run started while more than one open, ready pull request that may run closes the issue ends at once as a runner error, and the task needs attention.
+
+## List test runs
+
+Returns a task's test runs, newest first, also after automation is turned off.
+
+`GET /api/projects/{id}/tasks/{taskID}/runs`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+| `taskID` | path | integer | a task's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the task's test runs, empty when it has none |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+`status` is `queued`, `running`, `passed`, `failed`, `error` (a runner error) or `cancelled`. `prNumber` and `headSha` are the pull request and commit tested, `null` when no one linked pull request was found. `reason` is a runner error or cancel reason for the whole run, else `null`. `finishedAt` is `null` until the run ends.
+
+```json
+{
+  "runs": [
+    {
+      "id": 4,
+      "prNumber": 12,
+      "headSha": "9fceb02d0ae598e95dc970b74767f19372d61af8",
+      "status": "passed",
+      "reason": null,
+      "createdAt": "2026-11-08T09:30:00Z",
+      "finishedAt": "2026-11-08T09:34:12Z"
+    },
+    {
+      "id": 3,
+      "prNumber": 12,
+      "headSha": "e83c5163316f89bfbde7d9ab23ca2e25604af290",
+      "status": "cancelled",
+      "reason": "Cancelled by ada.",
+      "createdAt": "2026-11-08T09:12:00Z",
+      "finishedAt": "2026-11-08T09:13:40Z"
+    }
+  ]
+}
+```
+
+## Show test run
+
+Returns one test run with its workflow executions and its test results, also after automation is turned off.
+
+`GET /api/projects/{id}/runs/{runID}`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+| `runID` | path | integer | a test run's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the run, as [List test runs](#list-test-runs) shows it, with `executions` and `results` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+Each execution is one workflow running its tests. `logTail` is the last 64 KB of its log: build and start output, then each script's command and output. Its `status` is a run's, from its own results.
+
+Each result is one test, by its `position` in the Tests section. `text` is its line and block. `kind` is `script` or `llm`. `pinned` says it named its workflow. `executionId` and `workflow` are `null` when it went to no workflow. `probabilities` are the decision model's, by workflow name, empty when it made no pick. `status` is `pending`, `passed`, `failed`, `manual` (for the approver to check by hand), `error` (a runner error) or `skipped` (cancelled). `detail` is a script's exit code and output, an LLM check's reason, or the runner error. `transcript` is an LLM check's tool calls with their answers, cut to 64 KB, else `null`. `hasScreenshot` says whether [Show screenshot](#show-screenshot) has one.
+
+```json
+{
+  "id": 4,
+  "prNumber": 12,
+  "headSha": "9fceb02d0ae598e95dc970b74767f19372d61af8",
+  "status": "passed",
+  "reason": null,
+  "createdAt": "2026-11-08T09:30:00Z",
+  "finishedAt": "2026-11-08T09:34:12Z",
+  "executions": [
+    {
+      "id": 7,
+      "workflow": "frontend",
+      "status": "passed",
+      "attempts": 1,
+      "logTail": "#1 [internal] load build definition from Dockerfile\n…\n$ npm test\n12 passed\n",
+      "startedAt": "2026-11-08T09:30:02Z",
+      "finishedAt": "2026-11-08T09:34:10Z"
+    }
+  ],
+  "results": [
+    {
+      "id": 21,
+      "position": 1,
+      "text": "`npm test`",
+      "kind": "script",
+      "pinned": false,
+      "executionId": 7,
+      "workflow": "frontend",
+      "probabilities": { "backend": 0.1, "frontend": 0.9 },
+      "status": "passed",
+      "detail": "Exit code 0.\n12 passed\n",
+      "transcript": null,
+      "hasScreenshot": false
+    },
+    {
+      "id": 22,
+      "position": 2,
+      "text": "The sign-up page refuses an empty email",
+      "kind": "llm",
+      "pinned": false,
+      "executionId": 7,
+      "workflow": "frontend",
+      "probabilities": { "backend": 0.2, "frontend": 0.8 },
+      "status": "passed",
+      "detail": "Submitting the form with no email showed \"Enter an email\" and sent nothing.",
+      "transcript": [
+        { "tool": "browser_navigate", "arguments": "{\"url\": \"http://app:80/signup\"}", "answer": "Page title: Sign up\n…" },
+        { "tool": "report", "arguments": "{\"outcome\": \"pass\", \"reason\": \"…\"}", "answer": "Reported." }
+      ],
+      "hasScreenshot": true
+    }
+  ]
+}
+```
+
+## Show screenshot
+
+Returns the screenshot an LLM check took after its report, when it used the browser, also after automation is turned off.
+
+`GET /api/projects/{id}/runs/{runID}/results/{resultID}/screenshot`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+| `runID` | path | integer | a test run's `id` in the project |
+| `resultID` | path | integer | a result's `id` in that run, with `hasScreenshot` true |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the PNG, as `image/png` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found`, also for a result with no screenshot |
+| `502` | `github_error` |
+
+## Cancel test run
+
+Cancels a queued or running test run and its workflow executions, which stop within a few seconds, and skips its unfinished tests. The reason names the caller. The task stays where it is and can be moved out of Testing again. A cancelled run gets no issue comment.
+
+`POST /api/projects/{id}/runs/{runID}/cancel`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `runID` | path | integer | a test run's `id` in the project, `queued` or `running` |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `204` | empty |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `run_finished` |
+| `502` | `github_error` |

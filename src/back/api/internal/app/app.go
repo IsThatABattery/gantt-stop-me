@@ -76,6 +76,7 @@ func New(db *pgxpool.Pool, cfg Config) *App {
 		MaxConcurrentWorkflows: cfg.MaxConcurrentWorkflows,
 	}
 	auto.Register(mux)
+	brd.Rules = auto
 	routes := jsonErrors(mux)
 	checked := httpx.CheckOrigin(cfg.PublicURL, routes)
 	return &App{

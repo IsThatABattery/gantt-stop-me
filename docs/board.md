@@ -56,6 +56,8 @@ Returns the project's columns and tasks, syncing the tasks from the repository's
 | `404` | `not_found` |
 | `502` | `github_error` |
 
+Every task, here and wherever an endpoint answers one, has `runStatus`, its latest test run's status as [List test runs](automation.md#list-test-runs) gives it, `null` when it has none, and `needsAttention`, why it waits in Testing after a runner error, `null` while clear.
+
 ```json
 {
   "project": { "id": 1, "owner": "ada", "name": "gantt", "permission": "write" },
@@ -75,7 +77,9 @@ Returns the project's columns and tasks, syncing the tasks from the repository's
       "version": 1,
       "title": "Draw the timeline",
       "state": "open",
-      "url": "https://github.com/ada/gantt/issues/12"
+      "url": "https://github.com/ada/gantt/issues/12",
+      "runStatus": null,
+      "needsAttention": null
     },
     {
       "id": 9,
@@ -85,7 +89,9 @@ Returns the project's columns and tasks, syncing the tasks from the repository's
       "version": 3,
       "title": "Set up CI",
       "state": "closed",
-      "url": "https://github.com/ada/gantt/issues/14"
+      "url": "https://github.com/ada/gantt/issues/14",
+      "runStatus": "passed",
+      "needsAttention": null
     }
   ]
 }
@@ -130,7 +136,9 @@ Opens an issue labeled `board:backlog` on GitHub and adds its task at the end of
   "version": 1,
   "title": "Draw the timeline",
   "state": "open",
-  "url": "https://github.com/ada/gantt/issues/12"
+  "url": "https://github.com/ada/gantt/issues/12",
+  "runStatus": null,
+  "needsAttention": null
 }
 ```
 
@@ -168,6 +176,8 @@ Returns a task with its issue's title, state, body and labels as last read from 
   "title": "Draw the timeline",
   "state": "open",
   "url": "https://github.com/ada/gantt/issues/12",
+  "runStatus": "failed",
+  "needsAttention": null,
   "body": "One bar per task, by week.",
   "labels": [
     { "name": "board:in-progress", "color": "fbca04" },
@@ -216,7 +226,9 @@ Changes the title or body of a task's issue on GitHub.
   "version": 2,
   "title": "Draw the timeline by week",
   "state": "open",
-  "url": "https://github.com/ada/gantt/issues/12"
+  "url": "https://github.com/ada/gantt/issues/12",
+  "runStatus": null,
+  "needsAttention": null
 }
 ```
 
@@ -250,19 +262,39 @@ Puts a task in a column before another task or at the column's end, relabeling i
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
-| `409` | `conflict`, and the current task |
+| `409` | `conflict`, and the current task; `run_in_progress`, `not_tested` |
 | `502` | `github_error` |
+
+While the project's [automation](automation.md) is on, a move to another column also follows these rules. A reorder within a column is not such a move.
+
+| Move | Rule |
+| --- | --- |
+| Out of Testing | Refused with `run_in_progress` while the task's latest test run is `queued` or `running`. [Cancel test run](automation.md#cancel-test-run) unlocks it. Otherwise it clears `needsAttention`. |
+| Into User Check | Refused with `not_tested` unless the task's latest test run `passed` on the head commit its pull request has now. |
+| Into Testing | Starts a test run, which cancels the task's earlier queued or running one, of the one open, ready pull request that closes the issue and may run, at its head: from a branch of the repository, and not refused with a comment. With none, or more than one, the run ends at once as a runner error, and the task needs attention. |
+| Any other | Free, Closed included. |
 
 ```json
 {
   "id": 7,
   "issueNumber": 12,
-  "columnId": 2,
+  "columnId": 3,
   "position": 1.5,
   "version": 2,
   "title": "Draw the timeline",
   "state": "open",
-  "url": "https://github.com/ada/gantt/issues/12"
+  "url": "https://github.com/ada/gantt/issues/12",
+  "runStatus": "queued",
+  "needsAttention": null
+}
+```
+
+```json
+{
+  "error": {
+    "code": "run_in_progress",
+    "message": "This task's test run is still going. Cancel the run to move the task out of Testing."
+  }
 }
 ```
 
@@ -280,7 +312,9 @@ Puts a task in a column before another task or at the column's end, relabeling i
     "version": 3,
     "title": "Draw the timeline",
     "state": "open",
-    "url": "https://github.com/ada/gantt/issues/12"
+    "url": "https://github.com/ada/gantt/issues/12",
+    "runStatus": null,
+    "needsAttention": null
   }
 }
 ```

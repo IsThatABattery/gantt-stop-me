@@ -122,7 +122,7 @@ func TestRoutingAsksTheDecisionModel(t *testing.T) {
 	f.expectResults(
 		resultRow{1, "passed", "Exit code 0.", "backend", true},
 		resultRow{2, "passed", "Exit code 0.", "backend", false},
-		resultRow{3, "error", "LLM checks are not built yet.", "frontend", false},
+		resultRow{3, "error", noChat, "frontend", false}, // no chat reply is scripted
 		resultRow{4, "error", "Test 4 matches no workflow well enough to run. Best guesses: none. Pin it to one with [name].", "", false},
 		resultRow{5, "error", "Test 5 matches no workflow well enough to run. Best guesses: none. Pin it to one with [name].", "", false},
 	)
@@ -133,7 +133,7 @@ func TestRoutingAsksTheDecisionModel(t *testing.T) {
 	}
 	f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "error", Finished: true})
 	// The first error is test 3's, by position.
-	if got := f.task(1); got.NeedsAttention != "LLM checks are not built yet." {
+	if got := f.task(1); got.NeedsAttention != noChat {
 		t.Fatalf("needs_attention = %q", got.NeedsAttention)
 	}
 	var specs []string

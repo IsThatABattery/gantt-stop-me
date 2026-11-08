@@ -140,5 +140,7 @@ func TestAutomationNeedsRunnerURL(t *testing.T) {
 	}
 	f.Do("POST", f.path("/automation/webhook"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
 	f.Do("POST", fmt.Sprintf("/api/github/webhook/%d", f.project), "{}").Expect(http.StatusNotFound, "not_found")
+	f.Do("GET", f.path("/tasks/1/runs"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
+	f.Do("POST", f.path("/runs/1/cancel"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
 	f.Automation.Run(context.Background()) // returns at once instead of polling
 }
