@@ -1,0 +1,6 @@
+workflows:
+  frontend:
+    description: The React frontend in src/front, built with Vite; tests run in its source folder.
+    context: src/front
+    dockerfile: Dockerfile
+    target: build
