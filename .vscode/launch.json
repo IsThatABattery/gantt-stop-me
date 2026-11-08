@@ -18,6 +18,15 @@
       "preLaunchTask": "db: start"
     },
     {
+      "name": "Runner",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/src/back/api/cmd/runner",
+      // RUNNER_TOKEN comes from the dev container's environment, which the API entry shares.
+      "env": { "RUN_PREFIX": "gantt-dev" }
+    },
+    {
       "name": "Web",
       "type": "node-terminal",
       "request": "launch",
