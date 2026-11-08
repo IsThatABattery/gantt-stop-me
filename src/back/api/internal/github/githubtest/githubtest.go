@@ -900,7 +900,11 @@ func (f *Fake) createRef(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Ref, SHA string }
 	json.NewDecoder(r.Body).Decode(&in)
 	name, isBranch := strings.CutPrefix(in.Ref, "refs/heads/")
-	if _, exists := rp.branches[name]; !isBranch || in.SHA == "" || exists || name == "main" {
+	if !isBranch || in.SHA == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "Invalid request."})
+		return
+	}
+	if _, exists := rp.branches[name]; exists || name == "main" {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "Reference already exists"})
 		return
 	}

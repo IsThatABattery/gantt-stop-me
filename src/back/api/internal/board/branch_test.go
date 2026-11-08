@@ -37,3 +37,16 @@ func TestMoveToInProgressMakesABranch(t *testing.T) {
 		t.Fatalf("branches = %v", b)
 	}
 }
+
+func TestMoveRecordsNoBranchGitHubRefused(t *testing.T) {
+	f := setup(t, "Theme tokens")
+	// GitHub answers 422 for any refused ref, such as one a ruleset blocks, not only for one that exists.
+	f.GitHub.Fail("POST /repositories/{id}/git/refs", http.StatusUnprocessableEntity)
+	res := f.move(f.ada, 1, "in-progress", 0)
+	res.Expect(http.StatusOK, "")
+	var got task
+	res.JSON(&got)
+	if got.Branch != nil {
+		t.Fatalf("task records branch %q, GitHub has %v", *got.Branch, f.repo.Branches())
+	}
+}

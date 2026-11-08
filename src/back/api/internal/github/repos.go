@@ -261,8 +261,9 @@ func (c *Client) CreateBranch(ctx context.Context, token string, repoID int64, n
 	}
 	_, err = c.do(ctx, http.MethodPost, c.repo(repoID)+"/git/refs", token, nil,
 		map[string]string{"ref": "refs/heads/" + name, "sha": head.Object.SHA}, nil)
+	// GitHub answers every validation failure with 422, such as a ruleset or a clash with a branch named feature.
 	var ghErr *Error
-	if errors.As(err, &ghErr) && ghErr.Status == http.StatusUnprocessableEntity { // "Reference already exists"
+	if errors.As(err, &ghErr) && ghErr.Status == http.StatusUnprocessableEntity && ghErr.Message == "Reference already exists" {
 		err = nil
 	}
 	return repo.DefaultBranch, err
