@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -185,6 +186,45 @@ func (c *Client) CreateIssue(ctx context.Context, token string, repoID int64, ti
 	in := map[string]any{"title": title, "body": body, "labels": labels}
 	_, err := c.do(ctx, http.MethodPost, c.repo(repoID)+"/issues", token, nil, in, &is)
 	return is, err
+}
+
+// Issue loads issue number.
+func (c *Client) Issue(ctx context.Context, token string, repoID int64, number int) (Issue, error) {
+	var is Issue
+	_, err := c.do(ctx, http.MethodGet, c.issue(repoID, number), token, nil, nil, &is)
+	return is, err
+}
+
+// maxWorkflowFile is the most of a workflows file WorkflowFile reads: one byte over automation.ParseWorkflows'
+// limit, so the parser still rejects a longer file.
+const maxWorkflowFile = 64<<10 + 1
+
+// WorkflowFile returns the repository's .gantt/workflows.yml as it is at commit sha. A file absent at that commit
+// fails with *Error{Status: 404}, as does a repository the token cannot see. A file over 64 KiB comes back cut to
+// 64 KiB and one byte.
+func (c *Client) WorkflowFile(ctx context.Context, token string, repoID int64, sha string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	res, err := c.open(ctx, http.MethodGet, c.repo(repoID)+"/contents/.gantt/workflows.yml?ref="+url.QueryEscape(sha), token,
+		http.Header{"Accept": {"application/vnd.github.raw+json"}}, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	return io.ReadAll(io.LimitReader(res.Body, maxWorkflowFile))
+}
+
+// Tarball streams the repository's source at commit sha: GitHub's .tar.gz, with everything in one owner-repo-sha/
+// folder after a pax global header. The caller closes it. It has no time limit of its own, since a large repository
+// takes longer than any one limit to download: ctx bounds it. GitHub redirects it to codeload.github.com, and the
+// HTTP client sends the token only to api.github.com, as Go's does by dropping Authorization on a redirect to
+// another host.
+func (c *Client) Tarball(ctx context.Context, token string, repoID int64, sha string) (io.ReadCloser, error) {
+	res, err := c.open(ctx, http.MethodGet, c.repo(repoID)+"/tarball/"+url.PathEscape(sha), token, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
 }
 
 // UpdateIssue sets an issue's fields, any of "title", "body" and "state".
