@@ -115,7 +115,7 @@ Changes a provider's base URL, key or models after fetching `GET {baseUrl}/model
 
 ## Delete provider
 
-Removes one of the user's providers.
+Removes one of the user's providers, unless a project's [automation](automation.md) uses it.
 
 `DELETE /api/providers/{providerID}`
 
@@ -133,3 +133,4 @@ Removes one of the user's providers.
 | `204` | empty |
 | `401` | `unauthorized` |
 | `404` | `not_found` |
+| `409` | `provider_in_use` |

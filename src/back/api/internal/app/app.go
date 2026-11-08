@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gantt-stop-me/api/internal/accounts"
+	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/board"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
@@ -25,6 +26,7 @@ type Config struct {
 	GitHubClientSecret string
 	// AllowPrivateProviderURLs lets provider base URLs reach loopback and private networks, such as a local Ollama.
 	AllowPrivateProviderURLs bool
+	RunnerURL                string // the runner's base URL; automation is off, its routes 404, while it is empty
 }
 
 // New returns the API handler.
@@ -47,6 +49,14 @@ func New(db *pgxpool.Pool, cfg Config) http.Handler {
 	prj.Register(mux)
 	(&board.Board{DB: db, Accounts: acc, Projects: prj, GitHub: cfg.GitHub}).Register(mux)
 	settings.New(db, cfg.Secrets, acc, cfg.AllowPrivateProviderURLs).Register(mux)
+	(&automation.Automation{
+		DB:        db,
+		Accounts:  acc,
+		Projects:  prj,
+		Secrets:   cfg.Secrets,
+		PublicURL: cfg.PublicURL,
+		RunnerURL: cfg.RunnerURL,
+	}).Register(mux)
 	return httpx.CheckOrigin(cfg.PublicURL, jsonErrors(mux))
 }
 
