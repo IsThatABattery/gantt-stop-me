@@ -76,7 +76,7 @@ export function Proposals({ projectId, plan, act, busy }: { projectId: string; p
           return (
             <li key={p.id} className="rounded-lg border border-line-strong bg-surface-sunken px-3 py-2">
               <div className="flex items-start gap-3">
-                <details className="min-w-0 flex-1">
+                <details className="min-w-0 flex-1 wrap-anywhere">
                   <summary className="cursor-pointer text-sm">
                     {p.position}. {p.title} <span className="text-xs text-text-muted">{p.status.replace('_', ' ')}</span>
                   </summary>
@@ -103,7 +103,7 @@ export function Proposals({ projectId, plan, act, busy }: { projectId: string; p
                       aria-pressed={c?.verdict === 'approve'}
                       disabled={busy || !approvable(p)}
                       onClick={() => choose(p.id, c?.verdict === 'approve' ? undefined : { verdict: 'approve' })}
-                      className={`flex size-8 cursor-pointer items-center justify-center border-0 text-good hover:bg-good/25 disabled:cursor-not-allowed disabled:opacity-40 ${c?.verdict === 'approve' ? 'bg-good text-on-ion hover:bg-good' : 'bg-good/10'}`}
+                      className={`flex size-8 cursor-pointer items-center justify-center border-0 text-good hover:bg-good/25 disabled:cursor-not-allowed disabled:opacity-40 ${c?.verdict === 'approve' ? 'bg-good text-surface hover:bg-good' : 'bg-good/10'}`}
                     >
                       <Icon name="check" size={16} />
                     </button>
@@ -114,7 +114,7 @@ export function Proposals({ projectId, plan, act, busy }: { projectId: string; p
                       aria-pressed={c?.verdict === 'reject'}
                       disabled={busy}
                       onClick={() => choose(p.id, c?.verdict === 'reject' ? undefined : reject(p.id))}
-                      className={`flex size-8 cursor-pointer items-center justify-center border-0 border-l border-line-strong text-critical hover:bg-critical/25 disabled:cursor-not-allowed disabled:opacity-40 ${c?.verdict === 'reject' ? 'bg-critical text-on-ion hover:bg-critical' : 'bg-critical/10'}`}
+                      className={`flex size-8 cursor-pointer items-center justify-center border-0 border-l border-line-strong text-critical hover:bg-critical/25 disabled:cursor-not-allowed disabled:opacity-40 ${c?.verdict === 'reject' ? 'bg-critical text-surface hover:bg-critical' : 'bg-critical/10'}`}
                     >
                       <Icon name="close" size={16} />
                     </button>
