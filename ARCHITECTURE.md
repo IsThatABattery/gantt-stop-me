@@ -180,7 +180,7 @@ Issues change on GitHub too, so the API refreshes a project's issues whenever it
 - A `board:*` label added on GitHub moves the task to that column. A label the issue already had does not, so one left on an issue closed on GitHub cannot pull the task back later.
 - An open issue never moves into Closed by label. `board:closed` on an open issue is ignored, and closing the issue is what moves it there.
 
-The cached title, state, body, labels and board labels in `tasks` are overwritten on every sync, and by the API's own writes to the issue. A task's detail view reads the cached title, state, body and labels, refreshed by the sync when its throttle allows. A label renamed, recolored or deleted in the repository's settings changes no issue, so it reaches a task's cached labels only when its issue next changes.
+The cached title, state, body, labels and board labels in `tasks` are overwritten on every sync, and by the API's own writes to the issue. A task's detail view reads the cached title, state, body and labels, refreshed by the sync when its throttle allows. The sync also reads the repository's labels, so a label renamed, recolored or deleted in its settings updates every task that carries it.
 
 ### Provider settings
 
@@ -253,8 +253,9 @@ projects (
   name            text not null,
   added_by        bigint references users on delete set null,
   issues_etag     text,
+  labels_etag     text,
   synced_at       timestamptz,
-  backfill_pending boolean not null default false, -- syncs read every issue until one gets through; set when tasks gained body and labels
+  backfill_pending boolean not null default false, -- syncs read every issue until one gets through; set when tasks gained body and labels, and label ids
   created_at      timestamptz not null default now()
 )
 
@@ -288,7 +289,7 @@ tasks (
   state           text not null,      -- 'open' or 'closed', cache
   board_labels    text[] not null default '{}', -- the issue's board:* labels as last seen, so sync spots added ones
   body            text not null default '',     -- cache, overwritten by sync
-  labels          jsonb not null default '[]',  -- the issue's labels as [{"name", "color"}], cache
+  labels          jsonb not null default '[]',  -- the issue's labels as [{"id", "name", "color"}], cache
   updated_at      timestamptz not null default now(),
   unique (project_id, issue_number)
 )

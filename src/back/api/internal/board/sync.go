@@ -36,20 +36,21 @@ func (b *Board) syncIfDue(w http.ResponseWriter, r *http.Request, p projects.Pro
 	return true
 }
 
-// sync refreshes the project's tasks from its issues on GitHub, at most once every 30 seconds per project,
-// with the token of the user loading the board. While the project's backfill is pending, every sync reads every
-// issue, and only one that applies them all clears it.
+// sync refreshes the project's tasks from its labels and issues on GitHub, at most once every 30 seconds per
+// project, with the token of the user loading the board. While the project's backfill is pending, every sync reads
+// every issue, and only one that applies them all clears it.
 // shortcut: syncs that claim during a long backfill each read every issue, costing rate limit on big repos;
 // hold the claim for the whole read if that bites.
 func (b *Board) sync(ctx context.Context, p projects.Project, token string) error {
 	var prev *time.Time
-	var etag string
+	var etag, labelsETag string
 	var claimed time.Time
 	var full bool
 	err := b.DB.QueryRow(ctx, `
 		update projects set synced_at = now()
 		where id = $1 and (synced_at is null or synced_at < now() - interval '30 seconds')
-		returning old.synced_at, coalesce(issues_etag, ''), new.synced_at, backfill_pending`, p.ID).Scan(&prev, &etag, &claimed, &full)
+		returning old.synced_at, coalesce(issues_etag, ''), coalesce(labels_etag, ''), new.synced_at, backfill_pending`,
+		p.ID).Scan(&prev, &etag, &labelsETag, &claimed, &full)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // synced in the last 30 seconds, or another load is syncing now
 	}
@@ -64,11 +65,15 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 		cutoff = prev.Add(-lookback)
 	}
 	var issues []github.Issue
-	query := url.Values{"state": {"all"}, "sort": {"updated"}, "direction": {"desc"}, "per_page": {"100"}}
-	newETag, err := b.GitHub.Issues(ctx, token, p.RepoID, query, etag, func(page []github.Issue) bool {
-		issues = append(issues, page...)
-		return len(page) > 0 && !page[len(page)-1].UpdatedAt.Before(cutoff)
-	})
+	var newETag string
+	err = b.syncLabels(ctx, p, token, labelsETag)
+	if err == nil {
+		query := url.Values{"state": {"all"}, "sort": {"updated"}, "direction": {"desc"}, "per_page": {"100"}}
+		newETag, err = b.GitHub.Issues(ctx, token, p.RepoID, query, etag, func(page []github.Issue) bool {
+			issues = append(issues, page...)
+			return len(page) > 0 && !page[len(page)-1].UpdatedAt.Before(cutoff)
+		})
+	}
 	if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusNotModified {
 		return nil
 	}
@@ -89,6 +94,33 @@ func (b *Board) sync(ctx context.Context, p projects.Project, token string) erro
 	}
 	_, err = b.DB.Exec(ctx, `update projects set issues_etag = nullif($2, ''), backfill_pending = backfill_pending and not $3 where id = $1`,
 		p.ID, newETag, full)
+	return err
+}
+
+// syncLabels rewrites each label stored on the project's tasks to the repository's label with its id, keeping their
+// order and dropping those the repository no longer has, unless the label list is unchanged since etag. A label
+// stored with no id stays as it is until the backfill re-reads its issue. It leaves version and updated_at alone:
+// a label edit moves no task, and updated_at tells a sync whether a task changed since its fetch.
+func (b *Board) syncLabels(ctx context.Context, p projects.Project, token, etag string) error {
+	labels, etag, err := b.GitHub.Labels(ctx, token, p.RepoID, etag)
+	if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusNotModified {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// The <@ test leaves unwritten a task whose labels all still match the repository's.
+	_, err = b.DB.Exec(ctx, `
+		update tasks t set labels = coalesce((
+			select jsonb_agg(coalesce(r.label, l.label) order by l.n)
+			from jsonb_array_elements(t.labels) with ordinality l(label, n)
+			left join jsonb_array_elements($2::jsonb) r(label) on r.label->'id' = l.label->'id'
+			where r.label is not null or l.label->'id' is null
+		), '[]')
+		where t.project_id = $1 and not t.labels <@ $2::jsonb`, p.ID, labels)
+	if err == nil {
+		_, err = b.DB.Exec(ctx, `update projects set labels_etag = nullif($2, '') where id = $1`, p.ID, etag)
+	}
 	return err
 }
 
@@ -170,8 +202,6 @@ func target(cols []column, cur column, is github.Issue, seen []string) column {
 
 // refresh overwrites the task's cached title, state, body, labels and board labels, and moves it to the end of
 // column to when that is not cur.
-// shortcut: a label renamed, recolored or deleted in the repository's settings changes no issue, so it reaches the
-// cached labels only when an issue carrying it next changes; cache labels per project by id if that matters.
 func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github.Issue) error {
 	if to.ID != cur.ID {
 		_, err := tx.Exec(ctx, `

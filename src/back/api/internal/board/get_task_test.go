@@ -64,6 +64,27 @@ func TestGetTaskSyncsWhenDue(t *testing.T) {
 	}
 }
 
+func TestGetTaskHidesLabelIDs(t *testing.T) {
+	f := setup(t, "One")
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Labels = []string{"bug"} })
+	f.dueSync()
+	f.board()
+	id, _ := f.task(1)
+	var stored bool
+	f.DB.QueryRow(t.Context(), `select labels->0->'id' is not null from tasks where id = $1`, id).Scan(&stored)
+	if !stored {
+		t.Fatal("the sync stored the label without its id")
+	}
+
+	res := f.Do("GET", f.path("/tasks/%d", id), nil, f.ada)
+	res.Expect(http.StatusOK, "")
+	var got struct{ Labels []map[string]any }
+	res.JSON(&got)
+	if len(got.Labels) != 1 || len(got.Labels[0]) != 2 || got.Labels[0]["name"] != "bug" || got.Labels[0]["color"] != "ededed" {
+		t.Fatalf("labels = %v, want only the name and color of bug", got.Labels)
+	}
+}
+
 func TestGetTaskUnknown(t *testing.T) {
 	f := setup(t, "One")
 	f.Do("GET", f.path("/tasks/999"), nil, f.ada).Expect(http.StatusNotFound, "not_found")

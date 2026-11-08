@@ -27,8 +27,9 @@ type Repo struct {
 	} `json:"permissions"`
 }
 
-// Label is an issue label.
+// Label is a repository's label, as its issues carry it.
 type Label struct {
+	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
 }
@@ -83,22 +84,45 @@ func (c *Client) CreateLabel(ctx context.Context, token string, repoID int64, la
 // it calls page with each page until page returns false or no pages are left, and returns the first page's ETag.
 // With etag set, an unchanged first page fails with *Error{Status: 304}.
 func (c *Client) Issues(ctx context.Context, token string, repoID int64, query url.Values, etag string, page func([]Issue) bool) (string, error) {
-	next := c.repo(repoID) + "/issues?" + query.Encode()
+	return pages(ctx, c, token, c.repo(repoID)+"/issues?"+query.Encode(), etag, page)
+}
+
+// Labels lists the repository's labels and returns their ETag, or "" when they fill a page or more: an ETag covers
+// only the first page, so a change on a later one would leave it as it was. With etag set, an unchanged first page
+// fails with *Error{Status: 304}.
+func (c *Client) Labels(ctx context.Context, token string, repoID int64, etag string) ([]Label, string, error) {
+	labels := []Label{} // not nil, which would send null for a repository with none
+	n := 0
+	first, err := pages(ctx, c, token, c.repo(repoID)+"/labels?per_page=100", etag, func(page []Label) bool {
+		labels = append(labels, page...)
+		n++
+		return true
+	})
+	if n > 1 || len(labels) >= 100 {
+		first = ""
+	}
+	return labels, first, err
+}
+
+// pages GETs next and each page its Link header names after it, calling page with each until page returns false
+// or no pages are left, and returns the first page's ETag. With etag set, an unchanged first page fails with
+// *Error{Status: 304}.
+func pages[T any](ctx context.Context, c *Client, token, next, etag string, page func([]T) bool) (string, error) {
 	var header http.Header
 	if etag != "" {
 		header = http.Header{"If-None-Match": {etag}}
 	}
 	var first string
 	for i := 0; next != ""; i++ {
-		var issues []Issue
-		h, err := c.do(ctx, http.MethodGet, next, token, header, nil, &issues)
+		var items []T
+		h, err := c.do(ctx, http.MethodGet, next, token, header, nil, &items)
 		if err != nil {
 			return "", err
 		}
 		if i == 0 {
 			first, header = h.Get("ETag"), nil
 		}
-		if !page(issues) {
+		if !page(items) {
 			break
 		}
 		next = nextPage(h.Get("Link"))

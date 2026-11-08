@@ -6,7 +6,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -19,8 +18,11 @@ func (b *Board) getTask(w http.ResponseWriter, r *http.Request) {
 	}
 	var out struct {
 		task
-		Body   string         `json:"body"`
-		Labels []github.Label `json:"labels"`
+		Body   string `json:"body"`
+		Labels []struct {
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		} `json:"labels"` // not github.Label, whose id only the sync needs
 	}
 	var err error
 	out.task, err = b.scanTask(b.DB.QueryRow(r.Context(), `

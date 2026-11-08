@@ -305,22 +305,187 @@ func TestSyncUsesETag(t *testing.T) {
 }
 
 func TestSyncFailureServesCachedBoard(t *testing.T) {
-	f := setup(t, "One")
-	f.repo.AddIssue("Two")
-	f.GitHub.Fail("GET /repositories/{id}/issues", http.StatusInternalServerError)
+	for _, list := range []string{"issues", "labels"} {
+		t.Run(list, func(t *testing.T) {
+			f := setup(t, "One")
+			f.repo.AddIssue("Two")
+			f.GitHub.Fail("GET /repositories/{id}/"+list, http.StatusInternalServerError)
+			f.dueSync()
+			before, _ := f.synced()
+
+			if n := len(f.board().Tasks); n != 1 {
+				t.Fatalf("board during a failing sync has %d tasks, want the cached 1", n)
+			}
+			if after, _ := f.synced(); !after.Equal(before) {
+				t.Fatalf("synced_at = %v after a failed sync, want it put back to %v", after, before)
+			}
+
+			f.GitHub.Fail("GET /repositories/{id}/"+list, 0)
+			if n := len(f.board().Tasks); n != 2 {
+				t.Fatalf("the next load has %d tasks, want it to retry the sync and find 2", n)
+			}
+		})
+	}
+}
+
+// labeledTask gives issue 1 these labels and syncs them, then dates every change to before the next sync's cutoff,
+// issue 2's last, so later syncs stop at issue 2: only the label list can bring issue 1 a label edit.
+func (f *fixture) labeledTask(labels ...string) {
+	f.t.Helper()
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Labels = labels })
 	f.dueSync()
-	before, _ := f.synced()
+	f.board()
+	f.GitHub.PageSize = 1
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.UpdatedAt = time.Now().Add(-time.Hour) })
+	f.repo.EditIssue(2, func(is *githubtest.Issue) { is.UpdatedAt = time.Now().Add(-30 * time.Minute) })
+}
 
-	if n := len(f.board().Tasks); n != 1 {
-		t.Fatalf("board during a failing sync has %d tasks, want the cached 1", n)
+// stamp returns the version and updated_at of issue number's task.
+func (f *fixture) stamp(number int) (int, time.Time) {
+	f.t.Helper()
+	var version int
+	var at time.Time
+	err := f.DB.QueryRow(context.Background(), `select version, updated_at from tasks where project_id = $1 and issue_number = $2`,
+		f.project, number).Scan(&version, &at)
+	if err != nil {
+		f.t.Fatal(err)
 	}
-	if after, _ := f.synced(); !after.Equal(before) {
-		t.Fatalf("synced_at = %v after a failed sync, want it put back to %v", after, before)
+	return version, at
+}
+
+func TestSyncFollowsRepositoryLabelEdits(t *testing.T) {
+	f := setup(t, "One", "Two")
+	f.labeledTask("bug", "board:backlog", "wontfix")
+	f.exec(`update tasks set labels = labels || '[{"name": "legacy", "color": "000000"}]' where issue_number = 1`) // no id, as before 006
+	version, at := f.stamp(1)
+	for _, c := range []struct {
+		edit string
+		do   func()
+		want []label
+	}{
+		{"renamed", func() { f.repo.EditLabel("bug", func(l *githubtest.Label) { l.Name = "defect" }) },
+			[]label{{"defect", "ededed"}, {"board:backlog", "c5def5"}, {"wontfix", "ededed"}, {"legacy", "000000"}}},
+		{"recolored", func() { f.repo.EditLabel("wontfix", func(l *githubtest.Label) { l.Color = "ffffff" }) },
+			[]label{{"defect", "ededed"}, {"board:backlog", "c5def5"}, {"wontfix", "ffffff"}, {"legacy", "000000"}}},
+		{"deleted", func() { f.repo.DeleteLabel("defect") },
+			[]label{{"board:backlog", "c5def5"}, {"wontfix", "ffffff"}, {"legacy", "000000"}}},
+	} {
+		c.do()
+		f.dueSync()
+		if _, labels := f.details(1); !slices.Equal(labels, c.want) {
+			t.Fatalf("label %s on GitHub: GET task labels %v, want %v", c.edit, labels, c.want)
+		}
+	}
+	if v, a := f.stamp(1); v != version || !a.Equal(at) {
+		t.Fatalf("version %d, updated_at %v after the label edits; want %d, %v untouched", v, a, version, at)
+	}
+}
+
+// labelsETag returns the project's labels_etag.
+func (f *fixture) labelsETag() *string {
+	f.t.Helper()
+	var etag *string
+	if err := f.DB.QueryRow(context.Background(), `select labels_etag from projects where id = $1`, f.project).Scan(&etag); err != nil {
+		f.t.Fatal(err)
+	}
+	return etag
+}
+
+func TestSyncUsesLabelsETag(t *testing.T) {
+	f := setup(t, "One", "Two")
+	f.labeledTask("bug")
+	etag := f.labelsETag()
+	if etag == nil {
+		t.Fatal("sync stored no labels ETag")
 	}
 
-	f.GitHub.Fail("GET /repositories/{id}/issues", 0)
-	if n := len(f.board().Tasks); n != 2 {
-		t.Fatalf("the next load has %d tasks, want it to retry the sync and find 2", n)
+	// GitHub answers 304, so the sync keeps the stored labels as they are, even this tampered name, and still counts.
+	f.exec(`update tasks set labels = jsonb_set(labels, '{0,name}', '"tampered"') where issue_number = 1`)
+	version, at := f.stamp(1)
+	f.dueSync()
+	n := len(f.GitHub.Requests())
+	if _, labels := f.details(1); !slices.Equal(labels, []label{{"tampered", "ededed"}}) {
+		t.Fatalf("unchanged label list: labels %v, want the stored ones", labels)
+	}
+	if got := f.since(n); !slices.Contains(got, "GET /repositories/1/labels?per_page=100") {
+		t.Fatalf("requests %v, want the label list", got)
+	}
+	if v, a := f.stamp(1); v != version || !a.Equal(at) {
+		t.Fatalf("version %d, updated_at %v; want %d, %v untouched", v, a, version, at)
+	}
+	claimed, _ := f.synced()
+	if kept := f.labelsETag(); kept == nil || *kept != *etag || time.Since(claimed) > 30*time.Second {
+		t.Fatalf("labels ETag %v, synced at %v; want the ETag kept and the sync's claim standing", kept, claimed)
+	}
+}
+
+// An ETag covers only the first page, so a label list that fills one is read in full on every sync.
+func TestSyncRereadsLabelsOverOnePage(t *testing.T) {
+	f := setup(t, "One", "Two")
+	var names []string
+	for i := range 96 { // after the 5 board labels: 101, one past a page
+		names = append(names, fmt.Sprint("l", i))
+	}
+	f.labeledTask(names...)
+	if etag := f.labelsETag(); etag != nil {
+		t.Fatalf("labels ETag %q stored for two pages of labels", *etag)
+	}
+
+	f.repo.EditLabel("l95", func(l *githubtest.Label) { l.Name = "last" }) // on the second page
+	f.dueSync()
+	if _, labels := f.details(1); len(labels) != 96 || labels[95] != (label{"last", "ededed"}) {
+		t.Fatalf("%d labels, want 96 ending in the one renamed on the second page", len(labels))
+	}
+	if etag := f.labelsETag(); etag != nil {
+		t.Fatalf("labels ETag %q stored for two pages of labels", *etag)
+	}
+
+	f.repo.DeleteLabel("l0") // 100 left: one full page, which a label added later would leave unchanged
+	f.dueSync()
+	f.board()
+	if etag := f.labelsETag(); etag != nil {
+		t.Fatalf("labels ETag %q stored for a full page of labels", *etag)
+	}
+	f.repo.DeleteLabel("l1")
+	f.dueSync()
+	f.board()
+	if etag := f.labelsETag(); etag == nil {
+		t.Fatal("no labels ETag stored for 99 labels")
+	}
+}
+
+func TestSyncLabelsWithRevokedCredential(t *testing.T) {
+	f := setup(t, "One")
+	f.dueSync()
+	f.GitHub.Fail("GET /repositories/{id}/labels", http.StatusUnauthorized) // the token expired or was revoked
+	f.Do("GET", f.path("/board"), nil, f.ada).Expect(http.StatusForbidden, "github_not_linked")
+}
+
+// Labels stored before migration 006 have no id. 006 makes the next sync read every issue, which stores them with ids,
+// so a later label edit reaches them.
+func TestSyncBackfillsLabelIDs(t *testing.T) {
+	f := setup(t, "One", "Two")
+	f.labeledTask("bug")
+	f.exec(`update tasks set labels = '[{"name": "bug", "color": "ededed"}]' where issue_number = 1`)
+	f.exec(`alter table projects drop column labels_etag`)
+	f.exec(`delete from schema_migrations where version = '006_label_sync.sql'`)
+	f.exec(`insert into projects (github_repo_id, owner, name) values (999, 'octo', 'uninitialized')`)
+	if err := store.Migrate(context.Background(), f.DB, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	var initialized, uninitialized bool
+	f.DB.QueryRow(t.Context(), `select backfill_pending from projects where id = $1`, f.project).Scan(&initialized)
+	f.DB.QueryRow(t.Context(), `select backfill_pending from projects where synced_at is null`).Scan(&uninitialized)
+	if !initialized || uninitialized {
+		t.Fatalf("backfill pending: initialized project %v, uninitialized %v; want true, false", initialized, uninitialized)
+	}
+
+	f.dueSync()
+	f.board()
+	f.repo.EditLabel("bug", func(l *githubtest.Label) { l.Name = "defect" })
+	f.dueSync()
+	if _, labels := f.details(1); !slices.Equal(labels, []label{{"defect", "ededed"}}) {
+		t.Fatalf("labels %v after the backfill and a rename, want the rename", labels)
 	}
 }
 

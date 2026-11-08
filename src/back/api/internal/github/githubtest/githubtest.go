@@ -32,7 +32,7 @@ type Fake struct {
 	repos    []*Repo
 	failures map[string]int // route pattern -> the status it answers instead
 	requests []string
-	lastID   int64 // of repositories and issues
+	lastID   int64 // of repositories, issues and labels
 }
 
 type user struct {
@@ -64,6 +64,7 @@ type Issue struct {
 
 // Label is a repository's label.
 type Label struct {
+	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
 }
@@ -86,6 +87,7 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("POST /login/oauth/access_token", f.accessToken)
 	f.mux.HandleFunc("GET /repos/{owner}/{name}", f.getRepo)
 	f.mux.HandleFunc("GET /repositories/{id}", f.getRepo)
+	f.mux.HandleFunc("GET /repositories/{id}/labels", f.listLabels)
 	f.mux.HandleFunc("POST /repositories/{id}/labels", f.createLabel)
 	f.mux.HandleFunc("GET /repositories/{id}/issues", f.listIssues)
 	f.mux.HandleFunc("POST /repositories/{id}/issues", f.createIssue)
@@ -203,6 +205,35 @@ func (r *Repo) Labels() []string {
 	return names
 }
 
+// EditLabel changes the repository's label name, as someone would in its settings: the issues carrying it show the
+// change, and their UpdatedAt stays as it is.
+func (r *Repo) EditLabel(name string, edit func(*Label)) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	l := &r.labels[r.findLabel(name)]
+	old := l.Name
+	edit(l)
+	for _, is := range r.issues {
+		for i, n := range is.Labels {
+			if strings.EqualFold(n, old) {
+				is.Labels[i] = l.Name
+			}
+		}
+	}
+}
+
+// DeleteLabel deletes the repository's label name, as someone would in its settings: it leaves every issue that
+// carried it, and their UpdatedAt stays as it is.
+func (r *Repo) DeleteLabel(name string) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	i := r.findLabel(name)
+	r.labels = slices.Delete(r.labels, i, i+1)
+	for _, is := range r.issues {
+		is.Labels = slices.DeleteFunc(is.Labels, func(n string) bool { return strings.EqualFold(n, name) })
+	}
+}
+
 func (r *Repo) add(title, body string, labels []string, pr bool) *Issue {
 	r.f.lastID++
 	is := &Issue{ID: r.f.lastID, Number: len(r.issues) + 1, Title: title, Body: body, State: "open", PullRequest: pr, UpdatedAt: time.Now()}
@@ -226,7 +257,8 @@ func (r *Repo) label(name string) *Label {
 	if i := r.findLabel(name); i >= 0 {
 		return &r.labels[i]
 	}
-	r.labels = append(r.labels, Label{Name: name, Color: "ededed"})
+	r.f.lastID++
+	r.labels = append(r.labels, Label{ID: r.f.lastID, Name: name, Color: "ededed"})
 	return &r.labels[len(r.labels)-1]
 }
 
@@ -352,8 +384,17 @@ func (f *Fake) createLabel(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	f.lastID++
+	in.ID = f.lastID
 	rp.labels = append(rp.labels, in)
 	writeJSON(w, http.StatusCreated, in)
+}
+
+// listLabels serves GET /repositories/{id}/labels with its per_page and page parameters, like listIssues.
+func (f *Fake) listLabels(w http.ResponseWriter, r *http.Request) {
+	if rp, _, ok := f.repo(w, r, false); ok {
+		writePage(w, r, rp.labels, 100)
+	}
 }
 
 // listIssues serves GET /repositories/{id}/issues with its state, sort, direction, per_page and page
@@ -381,28 +422,34 @@ func (f *Fake) listIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		return c
 	})
-
-	size := min(atLeastOne(q.Get("per_page"), 30), f.PageSize)
-	page := atLeastOne(q.Get("page"), 1)
-	start := min((page-1)*size, len(list))
-	end := min(start+size, len(list))
-	items := []map[string]any{}
-	for _, is := range list[start:end] {
+	var items []map[string]any
+	for _, is := range list {
 		items = append(items, rp.json(is))
 	}
-	body, _ := json.Marshal(items)
+	writePage(w, r, items, f.PageSize)
+}
+
+// writePage answers a list request with the page of items its per_page and page parameters pick, at most limit
+// to a page, an ETag per page, and a Link header to the next and last pages.
+func writePage[T any](w http.ResponseWriter, r *http.Request, items []T, limit int) {
+	q := r.URL.Query()
+	size := min(atLeastOne(q.Get("per_page"), 30), limit)
+	page := atLeastOne(q.Get("page"), 1)
+	start := min((page-1)*size, len(items))
+	end := min(start+size, len(items))
+	body, _ := json.Marshal(append([]T{}, items[start:end]...)) // [], not null, for an empty page
 	etag := fmt.Sprintf(`"%x"`, sha256.Sum256(body))
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	w.Header().Set("ETag", etag)
-	if end < len(list) {
+	if end < len(items) {
 		link := func(page int) string {
 			q.Set("page", strconv.Itoa(page))
 			return "http://" + r.Host + r.URL.Path + "?" + q.Encode()
 		}
-		w.Header().Set("Link", fmt.Sprintf(`<%s>; rel="next", <%s>; rel="last"`, link(page+1), link((len(list)+size-1)/size)))
+		w.Header().Set("Link", fmt.Sprintf(`<%s>; rel="next", <%s>; rel="last"`, link(page+1), link((len(items)+size-1)/size)))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(body)
