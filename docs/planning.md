@@ -1,0 +1,377 @@
+# Planning
+
+A member describes a feature, and an interviewer agent asks them about it one question at a time while it writes a plan doc. The member then reviews the doc, unless their settings turn review off.
+
+The agent works in the API's planner worker, not in requests, because its LLM calls can outlast a request. A request records what the person did, sets the plan's `pending` job, and answers at once. The worker takes each plan with a job every 2 seconds and does one agent turn with the planning model of the user who started the plan. Load the plan again until `pending` is `null`. A turn that fails sets `error` and clears `pending`, and [Retry](#retry-the-agents-turn) gives the job back. While a turn runs on a plan, every change to it answers `409 agent_busy` at once instead of waiting.
+
+A plan's `status` is `briefing` (the interview), `needs_review`, `approved`, `done` or `discarded`. `pending` is the agent's next job: `ask` (update the doc and ask the next question, or finish), `draft` (write the doc from what it has and finish), `generate` (turn the doc into tasks), or `revise`, and `null` while the plan waits on a person. No agent takes `generate` or `revise` yet: an approved plan keeps `generate`.
+
+When the interview ends, because the agent finished, the member asked for the draft, or it asked 12 questions, the agent writes its last doc pass. With the creator's `review` on, the plan goes to `needs_review`. With it off, it goes straight to `approved` with `pending: "generate"`.
+
+## Show planning settings
+
+Returns the caller's planning model and whether they review plan docs.
+
+`GET /api/me/planning`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the settings; `providerId` and `model` are `null` and `review` is `true` until saved |
+| `401` | `unauthorized` |
+
+```json
+{ "providerId": 2, "model": "gpt-5", "review": true }
+```
+
+## Save planning settings
+
+Replaces the caller's planning settings. The agents of every plan the caller starts use them, including plans started before a change.
+
+`PUT /api/me/planning`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `providerId` | body | integer or null | one of the caller's providers; `null` with `model` picks no model, so the caller can delete the provider |
+| `model` | body | string or null | one of that provider's chosen `models`; it should support tool calling |
+| `review` | body | boolean | optional, default `true`; `false` approves plan docs without review |
+
+```json
+{ "providerId": 2, "model": "gpt-5", "review": true }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the settings, as [Show planning settings](#show-planning-settings) answers them |
+| `400` | `invalid_provider`, `invalid_model`, `bad_request` |
+| `401` | `unauthorized` |
+
+## Start a plan
+
+Starts a plan in `briefing` with `pending: "ask"`, for the agent's first question. Its agent always uses the caller's planning settings.
+
+`POST /api/projects/{id}/plans`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `title` | body | string | 1 to 256 characters, trimmed |
+| `description` | body | string | the feature as the caller describes it, 1 to 10000 characters, trimmed |
+
+```json
+{ "title": "Board export", "description": "Let admins export the board as CSV." }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `201` | the plan, as [Show plan](#show-plan) answers it |
+| `400` | `invalid_title`, `invalid_description`, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `planning_not_set_up`: the caller has no planning model |
+| `502` | `github_error` |
+
+## List plans
+
+Returns the project's plans, newest first, without their messages.
+
+`GET /api/projects/{id}/plans`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `plans`, each as [Show plan](#show-plan) answers it without `messages` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+## Show plan
+
+Returns one plan with its doc and its interview.
+
+`GET /api/projects/{id}/plans/{planID}`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+| `planID` | path | integer | a plan's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the plan |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+`doc` is always these sections, in order: `goal` (Goal), `users` (Users and use cases), `scope` (Scope), `out_of_scope` (Out of scope), `requirements` (Requirements), `success` (Success criteria), `risks` (Risks) and `open_questions` (Open questions). A section's `body` is text, or a list of items. Its `state` is `covered`, `asking` (the topic of the question waiting) or `not_yet`.
+
+`messages` is the interview in order: the agent's questions, with `options` (0 to 4 suggested answers), and the person's answers, with `skipped` true for a question skipped instead. `answered` counts the questions answered or skipped. `expectedQuestions` is roughly how many questions the interview takes: those asked, plus one per topic not yet touched, at most 12, and those asked once it is over. `feedback` is a denial's, until the agent's next turn takes it, else `null`. `error` says why the agent's last turn failed, `null` once one succeeds. `version` changes with every change to the plan.
+
+```json
+{
+  "id": 1,
+  "projectId": 1,
+  "title": "Board export",
+  "description": "Let admins export the board as CSV.",
+  "status": "briefing",
+  "doc": [
+    { "key": "goal", "title": "Goal", "body": "Admins export the board as CSV.", "state": "covered" },
+    { "key": "users", "title": "Users and use cases", "body": "", "state": "asking" },
+    { "key": "scope", "title": "Scope", "body": ["Every column", "Open tasks only"], "state": "covered" }
+  ],
+  "pending": null,
+  "feedback": null,
+  "error": null,
+  "version": 3,
+  "answered": 1,
+  "expectedQuestions": 6,
+  "createdAt": "2026-11-08T10:00:00Z",
+  "updatedAt": "2026-11-08T10:01:12Z",
+  "messages": [
+    { "id": 1, "role": "agent", "text": "Which columns go in?", "options": ["All", "Open only"], "skipped": false, "createdAt": "2026-11-08T10:00:04Z" },
+    { "id": 2, "role": "user", "text": "All", "options": [], "skipped": false, "createdAt": "2026-11-08T10:00:40Z" },
+    { "id": 3, "role": "agent", "text": "Who exports?", "options": [], "skipped": false, "createdAt": "2026-11-08T10:01:12Z" }
+  ]
+}
+```
+
+(The example shows three of the eight sections.)
+
+## Answer a question
+
+Answers the agent's waiting question, or skips it, and sets `pending: "ask"`.
+
+`POST /api/projects/{id}/plans/{planID}/answer`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `planID` | path | integer | a plan's `id` in the project |
+| `text` | body | string | 1 to 10000 characters, trimmed; ignored with `skip` |
+| `skip` | body | boolean | optional; `true` skips the question |
+
+```json
+{ "text": "Only admins." }
+```
+
+```json
+{ "skip": true }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the plan, as [Show plan](#show-plan) answers it |
+| `400` | `invalid_text`, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `wrong_status` outside `briefing`, `agent_busy` while `pending` is set, `no_question` when no question waits, after a failed turn |
+| `502` | `github_error` |
+
+## Draft the doc now
+
+Ends the interview early with `pending: "draft"`: the agent writes the doc from what it has, and puts the topics it could not cover into open questions.
+
+`POST /api/projects/{id}/plans/{planID}/draft`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `planID` | path | integer | a plan's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the plan, as [Show plan](#show-plan) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `wrong_status` outside `briefing`, `agent_busy` while `pending` is set |
+| `502` | `github_error` |
+
+## Edit the doc
+
+Changes doc sections as a person wrote them, in `briefing` or `needs_review`, unless the plan changed since they loaded `version`.
+
+`PATCH /api/projects/{id}/plans/{planID}`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `planID` | path | integer | a plan's `id` in the project |
+| `doc` | body | array | sections by `key`, in any number; each `body` (text, or a list of texts, at most 10000 characters in all) and `state` is optional and kept when left out; `title` is ignored, so the doc can be sent back as loaded |
+| `version` | body | integer | the plan's `version` as loaded |
+
+```json
+{ "doc": [{ "key": "goal", "body": "Admins export the board as CSV." }], "version": 3 }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the plan, as [Show plan](#show-plan) answers it |
+| `400` | `invalid_doc`, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `wrong_status`, `agent_busy` while `pending` is set, `conflict` with the plan as it is now |
+| `502` | `github_error` |
+
+```json
+{ "error": { "code": "conflict", "message": "This plan changed since you loaded it. It is shown as it is now." }, "plan": { "id": 1, "version": 4 } }
+```
+
+(`plan` is the whole plan, as [Show plan](#show-plan) answers it.)
+
+## Approve the doc
+
+Accepts the doc of a plan in `needs_review`: it becomes `approved` with `pending: "generate"`.
+
+`POST /api/projects/{id}/plans/{planID}/approve`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `planID` | path | integer | a plan's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the plan, as [Show plan](#show-plan) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `wrong_status` outside `needs_review`, `agent_busy` |
+| `502` | `github_error` |
+
+## Deny the doc
+
+Sends the doc of a plan in `needs_review` back to `briefing` with feedback and `pending: "ask"`. The sections the feedback points at go back to `not_yet`, and the agent's next turn reads the feedback and asks about them.
+
+`POST /api/projects/{id}/plans/{planID}/deny`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `planID` | path | integer | a plan's `id` in the project |
+| `feedback` | body | string | 1 to 10000 characters, trimmed |
+| `sections` | body | array of strings | optional; section keys |
+
+```json
+{ "feedback": "Scope is too wide: start with CSV only.", "sections": ["scope"] }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the plan, as [Show plan](#show-plan) answers it |
+| `400` | `invalid_feedback`, `invalid_sections`, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `wrong_status` outside `needs_review`, `agent_busy` |
+| `502` | `github_error` |
+
+## Retry the agent's turn
+
+Gives the agent back the job its last turn failed, in `briefing`: the draft when a question waits unanswered and there is no feedback, else the next question. `error` stays until a turn succeeds.
+
+`POST /api/projects/{id}/plans/{planID}/retry`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `planID` | path | integer | a plan's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the plan, as [Show plan](#show-plan) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `wrong_status` outside `briefing`, `agent_busy` while `pending` is set, `nothing_to_retry` when the last turn did not fail |
+| `502` | `github_error` |
+
+## Discard a plan
+
+Sets the plan `discarded`, in any status, and drops its job. Tasks it created stay. Already discarded is not an error.
+
+`DELETE /api/projects/{id}/plans/{planID}`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `planID` | path | integer | a plan's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `204` | empty |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `agent_busy` while the agent's turn runs on it |
+| `502` | `github_error` |

@@ -14,6 +14,7 @@ import (
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/llm"
+	"gantt-stop-me/api/internal/planning"
 	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/runner"
 	"gantt-stop-me/api/internal/secret"
@@ -34,10 +35,12 @@ type Config struct {
 	MaxConcurrentWorkflows   int            // workflow executions running at once across the install
 }
 
-// App is the API's handler, and the automation whose poller and queue worker main runs beside it.
+// App is the API's handler, the automation whose poller and queue worker main runs beside it, and the planning
+// whose planner worker it runs too.
 type App struct {
 	http.Handler
 	Automation *automation.Automation
+	Planning   *planning.Planning
 }
 
 // New returns the API.
@@ -77,6 +80,9 @@ func New(db *pgxpool.Pool, cfg Config) *App {
 	}
 	auto.Register(mux)
 	brd.Rules = auto
+	pln := &planning.Planning{DB: db, Accounts: acc, Projects: prj, Secrets: cfg.Secrets,
+		LLM: llm.HTTPClient(cfg.AllowPrivateProviderURLs, llm.CallTimeout)}
+	pln.Register(mux)
 	routes := jsonErrors(mux)
 	checked := httpx.CheckOrigin(cfg.PublicURL, routes)
 	return &App{
@@ -89,6 +95,7 @@ func New(db *pgxpool.Pool, cfg Config) *App {
 			checked.ServeHTTP(w, r)
 		}),
 		Automation: auto,
+		Planning:   pln,
 	}
 }
 

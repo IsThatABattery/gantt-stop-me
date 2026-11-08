@@ -22,6 +22,7 @@ import (
 	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/github/githubtest"
+	"gantt-stop-me/api/internal/planning"
 	"gantt-stop-me/api/internal/runner/runnertest"
 	"gantt-stop-me/api/internal/secret"
 	"gantt-stop-me/api/internal/store"
@@ -43,6 +44,8 @@ type Env struct {
 	// poll of a project, Automation.Work one pass of the worker, and Automation.Wait waits for the webhook deliveries
 	// already answered.
 	Automation *automation.Automation
+	// Planning is the API's planning. Its planner worker never ticks in tests: Planning.Work runs one pass.
+	Planning *planning.Planning
 }
 
 // New starts the API on a new, migrated schema, with OAuth linking enabled against a fake GitHub.
@@ -77,7 +80,8 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	// Cleanups run last first: the server stops taking deliveries, then the ones it answered finish, then the database goes.
 	t.Cleanup(api.Automation.Wait)
 	t.Cleanup(srv.Close)
-	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh, Runner: run, Automation: api.Automation}
+	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh, Runner: run, Automation: api.Automation,
+		Planning: api.Planning}
 }
 
 // DB returns a pool on a new schema with every migration applied, dropped when the test ends.

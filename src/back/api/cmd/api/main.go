@@ -65,7 +65,7 @@ func main() {
 	if err := api.Automation.Recover(ctx); err != nil {
 		log.Print("requeue the workflow executions that were running: ", err)
 	}
-	polled, worked := make(chan struct{}), make(chan struct{})
+	polled, worked, planned := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	go func() {
 		api.Automation.Run(ctx)
 		close(polled)
@@ -73,6 +73,10 @@ func main() {
 	go func() {
 		api.Automation.RunWorker(ctx) // on shutdown, stops and removes the executions it runs and requeues them
 		close(worked)
+	}()
+	go func() {
+		api.Planning.Run(ctx) // a turn shutdown interrupts keeps its job for the next start
+		close(planned)
 	}()
 	srv := &http.Server{
 		Addr:              ":8080",
@@ -96,5 +100,6 @@ func main() {
 	}
 	<-polled
 	<-worked
+	<-planned
 	api.Automation.Wait() // webhook deliveries the server answered before it stopped
 }

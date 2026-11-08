@@ -147,7 +147,7 @@ func TestChatNudgesOnce(t *testing.T) {
 		t.Fatalf("steps %+v, %v", steps, err)
 	}
 	got := f.Chats()[1].Messages[len(first):]
-	want := []llm.Message{{Role: "assistant", Content: "It answers 400."}, {Role: "user", Content: "Call report to finish."}}
+	want := []llm.Message{{Role: "assistant", Content: "It answers 400."}, {Role: "user", Content: "Answer by calling one of the tools."}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("sent %+v, want %+v", got, want)
 	}
