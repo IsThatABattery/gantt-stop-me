@@ -27,7 +27,7 @@ const stackedCap = 'max-md:max-h-60 max-md:overflow-y-auto'
 const itemBase = 'flex min-h-11 items-center rounded-lg no-underline'
 
 /** compact: tighter, for links nested under a mission */
-function RailLink({ item, className = '', compact = false }: { item: Item; className?: string; compact?: boolean }) {
+function RailLink({ item, className = '', labelClass, compact = false }: { item: Item; className?: string; labelClass?: string; compact?: boolean }) {
   return (
     <NavLink
       to={item.to}
@@ -41,7 +41,7 @@ function RailLink({ item, className = '', compact = false }: { item: Item; class
       {({ isActive }) => (
         <>
           <Icon name={item.icon} className={isActive ? 'text-ion' : ''} />
-          {item.label}
+          <span className={labelClass}>{item.label}</span>
         </>
       )}
     </NavLink>
@@ -144,7 +144,7 @@ export function NavRail({ projectId }: { projectId?: string }) {
   return (
     <nav
       aria-label="Primary"
-      className="box-border flex flex-[1_1_200px] flex-col gap-1 border-r border-line-soft bg-rail px-4 py-6 md:sticky md:top-0 md:h-screen md:self-start md:overflow-y-auto"
+      className="box-border flex min-w-0 flex-[1_1_200px] flex-col gap-1 border-r border-line-soft bg-rail px-4 py-6 md:sticky md:top-0 md:h-screen md:self-start md:overflow-y-auto"
     >
       <Link to="/" className="px-2 pb-6 no-underline">
         <Logo />
@@ -191,8 +191,10 @@ export function NavRail({ projectId }: { projectId?: string }) {
           </div>
         </Section>
       )}
-      <div className="mt-auto flex items-center gap-2 pt-4">
-        <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1" />
+      {/* At md+ the rail scrolls, so the footer sticks over the padding with the rail's own colour on an opaque page
+          background. It also anchors the account menu, which then spans the rail instead of running past its edge. */}
+      <div className="relative mt-auto flex items-center gap-2 pt-4 md:sticky md:-bottom-6 md:-mb-6 md:bg-background md:bg-linear-to-b md:from-rail md:to-rail md:pb-6">
+        <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1 md:flex-none" labelClass="md:sr-only" />
         <ThemeToggle />
         <UserMenu placement="above" />
       </div>
