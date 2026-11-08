@@ -69,7 +69,8 @@ type Issue struct {
 	Pull        *Pull // set on pull requests only
 	Comments    []Comment
 	UpdatedAt   time.Time
-	Author      string // login of an issue's author: the user who opened it through the API, or one a test sets
+	Author      string   // login of an issue's author: the user who opened it through the API, or one a test sets
+	Assignees   []string // logins
 }
 
 // Pull is what a pull request has beyond the issue GitHub's issue list shows for it.
@@ -133,6 +134,7 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/labels", f.addLabels)
 	f.mux.HandleFunc("DELETE /repositories/{id}/issues/{number}/labels/{label}", f.removeLabel)
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/comments", f.createComment)
+	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/assignees", f.addAssignees)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls", f.listPulls)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls/{number}", f.getPull)
 	f.mux.HandleFunc("PUT /repositories/{id}/pulls/{number}/merge", f.mergePull)
@@ -276,6 +278,7 @@ func (r *Repo) Issue(number int) Issue {
 	is := *r.issue(number)
 	is.Labels = slices.Clone(is.Labels)
 	is.Comments = slices.Clone(is.Comments)
+	is.Assignees = slices.Clone(is.Assignees)
 	if is.Pull != nil {
 		pull := *is.Pull
 		pull.Closes = slices.Clone(pull.Closes)
@@ -374,15 +377,23 @@ func (r *Repo) json(is *Issue) map[string]any {
 		author = is.Pull.Author
 	}
 	user, _ := r.f.byLogin(author)
+	assignees := []map[string]any{}
+	for _, login := range is.Assignees {
+		u, _ := r.f.byLogin(login)
+		assignees = append(assignees, map[string]any{"id": u.ID, "login": login, "avatar_url": avatarURL(login)})
+	}
 	out := map[string]any{
-		"id": is.ID, "number": is.Number, "title": is.Title, "body": body, "state": is.State,
-		"labels": labels, "updated_at": is.UpdatedAt.UTC().Format(time.RFC3339), "user": user,
+		"id": is.ID, "node_id": nodeID(is), "number": is.Number, "title": is.Title, "body": body, "state": is.State,
+		"labels": labels, "updated_at": is.UpdatedAt.UTC().Format(time.RFC3339), "user": user, "assignees": assignees,
 	}
 	if is.Pull != nil {
 		out["pull_request"] = map[string]any{}
 	}
 	return out
 }
+
+// avatarURL is the fake's avatar address for login.
+func avatarURL(login string) string { return "https://avatars.example.com/" + login }
 
 // pullJSON renders a pull request the way GitHub's REST API does.
 func (r *Repo) pullJSON(is *Issue) map[string]any {
@@ -682,6 +693,25 @@ func (f *Fake) createComment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"id": f.lastID, "body": in.Body, "user": author})
 }
 
+// addAssignees serves POST /repositories/{id}/issues/{number}/assignees, which needs push access, like GitHub.
+func (f *Fake) addAssignees(w http.ResponseWriter, r *http.Request) {
+	rp, is, ok := f.issue(w, r, true)
+	if !ok {
+		return
+	}
+	var in struct {
+		Assignees []string `json:"assignees"`
+	}
+	json.NewDecoder(r.Body).Decode(&in)
+	for _, login := range in.Assignees {
+		if !slices.Contains(is.Assignees, login) {
+			is.Assignees = append(is.Assignees, login)
+		}
+	}
+	is.UpdatedAt = time.Now()
+	writeJSON(w, http.StatusCreated, rp.json(is))
+}
+
 // listPulls serves GET /repositories/{id}/pulls with its state, per_page and page parameters, newest first like
 // GitHub's default order, an ETag per page, and a Link header to the next and last pages.
 func (f *Fake) listPulls(w http.ResponseWriter, r *http.Request) {
@@ -854,6 +884,10 @@ func (f *Fake) graphql(w http.ResponseWriter, r *http.Request) {
 		var ids []string
 		json.Unmarshal(in.Variables["ids"], &ids)
 		f.closingIssues(w, r, ids)
+	case "LinkedPullRequests":
+		var id string
+		json.Unmarshal(in.Variables["id"], &id)
+		f.linkedPullRequests(w, r, id)
 	case "ConvertToDraft":
 		var id string
 		json.Unmarshal(in.Variables["id"], &id)
@@ -893,6 +927,44 @@ func (f *Fake) closingIssues(w http.ResponseWriter, r *http.Request, ids []strin
 		out["errors"] = errs
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// linkedPullRequests answers LinkedPullRequests with the pull requests, in repositories the token has a role on, that
+// close the issue with node id, or with null and a NOT_FOUND error for an issue the token cannot see.
+func (f *Fake) linkedPullRequests(w http.ResponseWriter, r *http.Request, id string) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	var issue Ref
+	for _, rp := range f.repos {
+		for _, is := range rp.issues {
+			if _, granted := rp.roles[token]; granted && is.Pull == nil && nodeID(is) == id {
+				issue = Ref{rp.ID, is.Number}
+			}
+		}
+	}
+	if issue.Number == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"node": nil},
+			"errors": []map[string]any{{"type": "NOT_FOUND", "path": []any{"node"}, "message": "Could not resolve to a node with the global id of '" + id + "'"}}})
+		return
+	}
+	nodes := []map[string]any{}
+	for _, rp := range f.repos {
+		if _, granted := rp.roles[token]; !granted {
+			continue
+		}
+		for _, is := range rp.issues {
+			if is.Pull == nil || !slices.Contains(is.Pull.Closes, issue) {
+				continue
+			}
+			state := map[bool]string{true: "OPEN", false: "CLOSED"}[is.State == "open"]
+			if is.Pull.MergedWith != "" {
+				state = "MERGED"
+			}
+			nodes = append(nodes, map[string]any{"number": is.Number, "title": is.Title, "state": state, "isDraft": is.Pull.Draft,
+				"repository": map[string]any{"databaseId": rp.ID}, "url": fmt.Sprintf("%s/%s/%s/pull/%d", f.Server.URL, rp.Owner, rp.Name, is.Number)})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"node": map[string]any{
+		"closedByPullRequestsReferences": map[string]any{"nodes": nodes}}}})
 }
 
 // convertToDraft answers ConvertToDraft by making the pull request with node id a draft, or with null and an error

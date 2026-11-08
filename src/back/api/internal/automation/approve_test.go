@@ -392,6 +392,17 @@ func TestApproveNotMergeable(t *testing.T) {
 	f.approve(f.ada, f.manual()...).Expect(http.StatusOK, "")
 }
 
+// Automation leaves a task taken over to the member who took it: approving merges nothing.
+func TestApproveTakenOver(t *testing.T) {
+	f, n := inUserCheck(t)
+	checked := f.manual()
+	f.takeover("POST", f.ada)
+	f.approve(f.ada, checked...).Expect(http.StatusConflict, "taken_over")
+	if f.merges() != 0 || f.approvals() != 0 || f.repo.Issue(n).State != "open" {
+		t.Fatal("approving a task taken over merged it")
+	}
+}
+
 func TestApproveClosedPullRequest(t *testing.T) {
 	f, n := inUserCheck(t)
 	f.repo.EditIssue(n, func(is *githubtest.Issue) { is.State = "closed" })

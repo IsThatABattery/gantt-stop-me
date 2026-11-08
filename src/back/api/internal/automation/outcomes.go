@@ -107,23 +107,24 @@ func (a *Automation) finish(ctx context.Context, runID int64, reason string) err
 
 // draft turns pull request number back into a draft after a test failure, unless it is closed or a draft already,
 // and saves that in its record, under the project's lock: so a run started before the triggers next read GitHub
-// does not count it as ready, and they see no change to act on. A failure is logged, not returned: the run has
-// ended already.
-func (a *Automation) draft(ctx context.Context, p projects.Project, token string, number int) {
+// does not count it as ready, and they see no change to act on. A failure is logged, and GitHub's is returned for a
+// caller that can tell someone.
+func (a *Automation) draft(ctx context.Context, p projects.Project, token string, number int) error {
 	pr, err := a.GitHub.PullRequest(ctx, token, p.RepoID, number)
 	if err == nil && (pr.State != "open" || pr.Draft) {
-		return
+		return nil
 	}
 	if err == nil {
 		err = a.GitHub.ConvertToDraft(ctx, token, pr.NodeID)
 	}
 	if err != nil {
-		log.Printf("turn pull request %d of project %d back into a draft: %v", number, p.ID, a.PauseIfRejected(ctx, p.ID, token, err))
-		return
+		err = a.PauseIfRejected(ctx, p.ID, token, err)
+		log.Printf("turn pull request %d of project %d back into a draft: %v", number, p.ID, err)
+		return err
 	}
 	unlock, err := projects.Serialize(ctx, p.ID)
 	if err != nil {
-		return
+		return nil // GitHub has it as a draft
 	}
 	defer unlock()
 	err = pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
@@ -136,6 +137,7 @@ func (a *Automation) draft(ctx context.Context, p projects.Project, token string
 	if err != nil {
 		log.Printf("record pull request %d of project %d as a draft: %v", number, p.ID, err)
 	}
+	return nil
 }
 
 // commentAll posts the comment of every finished test run of an automated, unpaused project that has none yet,

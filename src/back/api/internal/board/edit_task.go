@@ -78,8 +78,8 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 	}
 	// updated_at, as a move sets it: a sync that fetched the issue before this edit then skips the task instead of undoing it.
 	t, err = b.scanTask(tx.QueryRow(ctx, `
-		update tasks t set title = $2, body = $3, labels = $4, updated_at = clock_timestamp()
-		where t.id = $1 returning `+taskColumns, t.ID, is.Title, is.Body, projects.Labels(is)), p)
+		update tasks t set title = $2, body = $3, labels = $4, assignees = $5, updated_at = clock_timestamp()
+		where t.id = $1 returning `+taskColumns, t.ID, is.Title, is.Body, projects.Labels(is), projects.Assignees(is)), p)
 	if err == nil {
 		_, err = projects.TakeTests(ctx, tx, t.ID, is.Body)
 	}

@@ -168,7 +168,7 @@ What a pull request's change does, whether the webhook or the poller sees it fir
 
 | Change | Effect |
 | --- | --- |
-| First seen ready, or draft to ready | Each task it closes moves to the end of Testing, unless it is there already, and gets a new test run, which cancels the task's earlier queued or running one. A task in Closed is never moved and gets no run. |
+| First seen ready, or draft to ready | Each task it closes moves to the end of Testing, unless it is there already, and gets a new test run, which cancels the task's earlier queued or running one. A task in Closed, or one a member [took over](#take-over-task), is never moved and gets no run. |
 | Ready to draft | Its queued or running test runs are cancelled. |
 | New head commit while ready | Nothing. |
 | Closed, merged, or gone from the open list | Its record is deleted. |
@@ -428,11 +428,12 @@ Merges a task's linked pull request once the caller has checked its manual tests
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
-| `409` | `not_tested`, `run_in_progress`, `head_moved`, `not_mergeable`, `pull_request_closed`, `automation_paused`, `automation_off` |
+| `409` | `not_tested`, `taken_over`, `run_in_progress`, `head_moved`, `not_mergeable`, `pull_request_closed`, `automation_paused`, `automation_off` |
 | `422` | `unchecked_manual_tests` |
 | `502` | `github_error` |
 
 - `not_tested`: the task is not in User Check, or its latest test run did not pass.
+- `taken_over`: a member [took the task over](#take-over-task), so automation leaves merging it to them. Nothing merged. [Give it back](#give-back-task) to approve it.
 - `run_in_progress`: another task linked to the same pull request has a test run queued or running. Merging closes its issue too, so approve once that run ends. Nothing merged.
 - `unchecked_manual_tests`: `checked` misses a manual test or holds an id that is none of the run's. The message names the tests not ticked and the ids that are not the run's.
 - `head_moved`: the pull request has commits newer than the one tested, found before merging or by GitHub refusing the merge. Nothing merged: the task moved back to Testing and a new test run of the new head is queued. When the pull request is a draft again, or its author no longer has write access, that run ends at once as a runner error saying so, as the triggers would refuse it.
@@ -456,3 +457,108 @@ A merge stands even when GitHub then fails the move to Closed: the answer is sti
   "approvedAt": "2026-11-08T10:02:31Z"
 }
 ```
+
+## Request changes
+
+Sends a task in User Check back to its author: it moves the task to the end of In Progress, turns the task's linked pull request back into a draft, as a failed test run does, so marking it ready for review again starts a new test run, and last posts the caller's feedback on the pull request, all with the caller's GitHub credential. The comment starts with `Changes requested by {login}:`. The linked pull request is, of the open ones in the project's repository closing the task's issue, the one its latest test run tested, else one ready for review, else a draft, each the first GitHub lists. It answers the task as [Get task](board.md#get-task) does.
+
+`POST /api/projects/{id}/tasks/{taskID}/request-changes`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project, in User Check |
+| `feedback` | body | string | trimmed, 1 to 10000 characters |
+
+```json
+{ "feedback": "The bars overlap on narrow screens." }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | task, as [Get task](board.md#get-task) answers it |
+| `400` | `invalid_feedback`, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `not_in_user_check`, `no_pull_request` when no open pull request closes the issue |
+| `502` | `github_error` |
+
+When GitHub fails the move, nothing else is written and the task stays in User Check, so a retry comments once. Once the task has moved, it stays in In Progress whatever GitHub does next, and a failure answers `502` `github_error` with a message saying what to do by hand: post the feedback when the comment failed, or mark the pull request draft and then ready for review when it could not be made a draft, since new commits on a ready pull request start no test run.
+
+## Take over task
+
+Takes a task from automation for the caller to finish by hand. It cancels the task's queued and running test runs, as [Turn off automation](#turn-off-automation) cancels them, with the reason `Taken over by {login}.`, and assigns the caller to its issue on GitHub. While it is taken over, a pull request that becomes ready neither moves it nor starts a run for it, and [Move task](board.md#move-task) moves it freely: no `run_in_progress` or `not_tested`, and no run on entering Testing. A task taken over already, by anyone, is answered as it is. It answers the task as [Get task](board.md#get-task) does, with `takenOverBy` the caller.
+
+`POST /api/projects/{id}/tasks/{taskID}/takeover`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | task, as [Get task](board.md#get-task) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+```json
+{
+  "id": 7,
+  "issueNumber": 12,
+  "columnId": 3,
+  "position": 1,
+  "version": 2,
+  "title": "Draw the timeline",
+  "state": "open",
+  "url": "https://github.com/ada/gantt/issues/12",
+  "runStatus": "cancelled",
+  "needsAttention": null,
+  "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }],
+  "body": "One bar per task, by week.",
+  "labels": [{ "name": "board:testing", "color": "fbca04" }],
+  "tests": [],
+  "testsError": null,
+  "pullRequests": [
+    { "number": 15, "title": "Draw the timeline", "state": "open", "draft": false, "url": "https://github.com/ada/gantt/pull/15" }
+  ],
+  "takenOverBy": { "id": 1, "login": "ada" }
+}
+```
+
+## Give back task
+
+Hands a task taken over back to automation: moves follow the automation rules again and pull requests start runs for it. It starts no test run by itself and leaves the issue's assignees as they are. A task not taken over is answered as it is. It answers the task as [Get task](board.md#get-task) does, with `takenOverBy` `null`.
+
+`DELETE /api/projects/{id}/tasks/{taskID}/takeover`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; write access |
+| `taskID` | path | integer | a task's `id` in the project |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | task, as [Get task](board.md#get-task) answers it |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `502` | `github_error` |
