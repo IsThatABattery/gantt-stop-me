@@ -74,7 +74,6 @@ export function TaskCard({ task, epic, feature, owner, to, overlay = false }: Ta
           : 'transition-[border-color,translate] hover:-translate-y-px hover:border-ion focus-visible:-translate-y-px focus-visible:border-ion'
       }`}
     >
-      <div className="h-[3px]" style={{ background: epic?.color ?? 'var(--color-line)' }} />
       <div className="flex flex-col gap-2.5 p-3">
         <div className="flex items-center justify-between">
           <span className="font-mono text-xs text-text-muted">{task.key}</span>
