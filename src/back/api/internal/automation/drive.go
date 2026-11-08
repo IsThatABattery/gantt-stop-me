@@ -44,6 +44,7 @@ type result struct {
 	detail     string // the exit code and output, or why
 	transcript []byte // an LLM check's tool calls as JSON, nil for none
 	screenshot []byte // an LLM check's PNG, nil for none
+	video      []byte // an LLM check's WebM recording of the browser, nil for none
 }
 
 var (
@@ -216,8 +217,9 @@ func (a *Automation) script(ctx context.Context, e *execution, r result) (result
 func (a *Automation) save(ctx context.Context, e *execution, r result) error {
 	_, err := a.DB.Exec(context.WithoutCancel(ctx), `
 		with tail as (update workflow_executions set log_tail = $7 where id = $6)
-		update test_results set status = $2, detail = $3, transcript = $4, screenshot = $5 where id = $1 and status = 'pending'`,
-		r.id, r.status, clean(r.detail), r.transcript, r.screenshot, e.id, e.log)
+		update test_results set status = $2, detail = $3, transcript = $4, screenshot = $5, video = $8
+		where id = $1 and status = 'pending'`,
+		r.id, r.status, clean(r.detail), r.transcript, r.screenshot, e.id, e.log, r.video)
 	return err
 }
 

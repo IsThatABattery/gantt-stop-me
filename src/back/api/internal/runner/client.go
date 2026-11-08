@@ -150,7 +150,7 @@ func (c *Client) MCP(ctx context.Context, id int64, sessionID, protocolVersion s
 		return nil, "", "", err
 	}
 	defer res.Body.Close()
-	answer, err := readAnswer(res)
+	answer, err := readAnswer(res, maxAnswer)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -158,6 +158,28 @@ func (c *Client) MCP(ctx context.Context, id int64, sessionID, protocolVersion s
 		err = answerError(res.StatusCode, answer)
 	}
 	return answer, res.Header.Get("Content-Type"), res.Header.Get("Mcp-Session-Id"), err
+}
+
+// Video returns the browser's recording name, which browser_start_video saved at VideoFile(name). The runner then
+// deletes it. A name with no recording is *Error with status 404, and one over 64 MiB has code too_large.
+func (c *Client) Video(ctx context.Context, id int64, name string) ([]byte, error) {
+	req, err := c.request(ctx, http.MethodGet, c.path(id, "/browser/videos/"+name), "", nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	webm, err := readAnswer(res, maxVideo)
+	if err == nil && (res.StatusCode < 200 || res.StatusCode > 299) {
+		err = answerError(res.StatusCode, webm)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return webm, nil
 }
 
 // Delete removes the execution's containers and network, stopping what its requests were running. Safe to repeat.
@@ -208,7 +230,7 @@ func (c *Client) send(ctx context.Context, method, url, contentType string, body
 		return err
 	}
 	defer res.Body.Close()
-	data, err := readAnswer(res)
+	data, err := readAnswer(res, maxAnswer)
 	if err != nil {
 		return err
 	}
@@ -224,15 +246,15 @@ func (c *Client) send(ctx context.Context, method, url, contentType string, body
 	return nil
 }
 
-// maxAnswer is the most of one runner answer the client reads. MCP answers carry page content the PR controls;
-// every other answer is far smaller.
+// maxAnswer is the most of one runner answer but a recording the client reads. MCP answers carry page content the
+// PR controls; every other answer is far smaller.
 const maxAnswer = 16 << 20
 
-// readAnswer reads res's body. One over maxAnswer is *Error with code too_large.
-func readAnswer(res *http.Response) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(res.Body, maxAnswer+1))
-	if err == nil && len(data) > maxAnswer {
-		err = &Error{Status: res.StatusCode, Code: "too_large", Message: fmt.Sprintf("the answer is over %d MiB", maxAnswer>>20)}
+// readAnswer reads res's body. One over most bytes is *Error with code too_large.
+func readAnswer(res *http.Response, most int) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(res.Body, int64(most)+1))
+	if err == nil && len(data) > most {
+		err = &Error{Status: res.StatusCode, Code: "too_large", Message: fmt.Sprintf("the answer is over %d MiB", most>>20)}
 	}
 	return data, err
 }

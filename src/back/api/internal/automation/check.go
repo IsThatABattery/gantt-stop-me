@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -50,8 +51,10 @@ var statuses = map[string]string{"pass": "passed", "fail": "failed", "unverifiab
 // check runs LLM check r of execution e, as LLM checks in AUTOMATION.md says: a tool-calling loop over the owner's
 // chat model, with run_command, http_request when the app or a sidecar runs, the browser's tools when the app runs,
 // and report, until the model reports. The result keeps the reason, the transcript and, when the check used the
-// browser, a screenshot taken after the report. No report after maxCalls calls, or the chat API failing, is a runner
-// error for this check alone. An error stops the execution, as for a script.
+// browser, a screenshot taken after the report and a recording of the browser from its first browser tool call to the
+// check's end, unless a cancel or the timeout ends it. A recording that fails is logged and changes nothing else. No
+// report after maxCalls calls, or the chat API failing, is a runner error for this check alone. An error stops the
+// execution, as for a script.
 func (a *Automation) check(ctx context.Context, e *execution, r result) (result, error) {
 	var issue int
 	var baseURL, model string
@@ -101,7 +104,8 @@ func (a *Automation) check(ctx context.Context, e *execution, r result) (result,
 	tools = append(tools, reportTool)
 	var outcome string
 	browsed := false
-	var stopped error // a tool call's error, which stops the execution
+	recording := fmt.Sprintf("r%d", r.id) // the check's own, since the execution's checks share the browser
+	var stopped error                     // a tool call's error, which stops the execution
 	handle := func(ctx context.Context, name, arguments string) (string, bool, error) {
 		if !slices.ContainsFunc(tools, func(t llm.Tool) bool { return t.Name == name }) {
 			return "There is no tool named " + name + ".", false, nil
@@ -114,7 +118,12 @@ func (a *Automation) check(ctx context.Context, e *execution, r result) (result,
 			outcome, r.detail = in.Outcome, in.Reason
 			return "Reported.", true, nil
 		}
-		browsed = browsed || name != runCommandTool.Name && name != httpRequestTool.Name
+		if !browsed && name != runCommandTool.Name && name != httpRequestTool.Name {
+			browsed = true
+			if err := e.browser.startVideo(ctx, recording); err != nil {
+				log.Printf("start recording test result %d: %v", r.id, err)
+			}
+		}
 		answer, err := a.tool(ctx, e, name, arguments)
 		stopped = err
 		return answer, false, err
@@ -129,11 +138,17 @@ func (a *Automation) check(ctx context.Context, e *execution, r result) (result,
 		return r, err
 	case err != nil:
 		r.status, r.detail = "error", "The LLM check could not finish: "+strings.TrimPrefix(err.Error(), "llm: ")+"."
-		return r, nil
+	default:
+		r.status = statuses[outcome]
+		if browsed {
+			r.screenshot = e.browser.screenshot(ctx)
+		}
 	}
-	r.status = statuses[outcome]
 	if browsed {
-		r.screenshot = e.browser.screenshot(ctx)
+		var err error
+		if r.video, err = e.browser.stopVideo(ctx, recording); err != nil {
+			log.Printf("save the recording of test result %d: %v", r.id, err)
+		}
 	}
 	return r, nil
 }

@@ -14,8 +14,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -33,6 +35,9 @@ var PNG = func() []byte {
 	return b.Bytes()
 }()
 
+// WebM is the recording browser_stop_video saves and the video endpoint answers: the EBML magic a WebM starts with.
+var WebM = []byte("\x1a\x45\xdf\xa3 runnertest")
+
 // Fake is a fake runner. Like the runner, it keeps executions in memory: Prepare adds one, even when it fails,
 // and DELETE or Restart forgets it.
 type Fake struct {
@@ -47,8 +52,8 @@ type Fake struct {
 }
 
 // Script is how the fake answers an execution's requests. The zero Script prepares with no log, exits 0 with no
-// output for every command, answers every /http request with status 404, starts the browser, and answers every
-// browser tool but the screenshot with no text.
+// output for every command, answers every /http request with status 404, starts the browser, answers every
+// browser tool but the screenshot and the recording ones with no text, and serves each recording.
 type Script struct {
 	Log      string                         // Prepare's log when it succeeds
 	Failure  *runner.Failure                // set: Prepare answers 422 with it, a build or start failure
@@ -57,6 +62,7 @@ type Script struct {
 	HTTP     map[string]runner.HTTPResponse // by method and URL, such as "POST http://app:80/api/signup"
 	Browser  *runner.Failure                // set: Browser answers 422 with it
 	Tools    map[string]string              // the text tools/call answers, by tool name
+	Video    int                            // set: the video endpoint answers this status, as an error, and keeps the recording
 }
 
 // Exit is a command's result.
@@ -67,13 +73,14 @@ type Exit struct {
 
 // Request is one request the fake got with the right token.
 type Request struct {
-	Endpoint string             // "prepare", "command", "http", "browser", "mcp", "delete" or "delete all"
+	Endpoint string             // "prepare", "command", "http", "browser", "mcp", "video", "delete" or "delete all"
 	ID       int64              // the execution, 0 for "delete all"
 	Spec     runner.Spec        // prepare
 	Source   []byte             // prepare: the tarball as it arrived
 	Command  string             // command
 	HTTP     runner.HTTPRequest // http
 	MCP      []byte             // mcp: the JSON-RPC message
+	Video    string             // video: the recording's name
 }
 
 // Hold is a request the fake keeps waiting until the test releases it.
@@ -86,10 +93,12 @@ type Hold struct {
 
 // execution is one prepared execution.
 type execution struct {
-	spec    runner.Spec
-	browser bool          // started
-	session string        // the MCP session initialize opened
-	deleted chan struct{} // closed by DELETE
+	spec      runner.Spec
+	browser   bool              // started
+	session   string            // the MCP session initialize opened
+	recording string            // the name of the recording browser_start_video started, "" for none
+	videos    map[string][]byte // the recordings browser_stop_video saved, by name
+	deleted   chan struct{}     // closed by DELETE
 }
 
 // New starts a Fake, closed when the test ends.
@@ -101,6 +110,7 @@ func New(t testing.TB) *Fake {
 	mux.HandleFunc("POST /executions/{id}/http", f.request)
 	mux.HandleFunc("POST /executions/{id}/browser", f.browser)
 	mux.HandleFunc("/executions/{id}/mcp", f.mcp)
+	mux.HandleFunc("GET /executions/{id}/browser/videos/{name}", f.video)
 	mux.HandleFunc("DELETE /executions/{id}", f.delete)
 	mux.HandleFunc("DELETE /executions", f.deleteAll)
 	outer := http.NewServeMux()
@@ -259,7 +269,7 @@ func (f *Fake) prepare(w http.ResponseWriter, r *http.Request) {
 	if taken {
 		f.requests = append(f.requests, req)
 	} else {
-		f.execs[id] = &execution{spec: spec, deleted: make(chan struct{})}
+		f.execs[id] = &execution{spec: spec, videos: map[string][]byte{}, deleted: make(chan struct{})}
 	}
 	f.mu.Unlock()
 	if taken {
@@ -346,7 +356,8 @@ func (f *Fake) browser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// tools are the browser tools tools/list offers, a few of the Playwright MCP's.
+// tools are the browser tools tools/list offers, a few of the Playwright MCP's. The last three are --caps=devtools
+// tools, which the API must not offer the model.
 var tools = []map[string]any{
 	{"name": "browser_navigate", "description": "Navigate to a URL",
 		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{"url": map[string]string{"type": "string"}}, "required": []string{"url"}}},
@@ -354,11 +365,18 @@ var tools = []map[string]any{
 		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
 	{"name": "browser_take_screenshot", "description": "Take a screenshot of the current page",
 		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+	{"name": "browser_annotate", "description": "Open the Playwright Dashboard in annotation mode for the current page and wait for the user to draw annotations.",
+		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+	{"name": "browser_start_video", "description": "Start video recording",
+		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{"filename": map[string]string{"type": "string"}}}},
+	{"name": "browser_stop_video", "description": "Stop video recording",
+		"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
 }
 
 // mcp is /executions/{id}/mcp: a small MCP server in place of the browser's, answering requests as server-sent
 // events the way the Playwright MCP does. initialize opens a session, tools/list offers tools, and tools/call answers
-// the script's text, or for browser_take_screenshot an image item holding PNG.
+// the script's text, for browser_take_screenshot an image item holding PNG, and for browser_start_video and
+// browser_stop_video what the Playwright MCP says, the stop saving WebM under the name of the start's filename.
 func (f *Fake) mcp(w http.ResponseWriter, r *http.Request) {
 	id, ok := execID(w, r)
 	if !ok {
@@ -386,6 +404,9 @@ func (f *Fake) mcp(w http.ResponseWriter, r *http.Request) {
 		Params struct {
 			ProtocolVersion string `json:"protocolVersion"`
 			Name            string `json:"name"`
+			Arguments       struct {
+				Filename string `json:"filename"`
+			} `json:"arguments"`
 		} `json:"params"`
 	}
 	if err := json.Unmarshal(body, &msg); err != nil {
@@ -414,6 +435,31 @@ func (f *Fake) mcp(w http.ResponseWriter, r *http.Request) {
 			{"type": "text", "text": "Took a screenshot of the current page."},
 			{"type": "image", "data": base64.StdEncoding.EncodeToString(PNG), "mimeType": "image/png"},
 		}})
+	case msg.Method == "tools/call" && msg.Params.Name == "browser_start_video":
+		f.mu.Lock()
+		recording := e.recording != ""
+		if !recording {
+			e.recording = cmp.Or(strings.TrimSuffix(path.Base(msg.Params.Arguments.Filename), ".webm"), "video")
+		}
+		f.mu.Unlock()
+		if recording {
+			event(w, msg.ID, "result", map[string]any{"isError": true,
+				"content": []map[string]string{{"type": "text", "text": "### Error\nError: Video recording has already been started."}}})
+			break
+		}
+		event(w, msg.ID, "result", map[string]any{"content": []map[string]string{{"type": "text", "text": "### Result\nVideo recording started."}}})
+	case msg.Method == "tools/call" && msg.Params.Name == "browser_stop_video":
+		f.mu.Lock()
+		name := e.recording
+		if name != "" {
+			e.videos[name], e.recording = WebM, ""
+		}
+		f.mu.Unlock()
+		text := "### Result\nNo videos were recorded."
+		if name != "" {
+			text = "### Result\n- [Video](" + runner.VideoFile(name) + ")"
+		}
+		event(w, msg.ID, "result", map[string]any{"content": []map[string]string{{"type": "text", "text": text}}})
 	case msg.Method == "tools/call" && slices.ContainsFunc(tools, func(t map[string]any) bool { return t["name"] == msg.Params.Name }):
 		event(w, msg.ID, "result", map[string]any{"content": []map[string]string{{"type": "text", "text": s.Tools[msg.Params.Name]}}})
 	case msg.Method == "tools/call":
@@ -433,6 +479,35 @@ func event(w http.ResponseWriter, id json.RawMessage, field string, value any) {
 // refuse answers an MCP message the server will not take, as plain JSON with an HTTP error status.
 func refuse(w http.ResponseWriter, status, code int, message string) {
 	httpx.JSON(w, status, map[string]any{"jsonrpc": "2.0", "id": nil, "error": map[string]any{"code": code, "message": message}})
+}
+
+// video is GET /executions/{id}/browser/videos/{name}: the script's status, or the recording browser_stop_video saved
+// under name, which it then forgets, as the runner deletes it, or 404 when there is none.
+// shortcut: the name is not checked the way the runner's videoName does; check it when an API test needs 400 bad_name.
+func (f *Fake) video(w http.ResponseWriter, r *http.Request) {
+	id, ok := execID(w, r)
+	if !ok {
+		return
+	}
+	name := r.PathValue("name")
+	e, s, ok := f.arrive(w, r, Request{Endpoint: "video", ID: id, Video: name})
+	if !ok {
+		return
+	}
+	if s.Video != 0 {
+		httpx.Error(w, s.Video, "runnertest", "The script fails the video endpoint.")
+		return
+	}
+	f.mu.Lock()
+	webm, found := e.videos[name]
+	delete(e.videos, name)
+	f.mu.Unlock()
+	if !found {
+		httpx.Error(w, http.StatusNotFound, "not_found", "No such recording.")
+		return
+	}
+	w.Header().Set("Content-Type", "video/webm")
+	w.Write(webm)
 }
 
 // delete is DELETE /executions/{id}: forget the execution, ending its held requests. Safe to repeat.

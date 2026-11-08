@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
+	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/llm/llmtest"
 	"gantt-stop-me/api/internal/runner"
@@ -41,12 +44,13 @@ type checkRow struct {
 	Status, Detail string
 	Transcript     []llm.Step
 	Screenshot     []byte
+	Video          []byte
 }
 
-// checks returns the test results, in position order, with their transcripts and screenshots.
+// checks returns the test results, in position order, with their transcripts, screenshots and videos.
 func (f *fixture) checks() []checkRow {
 	f.t.Helper()
-	rows, err := f.DB.Query(context.Background(), `select status, detail, transcript, screenshot from test_results order by run_id, position`)
+	rows, err := f.DB.Query(context.Background(), `select status, detail, transcript, screenshot, video from test_results order by run_id, position`)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -55,7 +59,7 @@ func (f *fixture) checks() []checkRow {
 	for rows.Next() {
 		var c checkRow
 		var transcript []byte
-		if err := rows.Scan(&c.Status, &c.Detail, &transcript, &c.Screenshot); err != nil {
+		if err := rows.Scan(&c.Status, &c.Detail, &transcript, &c.Screenshot, &c.Video); err != nil {
 			f.t.Fatal(err)
 		}
 		if transcript != nil {
@@ -66,6 +70,32 @@ func (f *fixture) checks() []checkRow {
 		got = append(got, c)
 	}
 	return got
+}
+
+// resultIDs returns the test results' ids, in position order.
+func (f *fixture) resultIDs() []int64 {
+	f.t.Helper()
+	rows, _ := f.DB.Query(context.Background(), `select id from test_results order by run_id, position`)
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return ids
+}
+
+// browserCalls are the names of the browser tools the API called, in order.
+func (f *fixture) browserCalls() []string {
+	var names []string
+	for _, r := range f.Runner.Requests() {
+		var msg struct {
+			Method string
+			Params struct{ Name string }
+		}
+		if json.Unmarshal(r.MCP, &msg); r.Endpoint == "mcp" && msg.Method == "tools/call" {
+			names = append(names, msg.Params.Name)
+		}
+	}
+	return names
 }
 
 // toolNames are the names of the tools the fake LLM's chat number i offered.
@@ -252,12 +282,15 @@ func TestLLMCheckBrowser(t *testing.T) {
 	f.Runner.Script(0, runnertest.Script{Tools: map[string]string{"browser_navigate": "Page title: Sign up"}})
 	f.llm.Reply(
 		call("browser_navigate", `{"url": "http://app:80/signup"}`),
-		call("browser_click", `{}`), // not one of the browser's tools
+		call("browser_click", `{}`),      // not one of the browser's tools
+		call("browser_stop_video", `{}`), // the browser's, but hidden from the model
+		call("browser_snapshot", `{}`),
 		reported("pass", "The page said the email is required."),
 		reported("unverifiable", "Check the board on a phone."),
 	)
 	n := f.ready()
 	f.work()
+	ids := f.resultIDs()
 
 	var methods []string
 	browsers := 0
@@ -280,24 +313,98 @@ func TestLLMCheckBrowser(t *testing.T) {
 	if browsers != 1 {
 		t.Fatalf("browser started %d times, want once for both checks", browsers)
 	}
+	if len(ids) != 2 {
+		t.Fatalf("result ids = %v", ids)
+	}
 	want := []string{
 		"initialize", "notifications/initialized", "tools/list",
+		// Right before the first browser tool call, named for the first check's result.
+		fmt.Sprintf(`tools/call browser_start_video {"cursor":false,"filename":"/tmp/browser/r%d.webm","size":{"height":720,"width":1280}}`, ids[0]),
 		`tools/call browser_navigate {"url":"http://app:80/signup"}`, // the model's arguments, compacted
-		`tools/call browser_take_screenshot {"type":"png"}`,          // after the first check's report; the second used no browser tool
+		`tools/call browser_snapshot {}`,
+		// After the first check's report. The second used no browser tool, so it records nothing.
+		`tools/call browser_take_screenshot {"type":"png"}`,
+		`tools/call browser_stop_video {}`,
 	}
 	if !slices.Equal(methods, want) {
 		t.Fatalf("MCP messages = %q, want %q", methods, want)
+	}
+	var videos []string
+	for _, r := range f.Runner.Requests() {
+		if r.Endpoint == "video" {
+			videos = append(videos, r.Video)
+		}
+	}
+	if want := []string{fmt.Sprintf("r%d", ids[0])}; !slices.Equal(videos, want) {
+		t.Fatalf("videos fetched = %q, want %q", videos, want)
 	}
 	got := f.checks()
 	if len(got) != 2 || got[0].Status != "passed" || got[1].Status != "manual" || got[1].Detail != "Check the board on a phone." {
 		t.Fatalf("results = %+v", got)
 	}
-	if steps := got[0].Transcript; len(steps) != 3 || steps[0].Answer != "Page title: Sign up" ||
-		steps[1].Answer != "There is no tool named browser_click." {
+	if steps := got[0].Transcript; len(steps) != 5 || steps[0].Answer != "Page title: Sign up" ||
+		steps[1].Answer != "There is no tool named browser_click." || steps[2].Answer != "There is no tool named browser_stop_video." {
 		t.Fatalf("transcript = %+v", steps)
 	}
 	if !bytes.Equal(got[0].Screenshot, runnertest.PNG) || got[1].Screenshot != nil {
 		t.Fatalf("screenshots = %d and %d bytes, want the PNG for the first check alone", len(got[0].Screenshot), len(got[1].Screenshot))
+	}
+	if !bytes.Equal(got[0].Video, runnertest.WebM) || got[1].Video != nil {
+		t.Fatalf("videos = %q and %q, want the WebM for the first check alone", got[0].Video, got[1].Video)
+	}
+	f.expectRuns(pass(n))
+	at := fmt.Sprintf("%s/api/projects/%d/runs/%d/results/%d/", apptest.PublicURL, f.project, f.lastRun(), ids[0])
+	f.expectComments("**Tests passed** on a1.\n\n" +
+		"- passed: The sign-up page refuses an empty email (frontend) [video](" + at + "video) [screenshot](" + at + "screenshot)\n" +
+		"- manual: The board looks right on a phone (frontend)\n\n" +
+		"Check these by hand before approving:\n- The board looks right on a phone\n\n" + f.link())
+}
+
+func TestLLMCheckRecordsUntilItEnds(t *testing.T) {
+	navigate := call("browser_navigate", `{"url": "http://app:80/"}`)
+	for _, c := range []struct {
+		name      string
+		replies   []llmtest.Reply
+		status    string
+		navigates int
+		calls     []string // the browser tools the API calls after the model's
+	}{
+		{"a failure", []llmtest.Reply{navigate, reported("fail", "No error shown.")}, "failed", 1,
+			[]string{"browser_take_screenshot", "browser_stop_video"}},
+		{"no report after 50 tool calls", slices.Repeat([]llmtest.Reply{navigate}, 50), "error", 50, []string{"browser_stop_video"}},
+		{"the chat API failing", []llmtest.Reply{navigate}, "error", 1, []string{"browser_stop_video"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := withLLM(t)
+			f.tests(1, oneCheck)
+			f.repo.AddFile("a1", ".gantt/workflows.yml", withApp)
+			f.llm.Reply(c.replies...)
+			f.ready()
+			f.work()
+			got := f.checks()
+			if len(got) != 1 || got[0].Status != c.status || !bytes.Equal(got[0].Video, runnertest.WebM) {
+				t.Fatalf("results = %+v, want %s with its video", got, c.status)
+			}
+			want := slices.Concat([]string{"browser_start_video"}, slices.Repeat([]string{"browser_navigate"}, c.navigates), c.calls)
+			if calls := f.browserCalls(); !slices.Equal(calls, want) {
+				t.Fatalf("browser calls = %q, want %q", calls, want)
+			}
+		})
+	}
+}
+
+func TestLLMCheckWithoutItsVideo(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, oneCheck)
+	f.repo.AddFile("a1", ".gantt/workflows.yml", withApp)
+	f.Runner.Script(0, runnertest.Script{Video: http.StatusInternalServerError})
+	f.llm.Reply(call("browser_navigate", `{"url": "http://app:80/signup"}`), reported("pass", "It refused."))
+	n := f.ready()
+	f.work()
+	got := f.checks()
+	if len(got) != 1 || got[0].Status != "passed" || got[0].Detail != "It refused." || got[0].Video != nil ||
+		!bytes.Equal(got[0].Screenshot, runnertest.PNG) {
+		t.Fatalf("results = %+v, want passed as reported, with its screenshot and no video", got)
 	}
 	f.expectRuns(pass(n))
 }

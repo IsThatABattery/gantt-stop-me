@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -83,6 +84,15 @@ func TestRunOnDocker(t *testing.T) {
 	}
 	if png := got[1].Screenshot; !bytes.HasPrefix(png, []byte("\x89PNG\r\n\x1a\n")) {
 		t.Fatalf("screenshot = %d bytes, want a PNG", len(png))
+	}
+	// The browser's flags, the recording's path and its read off the browser's tmpfs, on real Docker.
+	if webm := got[1].Video; !bytes.HasPrefix(webm, []byte("\x1a\x45\xdf\xa3")) {
+		t.Fatalf("video = %d bytes, want a WebM", len(webm))
+	}
+	video := f.Do("GET", f.path(fmt.Sprintf("/runs/%d/results/%d/video", f.lastRun(), f.resultIDs()[1])), nil, f.ada)
+	video.Expect(http.StatusOK, "")
+	if video.Header.Get("Content-Type") != "video/webm" || !bytes.Equal(video.Body, got[1].Video) {
+		t.Fatalf("the video endpoint answered %s with %d bytes, want the stored WebM", video.Header.Get("Content-Type"), len(video.Body))
 	}
 	if got := f.task(1); got.Column != "user-check" {
 		t.Fatalf("task = %+v, want it in User Check", got)

@@ -73,7 +73,8 @@ func TestRunFlags(t *testing.T) {
 		{"command", s.commandRun(7, spec, "gantt-x7_1", command),
 			slices.Concat([]string{"--name=gantt-x7_1", "--entrypoint=sh"}, envs(spec.Env), mounts), "gantt-p3-web", []string{"-c", command}},
 		{"browser", s.browserRun(7), service("browser"), browserImage,
-			[]string{"--isolated", "--host", "0.0.0.0", "--port", "8931", "--allowed-hosts", "browser:8931"}},
+			[]string{"--isolated", "--host", "0.0.0.0", "--port", "8931", "--allowed-hosts", "browser:8931",
+				"--caps=devtools", "--output-dir", "/tmp/browser"}},
 	}
 	for _, k := range kinds {
 		t.Run(k.name, func(t *testing.T) {
