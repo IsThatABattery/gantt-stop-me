@@ -6,7 +6,7 @@ interface DialogProps {
   label: string
   onClose: () => void
   children: ReactNode
-  /** 860px, top-aligned, for long content such as a plan */
+  /** 860px, for long content such as a plan */
   wide?: boolean
 }
 
@@ -14,15 +14,16 @@ interface DialogProps {
 export function Dialog({ label, onClose, children, wide }: DialogProps) {
   const ref = useModal<HTMLDivElement>(onClose)
   return (
-    <div className={`fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 ${wide ? '' : 'sm:items-center'}`}>
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4">
       <div className="fixed inset-0 bg-background/70" onClick={onClose} aria-hidden="true" />
       <div
         ref={ref}
+        // my-auto, not items-center: a dialog taller than the screen scrolls from its top instead of being cut off.
         role="dialog"
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className={`relative w-full ${wide ? 'max-w-[860px]' : 'max-w-[560px]'} rounded-dialog border border-line bg-surface text-text shadow-2xl outline-none`}
+        className={`relative w-full sm:my-auto ${wide ? 'max-w-[860px]' : 'max-w-[560px]'} rounded-dialog border border-line bg-surface text-text shadow-2xl outline-none`}
       >
         <button
           type="button"
