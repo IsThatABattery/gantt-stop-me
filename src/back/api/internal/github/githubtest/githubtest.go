@@ -68,6 +68,7 @@ type Issue struct {
 	Pull        *Pull // set on pull requests only
 	Comments    []Comment
 	UpdatedAt   time.Time
+	Author      string // login of an issue's author: the user who opened it through the API, or one a test sets
 }
 
 // Pull is what a pull request has beyond the issue GitHub's issue list shows for it.
@@ -352,9 +353,14 @@ func (r *Repo) json(is *Issue) map[string]any {
 	if is.Body != "" {
 		body = is.Body
 	}
+	author := is.Author
+	if is.Pull != nil {
+		author = is.Pull.Author
+	}
+	user, _ := r.f.byLogin(author)
 	out := map[string]any{
 		"id": is.ID, "number": is.Number, "title": is.Title, "body": body, "state": is.State,
-		"labels": labels, "updated_at": is.UpdatedAt.UTC().Format(time.RFC3339),
+		"labels": labels, "updated_at": is.UpdatedAt.UTC().Format(time.RFC3339), "user": user,
 	}
 	if is.Pull != nil {
 		out["pull_request"] = map[string]any{}
@@ -575,7 +581,9 @@ func (f *Fake) createIssue(w http.ResponseWriter, r *http.Request) {
 		Labels []string `json:"labels"`
 	}
 	json.NewDecoder(r.Body).Decode(&in)
-	writeJSON(w, http.StatusCreated, rp.json(rp.add(in.Title, in.Body, in.Labels, false)))
+	is := rp.add(in.Title, in.Body, in.Labels, false)
+	is.Author = f.users[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")].Login
+	writeJSON(w, http.StatusCreated, rp.json(is))
 }
 
 func (f *Fake) getIssue(w http.ResponseWriter, r *http.Request) {

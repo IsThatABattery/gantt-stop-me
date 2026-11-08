@@ -23,9 +23,9 @@ var (
 // project's lock, while the project's automation is on. A person's move, byHand, out of Testing while the task's
 // latest test run is queued or running is refused with run_in_progress, and one into User Check with not_tested
 // unless that run passed on its pull request's head as the record has it now. A person's move into Testing starts a
-// test run for the task's linked pull request. Any move out of Testing clears needs_attention. It implements
-// board.Rules.
-func (a *Automation) Moving(ctx context.Context, tx pgx.Tx, p projects.Project, taskID int64, from, to string, byHand bool) error {
+// test run for the task's linked pull request, whose author it checks on GitHub with token. Any move out of Testing
+// clears needs_attention. It implements board.Rules.
+func (a *Automation) Moving(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64, from, to string, byHand bool) error {
 	var on bool
 	err := tx.QueryRow(ctx, `select exists (select from project_automation where project_id = $1)`, p.ID).Scan(&on)
 	if err != nil || !on || a.RunnerURL == "" {
@@ -49,18 +49,19 @@ func (a *Automation) Moving(ctx context.Context, tx pgx.Tx, p projects.Project, 
 		_, err := tx.Exec(ctx, `update tasks set needs_attention = null where id = $1`, taskID)
 		return err
 	case byHand && to == "testing":
-		return startLinked(ctx, tx, p, taskID)
+		return a.startLinked(ctx, tx, token, p, taskID)
 	}
 	return nil
 }
 
-// startLinked starts a test run of task taskID for its linked pull request as the records have it: the one open,
-// ready pull request closing its issue that may run, at its head. None, or more than one, starts a run that ends at
-// once as a runner error. Call it in tx holding projects.Lock.
-// shortcut: "may run" is the records' word, a branch of the repository whose refusal comment was never posted, as
-// the triggers count ready pull requests; the author's write access is not asked again. Ask GitHub here if a
-// pull request by an author without it can reach a task's record unrefused.
-func startLinked(ctx context.Context, tx pgx.Tx, p projects.Project, taskID int64) error {
+// startLinked starts a test run of task taskID for its linked pull request: the one open, ready pull request closing
+// its issue that may run, at its head as the records have it. None, or more than one, starts a run that ends at once
+// as a runner error. A record says a pull request comes from a branch of the repository, but not that its author can
+// push: one first seen ready while it closed no open task's issue was never asked about. So it asks GitHub with
+// token, as the triggers do. Call it in tx holding projects.Lock.
+// shortcut: the triggers' count of ready pull requests still takes the records' word, so such a pull request can
+// turn a trusted one's run into the ambiguous error; ask GitHub there too if that is abused.
+func (a *Automation) startLinked(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64) error {
 	type pull struct {
 		Number int
 		Head   string
@@ -69,16 +70,35 @@ func startLinked(ctx context.Context, tx pgx.Tx, p projects.Project, taskID int6
 		select r.number, r.head_sha from pull_requests r join tasks t on t.id = $2
 		where r.project_id = $1 and not r.draft and t.issue_number = any(r.linked_issues) and r.head_repo_id = $3
 			and not r.refused
-		order by r.number limit 2`, p.ID, taskID, p.RepoID)
+		order by r.number`, p.ID, taskID, p.RepoID)
 	pulls, err := pgx.CollectRows(rows, pgx.RowToStructByPos[pull])
 	if err != nil {
 		return err
 	}
-	switch len(pulls) {
+	var trusted []pull // two at most: enough to tell one from several
+	for _, r := range pulls {
+		pr, err := a.GitHub.PullRequest(ctx, token, p.RepoID, r.Number)
+		if err != nil {
+			return err
+		}
+		if pr.State != "open" || pr.Draft { // since the triggers last read it
+			continue
+		}
+		why, err := a.refusal(ctx, token, p, pr)
+		if err != nil {
+			return err
+		}
+		if why == "" {
+			if trusted = append(trusted, r); len(trusted) == 2 {
+				break
+			}
+		}
+	}
+	switch len(trusted) {
 	case 0:
 		return startRun(ctx, tx, p.ID, taskID, 0, "", "No linked pull request.")
 	case 1:
-		return startRun(ctx, tx, p.ID, taskID, pulls[0].Number, pulls[0].Head, "")
+		return startRun(ctx, tx, p.ID, taskID, trusted[0].Number, trusted[0].Head, "")
 	}
 	return startRun(ctx, tx, p.ID, taskID, 0, "", ambiguous)
 }

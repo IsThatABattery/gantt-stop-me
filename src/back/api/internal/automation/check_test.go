@@ -78,12 +78,15 @@ func (f *fixture) toolNames(i int) []string {
 }
 
 func TestLLMCheckReports(t *testing.T) {
+	const check = "Signing up with an empty email answers 400"
 	for _, c := range []struct {
 		outcome, status, run, column string
+		comment                      string // before the link
 	}{
-		{"pass", "passed", "passed", "user-check"},
-		{"fail", "failed", "failed", "in-progress"},
-		{"unverifiable", "manual", "passed", "user-check"},
+		{"pass", "passed", "passed", "user-check", "**Tests passed** on a1.\n\n- passed: " + check + " (default)\n\n"},
+		{"fail", "failed", "failed", "in-progress", "**Tests failed** on a1.\n\n- failed: " + check + " (default)\n\n"},
+		{"unverifiable", "manual", "passed", "user-check", "**Tests passed** on a1.\n\n- manual: " + check + " (default)\n\n" +
+			"Check these by hand before approving:\n- " + check + "\n\n"},
 	} {
 		t.Run(c.outcome, func(t *testing.T) {
 			f := withLLM(t)
@@ -116,6 +119,7 @@ func TestLLMCheckReports(t *testing.T) {
 			if got := f.task(1); got.Column != c.column {
 				t.Fatalf("task = %+v, want it in %s", got, c.column)
 			}
+			f.expectComments(c.comment + f.link())
 		})
 	}
 }

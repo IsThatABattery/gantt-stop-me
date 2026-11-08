@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -21,8 +23,24 @@ type Client struct {
 	HTTP    *http.Client // from HTTPClient with CallTimeout, so every call keeps the guard
 }
 
+// unreachable is a call that got no answer. Its text says only that, and it wraps the cause, so a caller can still
+// tell a cancel from the provider being down.
+type unreachable struct {
+	path string
+	err  error
+}
+
+func (u unreachable) Error() string {
+	if t := (interface{ Timeout() bool })(nil); errors.As(u.err, &t) && t.Timeout() {
+		return "llm: POST " + u.path + " timed out"
+	}
+	return "llm: POST " + u.path + " could not reach the provider"
+}
+
+func (u unreachable) Unwrap() error { return u.err }
+
 // post sends in as JSON to {BaseURL}{path} and decodes a 2xx answer into out. Its errors never quote the answer,
-// which the provider controls, since they end up in test results anyone on the project reads.
+// which the provider controls, or name the provider's address, since they end up in test results and issue comments.
 func (c *Client) post(ctx context.Context, path string, in, out any) error {
 	body, err := json.Marshal(in)
 	if err != nil {
@@ -36,7 +54,9 @@ func (c *Client) post(ctx context.Context, path string, in, out any) error {
 	req.Header.Set("Content-Type", "application/json")
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("llm: POST %s: %w", path, err)
+		// Its text names the provider's address, which may be private, so only the log keeps it.
+		log.Printf("llm: POST %s%s: %v", c.BaseURL, path, err)
+		return unreachable{path, err}
 	}
 	defer res.Body.Close()
 	if res.StatusCode/100 != 2 {

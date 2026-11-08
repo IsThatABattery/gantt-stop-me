@@ -66,15 +66,21 @@ func TestDisable(t *testing.T) {
 		f.project, other)
 
 	queuedRun, queuedExec := f.run(f.project, "queued")
-	runningRun, runningExec := f.run(f.project, "running")
+	runningRun, _ := f.run(f.project, "running")
 	f.run(f.project, "passed")
 	f.run(f.project, "error")
 	f.run(other, "running")
 	wantRuns, wantExecs := f.statuses("test_runs"), f.statuses("workflow_executions")
 	wantRuns[queuedRun], wantRuns[runningRun] = "cancelled", "cancelled"
-	wantExecs[queuedExec], wantExecs[runningExec] = "cancelled", "cancelled"
+	wantExecs[queuedExec] = "cancelled" // the running one runs until the queue worker has stopped it and removed it
+	f.exec(`update test_runs set commented_at = null`)
 
 	f.Do("DELETE", f.path("/automation"), nil, f.ada).Expect(http.StatusNoContent, "")
+	var unposted int
+	f.DB.QueryRow(context.Background(), `select count(*) from test_runs where commented_at is null and status <> 'cancelled'`).Scan(&unposted)
+	if unposted != 1 { // the other project's running run
+		t.Errorf("%d runs still to comment on, want the finished ones given up", unposted)
+	}
 
 	if got := f.statuses("test_runs"); !maps.Equal(got, wantRuns) {
 		t.Errorf("test runs = %v, want %v", got, wantRuns)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -69,14 +70,26 @@ func (a *Automation) drive(ctx context.Context, e *execution) {
 	unwatch := a.watch(xctx, e.id, cancel)
 	err := a.carryOut(xctx, e)
 	unwatch()
+	settle := func() {
+		if err := a.settle(ctx, xctx, e, err); err != nil {
+			log.Printf("end workflow execution %d: %v", e.id, err)
+		}
+	}
+	// The end is recorded after Delete, so the queue starts nothing beside an execution still being removed. But
+	// shutting down, nothing claims any more: recorded first, a kill on the way down costs no attempt, and Recover's
+	// DeleteAll removes what Delete did not.
+	shutdown := ctx.Err() != nil
+	if shutdown {
+		settle()
+	}
 	// A fresh context: the execution's may have ended, and its containers go either way.
 	dctx, done := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := a.Runner.Delete(dctx, e.id); err != nil {
 		log.Printf("remove workflow execution %d from the runner: %v", e.id, err)
 	}
 	done()
-	if err := a.settle(ctx, xctx, e, err); err != nil {
-		log.Printf("end workflow execution %d: %v", e.id, err)
+	if !shutdown {
+		settle()
 	}
 }
 
@@ -114,7 +127,8 @@ func (a *Automation) watch(ctx context.Context, id int64, cancel context.CancelC
 
 // carryOut prepares execution e from the source at its head, then runs its pending scripts and then its pending LLM
 // checks, one at a time in issue order, saving each result as it ends. It returns what stopped it early: ctx ending,
-// GitHub failing the download, the runner failing, or the runner restarting, marked interrupted.
+// GitHub failing, marked gitHubFailure, the runner failing, or the runner restarting or out of reach, marked
+// interrupted or unreachable.
 func (a *Automation) carryOut(ctx context.Context, e *execution) error {
 	rows, _ := a.DB.Query(ctx, `
 		select id, position, text, kind, coalesce(command, ''), status from test_results
@@ -128,7 +142,7 @@ func (a *Automation) carryOut(ctx context.Context, e *execution) error {
 	}
 	source, err := a.GitHub.Tarball(ctx, e.token, e.project.RepoID, e.head)
 	if err != nil {
-		return fmt.Errorf("download the source from GitHub: %w", err)
+		return gitHubFailure{fmt.Errorf("download the source from GitHub: %w", err)}
 	}
 	out, err := a.Runner.Prepare(ctx, e.id, e.spec, source)
 	source.Close()
@@ -199,7 +213,19 @@ type interrupted struct{ error }
 
 func (i interrupted) Unwrap() error { return i.error }
 
-// fromRunner marks err, from a runner call, interrupted unless it is the runner's own answer or the source failing.
+// unreachable marks an error of the runner's that means the request never reached it, such as while it restarts: it
+// was not interrupted by it.
+type unreachable struct{ error }
+
+func (u unreachable) Unwrap() error { return u.error }
+
+// gitHubFailure marks an error of a GitHub call an execution made, such as its source's download.
+type gitHubFailure struct{ error }
+
+func (g gitHubFailure) Unwrap() error { return g.error }
+
+// fromRunner marks err, from a runner call, unreachable when it could not connect, or interrupted unless it is the
+// runner's own answer or the source failing.
 func fromRunner(err error) error {
 	var f *runner.Failure
 	var se *runner.SourceError
@@ -207,27 +233,40 @@ func fromRunner(err error) error {
 	if err == nil || errors.As(err, &f) || errors.As(err, &se) || errors.As(err, &re) && re.Status != http.StatusNotFound {
 		return err
 	}
+	if op := (*net.OpError)(nil); errors.As(err, &op) && op.Op == "dial" {
+		return unreachable{err}
+	}
 	return interrupted{err}
 }
 
 // settle records how execution e ended after carryOut stopped with err. xctx is e's own context and ctx the
-// worker's. A cancel skips the unfinished tests, and the timeout fails them as a runner error. The API shutting down,
-// or GitHub refusing the owner's credential, which pauses the project, puts e back on the queue without counting the
-// attempt; the runner restarting puts it back once, and the second time is a runner error. Any other error is a
-// runner error for every unfinished test.
+// worker's. Its run being cancelled skips the unfinished tests, and the timeout fails them as a runner error. The API
+// shutting down, the runner being unreachable, GitHub failing for now, or GitHub refusing the owner's credential,
+// which pauses the project, puts e back on the queue without counting the attempt; the runner restarting puts it back
+// once, and the second time is a runner error. Any other error is a runner error for every unfinished test.
+// shortcut: an unreachable runner is tried again every pass, each try downloading the source from GitHub; back off
+// if runners stay down for long.
 func (a *Automation) settle(ctx, xctx context.Context, e *execution, err error) error {
 	db := context.WithoutCancel(xctx)
+	// Checked here as well as by the watch, which may not have looked since a cancel.
+	var live bool
+	if qErr := a.DB.QueryRow(db, `select status in ('queued', 'running') from test_runs where id = $1`, e.runID).
+		Scan(&live); qErr != nil && !errors.Is(qErr, pgx.ErrNoRows) { // no rows: gone with its task
+		return qErr
+	}
 	switch cause := context.Cause(xctx); {
+	case !live, errors.Is(cause, errCancelled):
+		return a.end(db, e, "skipped", "")
 	case err == nil:
 		return a.end(db, e, "", "")
-	case errors.Is(cause, errCancelled):
-		return a.end(db, e, "skipped", "")
 	case errors.Is(cause, errTimedOut):
 		return a.end(db, e, "error", "The workflow timed out after "+short(e.timeout)+".")
-	case ctx.Err() != nil:
+	case ctx.Err() != nil, errors.As(err, new(unreachable)):
 		return a.requeue(db, e, false)
 	case rejected(err):
 		a.PauseIfRejected(db, e.project.ID, e.token, err)
+		return a.requeue(db, e, false)
+	case errors.As(err, new(gitHubFailure)) && !lasting(err):
 		return a.requeue(db, e, false)
 	case errors.As(err, new(interrupted)) && e.attempts < 2:
 		return a.requeue(db, e, true)

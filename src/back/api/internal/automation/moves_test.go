@@ -112,6 +112,18 @@ func TestMoveIntoTestingStartsARun(t *testing.T) {
 	f.expectRuns(pass(n), pass(n))
 }
 
+func TestMoveIntoTestingCountsOnlyPullRequestsThatMayRun(t *testing.T) {
+	f := withLLM(t)
+	f.place("closed") // so the pull requests' triggers neither start a run nor ask about their authors
+	f.member("mallory", "triage")
+	f.pull("mallory", false, 1)
+	n := f.pull("ada", false, 1)
+	f.poll()
+	f.place("backlog")
+	f.move(1, "testing")
+	f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "queued"})
+}
+
 func TestMoveIntoTestingWithoutOneLinkedPullRequest(t *testing.T) {
 	for _, c := range []struct {
 		name   string
@@ -124,6 +136,11 @@ func TestMoveIntoTestingWithoutOneLinkedPullRequest(t *testing.T) {
 			f.repo.AddPull("Fork", githubtest.Pull{Author: "ada", HeadSHA: "f1", HeadRepo: 999, Closes: f.closing(1)})
 		}, "No linked pull request."},
 		{"two", func(f *fixture) { f.pull("ada", false, 1); f.pull("ada", false, 1) }, ambiguous},
+		// Seen ready while the task was in Closed, so the triggers never asked about its author.
+		{"by an author without write access", func(f *fixture) {
+			f.member("mallory", "triage")
+			f.pull("mallory", false, 1)
+		}, "No linked pull request."},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := withLLM(t)

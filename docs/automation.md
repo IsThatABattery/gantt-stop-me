@@ -79,7 +79,7 @@ Turns automation on with the caller as its owner, or takes it over: the caller r
 
 ## Turn off automation
 
-Turns automation off, forgets the project's pull request records, and cancels its queued and running test runs and workflow executions. Already off is not an error.
+Turns automation off, forgets the project's pull request records, and cancels its queued and running test runs and workflow executions. A running execution stays `running` until the runner has removed it, within a few seconds. A finished run whose issue comment is not posted yet gets none. Already off is not an error.
 
 `DELETE /api/projects/{id}/automation`
 
@@ -163,7 +163,7 @@ What a pull request's change does, whether the webhook or the poller sees it fir
 | New head commit while ready | Nothing. |
 | Closed, merged, or gone from the open list | Its record is deleted. |
 
-Only a pull request from a branch of the repository, by an author with write access or above, runs. Any other that would start a run gets one comment saying why it was not tested, once while it stays open, and nothing else happens. A run started while more than one open, ready pull request that may run closes the issue ends at once as a runner error, and the task needs attention.
+Only a pull request from a branch of the repository, by an author with write access or above, runs. Any other that would start a run gets one comment saying why it was not tested, once while it stays open, and nothing else happens. A run started while more than one open, ready pull request that may run closes the issue ends at once as a runner error, and the task needs attention. So does a run whose issue was opened by someone without write access: its Tests section would run with the workflow's caches.
 
 ## List test runs
 
@@ -327,7 +327,7 @@ Returns the screenshot an LLM check took after its report, when it used the brow
 
 ## Cancel test run
 
-Cancels a queued or running test run and its workflow executions, which stop within a few seconds, and skips its unfinished tests. The reason names the caller. The task stays where it is and can be moved out of Testing again. A cancelled run gets no issue comment.
+Cancels a queued or running test run and its workflow executions, and skips its unfinished tests. A running execution stays `running` until it has stopped and the runner has removed it, within a few seconds, so nothing starts beside it meanwhile. The reason names the caller. The task stays where it is and can be moved out of Testing again. A cancelled run gets no issue comment.
 
 `POST /api/projects/{id}/runs/{runID}/cancel`
 

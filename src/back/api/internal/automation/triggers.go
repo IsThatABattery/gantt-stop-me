@@ -218,15 +218,20 @@ func (a *Automation) refusal(ctx context.Context, token string, p projects.Proje
 	if headRepo(pr) != p.RepoID {
 		return "Not tested: this pull request comes from a fork. Automation tests only pull requests from branches of this repository.", nil
 	}
-	perm, err := a.GitHub.Permission(ctx, token, p.RepoID, pr.User.Login)
-	if err != nil {
+	if ok, err := a.canPush(ctx, token, p, pr.User.Login); err != nil || ok {
 		return "", err
-	}
-	if perm == "admin" || perm == "maintain" || perm == "write" {
-		return "", nil
 	}
 	return "Not tested: " + pr.User.Login + " does not have write access to this repository. " +
 		"Automation tests only pull requests by authors who can push to it.", nil
+}
+
+// canPush reports whether login has write access or above to the project's repository, as GitHub tells token.
+func (a *Automation) canPush(ctx context.Context, token string, p projects.Project, login string) (bool, error) {
+	if login == "" { // no author to ask about, which would ask for the collaborators list instead
+		return false, nil
+	}
+	perm, err := a.GitHub.Permission(ctx, token, p.RepoID, login)
+	return perm == "admin" || perm == "maintain" || perm == "write", err
 }
 
 // startRun starts a test run of task taskID on head of pull request number: it cancels the task's earlier queued or
@@ -246,17 +251,27 @@ func startRun(ctx context.Context, tx pgx.Tx, projectID, taskID int64, number in
 }
 
 // cancelRuns cancels the project's queued and running test runs of task taskID, or when taskID is 0, those testing
-// pull request number, with reason, and their queued and running workflow executions, which the queue worker then
-// stops, and skips their unfinished tests.
+// pull request number, with reason, then skips the rest of them.
 func cancelRuns(ctx context.Context, tx pgx.Tx, projectID, taskID int64, number int, reason string) error {
+	rows, _ := tx.Query(ctx, `
+		update test_runs set status = 'cancelled', reason = $4, finished_at = now()
+		where status in ('queued', 'running') and task_id in (select id from tasks where project_id = $1)
+			and (task_id = $2 or $2 = 0 and pr_number = $3)
+		returning id`, projectID, taskID, number, reason)
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil || len(ids) == 0 {
+		return err
+	}
+	return skipRest(ctx, tx, ids)
+}
+
+// skipRest skips the unfinished tests of test runs ids, just cancelled, and cancels their queued workflow
+// executions. A running one keeps its status until the queue worker has stopped it and removed it from the runner,
+// so the queue starts nothing beside it meanwhile. A statement of its own, after the runs': it sees what a plan
+// committed while the cancel waited for the run's row.
+func skipRest(ctx context.Context, tx pgx.Tx, ids []int64) error {
 	_, err := tx.Exec(ctx, `
-		with runs as (
-			update test_runs set status = 'cancelled', reason = $4, finished_at = now()
-			where status in ('queued', 'running') and task_id in (select id from tasks where project_id = $1)
-				and (task_id = $2 or $2 = 0 and pr_number = $3)
-			returning id),
-		results as (update test_results set status = 'skipped' where status = 'pending' and run_id in (select id from runs))
-		update workflow_executions set status = 'cancelled', finished_at = now()
-		where status in ('queued', 'running') and run_id in (select id from runs)`, projectID, taskID, number, reason)
+		with results as (update test_results set status = 'skipped' where status = 'pending' and run_id = any($1))
+		update workflow_executions set status = 'cancelled', finished_at = now() where status = 'queued' and run_id = any($1)`, ids)
 	return err
 }

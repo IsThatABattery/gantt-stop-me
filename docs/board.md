@@ -271,8 +271,10 @@ While the project's [automation](automation.md) is on, a move to another column 
 | --- | --- |
 | Out of Testing | Refused with `run_in_progress` while the task's latest test run is `queued` or `running`. [Cancel test run](automation.md#cancel-test-run) unlocks it. Otherwise it clears `needsAttention`. |
 | Into User Check | Refused with `not_tested` unless the task's latest test run `passed` on the head commit its pull request has now. |
-| Into Testing | Starts a test run, which cancels the task's earlier queued or running one, of the one open, ready pull request that closes the issue and may run, at its head: from a branch of the repository, and not refused with a comment. With none, or more than one, the run ends at once as a runner error, and the task needs attention. |
+| Into Testing | Starts a test run, which cancels the task's earlier queued or running one, of the one open, ready pull request that closes the issue and may run, at its head: from a branch of the repository, by an author with write access as GitHub says now, and not refused with a comment. With none, or more than one, the run ends at once as a runner error, and the task needs attention. |
 | Any other | Free, Closed included. |
+
+The rules hold for this endpoint only. A sync follows GitHub: a board label added there, or the issue closed, moves the task whatever its test run, and approving checks the run again. A sync's move out of Testing also clears `needsAttention`.
 
 ```json
 {

@@ -85,7 +85,7 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusConflict, refusal.Code, refusal.Message)
 	case errors.Is(err, errInvalidBefore):
 		httpx.Error(w, http.StatusBadRequest, "invalid_before_task", "beforeTaskId must be another task in the target column.")
-	case errors.As(err, new(gitHubError)):
+	case errors.As(err, new(gitHubError)), errors.As(err, new(*github.Error)): // the latter from the rules
 		github.Fail(w, r, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
@@ -137,7 +137,7 @@ func (b *Board) place(ctx context.Context, tx pgx.Tx, token string, p projects.P
 		return task{}, errInvalidBefore
 	}
 	if to.ID != from.ID && b.Rules != nil {
-		if err := b.Rules.Moving(ctx, tx, p, t.ID, from.Key, to.Key, byHand); err != nil {
+		if err := b.Rules.Moving(ctx, tx, token, p, t.ID, from.Key, to.Key, byHand); err != nil {
 			return task{}, err
 		}
 	}

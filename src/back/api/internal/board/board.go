@@ -32,9 +32,10 @@ type Board struct {
 // Rules add Moves while automated, in AUTOMATION.md, to the moves of a project whose automation is on.
 type Rules interface {
 	// Moving runs in tx, holding projects.Lock, before task taskID moves from the column with key from to another
-	// column with key to, and before GitHub hears of it. byHand is false for MoveToEnd, the API's own moves. A
-	// *Refusal stops the move, which the move endpoint answers with 409; any other error fails it.
-	Moving(ctx context.Context, tx pgx.Tx, p projects.Project, taskID int64, from, to string, byHand bool) error
+	// column with key to, and before GitHub hears of it, which it may ask with token, the mover's. byHand is false for
+	// MoveToEnd, the API's own moves. A *Refusal stops the move, which the move endpoint answers with 409; a
+	// *github.Error fails it as GitHub's, and any other error fails it.
+	Moving(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64, from, to string, byHand bool) error
 }
 
 // Refusal is a move the rules refuse, answered 409 with this error code and message.

@@ -242,6 +242,19 @@ func TestSyncMovesClosedAndReopenedIssues(t *testing.T) {
 	}
 }
 
+func TestSyncLeavingTestingClearsNeedsAttention(t *testing.T) {
+	f := setup(t, "One", "Two")
+	f.exec(`update tasks set column_id = $1, needs_attention = 'The build failed.'`, f.column("testing"))
+	f.repo.EditIssue(1, func(is *githubtest.Issue) { is.State = "closed" }) // its pull request merged
+	f.repo.EditIssue(2, func(is *githubtest.Issue) { is.Title = "Two, renamed" })
+	f.dueSync()
+	for _, tk := range f.board().Tasks {
+		if want := map[int]string{1: "null", 2: "The build failed."}[tk.IssueNumber]; orNull(tk.NeedsAttention) != want {
+			t.Fatalf("task %d needsAttention = %s, want %s", tk.IssueNumber, orNull(tk.NeedsAttention), want)
+		}
+	}
+}
+
 func TestSyncFollowsLabelChanges(t *testing.T) {
 	f := setup(t, "One", "Two", "Three")
 	f.exec(`update tasks set column_id = $1 where issue_number = 3`, f.column("testing"))

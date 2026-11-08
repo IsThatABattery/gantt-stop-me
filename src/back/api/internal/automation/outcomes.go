@@ -32,10 +32,11 @@ func (a *Automation) finishAll(ctx context.Context) {
 
 // finish ends test run runID: with reason, a runner error for the whole run, or else once it is over, by its test
 // results as Outcomes says. It applies the outcome to the task under the project's lock, as ordinary moves with the
-// owner's credential, unless someone moved the task out of Testing meanwhile: a test failure moves it to In Progress
-// and turns its pull request back into a draft, a runner error leaves it in Testing with needs_attention set to the
-// first error's reason, and a pass moves it to User Check. A run already finished, or not over, stays as it is. While
-// the owner is paused, or GitHub fails the move for now, it returns an error and the next pass tries again.
+// owner's credential, unless someone moved the task out of Testing meanwhile: a test failure moves it to In Progress,
+// a runner error leaves it in Testing with needs_attention set to the first error's reason, and a pass moves it to
+// User Check. A test failure also turns its pull request back into a draft, wherever the task is, since the pull
+// request is still ready with failing tests. A run already finished, or not over, stays as it is. While the owner is
+// paused, or GitHub fails the move for now, it returns an error and the next pass tries again.
 func (a *Automation) finish(ctx context.Context, runID int64, reason string) error {
 	var p projects.Project
 	var taskID int64
@@ -55,7 +56,6 @@ func (a *Automation) finish(ctx context.Context, runID int64, reason string) err
 	if err != nil {
 		return err
 	}
-	defer unlock()
 	ctx = context.WithoutCancel(ctx) // once GitHub has the move, finish saving it
 	draft := false
 	err = pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
@@ -72,16 +72,18 @@ func (a *Automation) finish(ctx context.Context, runID int64, reason string) err
 					order by position limit 1), ''),
 				(select c.key from tasks t join columns c on c.id = t.column_id where t.id = r.task_id)`, runID, reason).
 			Scan(&status, &why, &column)
-		if errors.Is(err, pgx.ErrNoRows) || err == nil && column != "testing" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+		if draft = status == "failed" && pr != 0; column != "testing" {
+			return nil
+		}
 		switch status {
 		case "failed":
 			err = a.Board.MoveToEnd(ctx, tx, token, p, taskID, "in-progress")
-			draft = err == nil && pr != 0
 		case "error":
 			_, err = tx.Exec(ctx, `update tasks set needs_attention = $2 where id = $1`, taskID, why)
 		case "passed":
@@ -93,6 +95,7 @@ func (a *Automation) finish(ctx context.Context, runID int64, reason string) err
 		}
 		return err
 	})
+	unlock() // the draft's GitHub calls need no lock
 	if err != nil {
 		return a.PauseIfRejected(ctx, p.ID, token, err)
 	}
@@ -102,15 +105,36 @@ func (a *Automation) finish(ctx context.Context, runID int64, reason string) err
 	return nil
 }
 
-// draft turns pull request number back into a draft after a test failure. A failure is logged, not returned: the
-// task has moved already.
+// draft turns pull request number back into a draft after a test failure, unless it is closed or a draft already,
+// and saves that in its record, under the project's lock: so a run started before the triggers next read GitHub
+// does not count it as ready, and they see no change to act on. A failure is logged, not returned: the run has
+// ended already.
 func (a *Automation) draft(ctx context.Context, p projects.Project, token string, number int) {
 	pr, err := a.GitHub.PullRequest(ctx, token, p.RepoID, number)
+	if err == nil && (pr.State != "open" || pr.Draft) {
+		return
+	}
 	if err == nil {
 		err = a.GitHub.ConvertToDraft(ctx, token, pr.NodeID)
 	}
 	if err != nil {
 		log.Printf("turn pull request %d of project %d back into a draft: %v", number, p.ID, a.PauseIfRejected(ctx, p.ID, token, err))
+		return
+	}
+	unlock, err := projects.Serialize(ctx, p.ID)
+	if err != nil {
+		return
+	}
+	defer unlock()
+	err = pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
+		if err := projects.Lock(ctx, tx, p.ID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `update pull_requests set draft = true where project_id = $1 and number = $2`, p.ID, number)
+		return err
+	})
+	if err != nil {
+		log.Printf("record pull request %d of project %d as a draft: %v", number, p.ID, err)
 	}
 }
 

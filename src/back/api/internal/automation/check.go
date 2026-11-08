@@ -70,7 +70,7 @@ func (a *Automation) check(ctx context.Context, e *execution, r result) (result,
 	if e.issue == nil {
 		is, err := a.GitHub.Issue(ctx, e.token, e.project.RepoID, issue)
 		if err != nil {
-			return r, fmt.Errorf("read the issue from GitHub: %w", err)
+			return r, gitHubFailure{fmt.Errorf("read the issue from GitHub: %w", err)}
 		}
 		e.issue = &is
 	}

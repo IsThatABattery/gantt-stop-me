@@ -211,13 +211,14 @@ func target(cols []column, cur column, is github.Issue, seen []string) column {
 }
 
 // refresh overwrites the task's cached title, state, body, labels and board labels, and moves it to the end of
-// column to when that is not cur.
+// column to when that is not cur. Leaving Testing clears needs_attention, as a move on the board does. Moves while
+// automated, in AUTOMATION.md, guard the board's moves only: the board follows GitHub, and approving checks the run.
 func refresh(ctx context.Context, tx pgx.Tx, id int64, cur, to column, is github.Issue) error {
 	if to.ID != cur.ID {
 		_, err := tx.Exec(ctx, `
 			update tasks set column_id = $2, position = coalesce((select max(position) from tasks where column_id = $2), 0) + 1,
-				version = version + 1, updated_at = now()
-			where id = $1`, id, to.ID)
+				version = version + 1, updated_at = now(), needs_attention = case when $3 then null else needs_attention end
+			where id = $1`, id, to.ID, cur.Key == "testing")
 		if err != nil {
 			return err
 		}

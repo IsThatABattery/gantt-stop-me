@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/llm"
@@ -33,10 +34,11 @@ func (a *Automation) planAll(ctx context.Context) {
 }
 
 // plan works out a queued test run's workflow executions, outside the project's lock: it reads the issue fresh from
-// GitHub with the owner's credential, parses its Tests section, reads .gantt/workflows.yml at the run's head, and
-// routes each test. Then, if the run is still queued, it saves in one transaction a queued workflow execution per
-// workflow that has tests, and a test result per test. A run that cannot be planned, or whose tests all failed to
-// route, ends at once as a runner error. A paused owner, or a GitHub failure a retry may mend, leaves it queued.
+// GitHub with the owner's credential, checks its author can push, parses its Tests section, reads .gantt/workflows.yml
+// at the run's head, and routes each test. Then, if the run is still queued, it saves in one transaction a queued
+// workflow execution per workflow that has tests, and a test result per test. A run that cannot be planned or saved,
+// or whose tests all failed to route, ends at once as a runner error. A paused owner, or a GitHub failure a retry may
+// mend, leaves it queued.
 func (a *Automation) plan(ctx context.Context, runID int64) error {
 	var p projects.Project
 	var issue, pr int
@@ -52,12 +54,21 @@ func (a *Automation) plan(ctx context.Context, runID int64) error {
 	if err != nil {
 		return err
 	}
-	if pr == 0 {
+	if pr == 0 { // defensive: every run without a pull request starts ended, by startRun
 		return a.finish(ctx, runID, "No linked pull request.")
 	}
 	is, err := a.GitHub.Issue(ctx, token, p.RepoID, issue)
+	var trusted bool
+	if err == nil {
+		trusted, err = a.canPush(ctx, token, p, is.User.Login)
+	}
 	if err != nil {
 		return a.gitHubFailed(ctx, p.ID, runID, token, "read the issue", err)
+	}
+	// Its tests run with the workflow's caches, which later runs trust. Only the author and those with write access
+	// can edit an issue's body, so its author having write access means everyone who wrote it had.
+	if !trusted {
+		return a.finish(ctx, runID, "The issue was opened by someone without write access to the repository, so its tests do not run.")
 	}
 	tests, err := ParseTests(is.Body)
 	if errors.Is(err, ErrNoTests) {
@@ -129,6 +140,10 @@ func (a *Automation) plan(ctx context.Context, runID int64) error {
 		}
 		return nil
 	})
+	if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && strings.HasPrefix(pgErr.Code, "22") {
+		// Text the database cannot store, such as a NUL in a test, fails every try, so the run ends instead.
+		return a.finish(ctx, runID, "The tests could not be saved: "+pgErr.Message+".")
+	}
 	if err != nil || executions > 0 {
 		return err
 	}

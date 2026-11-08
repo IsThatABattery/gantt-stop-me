@@ -103,3 +103,13 @@ func TestDecideErrors(t *testing.T) {
 		t.Fatalf("the fake served %d decisions", n)
 	}
 }
+
+func TestUnreachableProviderErrorsNameNoAddress(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close() // nothing listens there now
+	c := &llm.Client{BaseURL: srv.URL, HTTP: llm.HTTPClient(true, llm.CallTimeout)}
+	_, err := c.Decide(context.Background(), llmtest.DecisionModel, "Issue", questions)
+	if err == nil || err.Error() != "llm: POST /decisions could not reach the provider" {
+		t.Fatalf("error = %v, want one without %s", err, srv.URL)
+	}
+}

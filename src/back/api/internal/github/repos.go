@@ -45,6 +45,7 @@ type Issue struct {
 	Labels      []Label   `json:"labels"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	PullRequest *struct{} `json:"pull_request"` // set only on pull requests
+	User        User      `json:"user"`         // its author
 }
 
 // repo is the REST URL of the repository with this id. Calls go by id, which survives renames and transfers,

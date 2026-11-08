@@ -273,8 +273,9 @@ func TestReadyToDraftCancelsTheRun(t *testing.T) {
 			f.repo.EditPull(n, func(p *githubtest.Pull) { p.Draft = true })
 			path.via(f, n)
 			f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "cancelled", Reason: "The pull request went back to draft.", Finished: true})
-			if got := slices.Sorted(maps.Values(f.statuses("workflow_executions"))); !slices.Equal(got, []string{"cancelled", "cancelled", "passed"}) {
-				t.Fatalf("workflow executions = %v, want the running and queued ones cancelled", got)
+			// The running one is the queue worker's to stop, which cancels it once the runner has removed it.
+			if got := slices.Sorted(maps.Values(f.statuses("workflow_executions"))); !slices.Equal(got, []string{"cancelled", "passed", "running"}) {
+				t.Fatalf("workflow executions = %v, want the queued one cancelled", got)
 			}
 			if got := f.task(1); got.Column != "testing" || got.Version != 2 {
 				t.Fatalf("task = %+v, want it left in Testing", got)

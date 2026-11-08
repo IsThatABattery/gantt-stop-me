@@ -328,6 +328,79 @@ func TestRunnerRestartRequeuesOnce(t *testing.T) {
 	)
 }
 
+func TestRunnerDownCostsNoAttempt(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, twoTests)
+	n := f.ready()
+	h := f.Runner.Hold(0, "command")
+	wait := f.workInBackground()
+	<-h.Arrived()
+	f.Runner.Restart() // interrupted once
+	wait()
+	up := f.Automation.Runner.URL
+	f.Automation.Runner.URL = "http://127.0.0.1:1" // and not listening again yet
+	f.work()
+	f.work()
+	f.expectExecutions(executionRow{"default", "queued", 1})
+	f.Automation.Runner.URL = up
+	f.work()
+	f.expectExecutions(executionRow{"default", "passed", 2})
+	f.expectRuns(pass(n))
+}
+
+func TestGitHubFailingForNowRequeuesTheExecution(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, twoTests)
+	n := f.ready()
+	f.GitHub.Fail("GET /repositories/{id}/tarball/{sha}", http.StatusBadGateway)
+	f.work()
+	f.expectExecutions(executionRow{"default", "queued", 0})
+	f.expectResults(resultRow{1, "pending", "", "default", false}, resultRow{2, "pending", "", "default", false})
+	f.GitHub.Fail("GET /repositories/{id}/tarball/{sha}", 0)
+	f.work()
+	f.expectRuns(pass(n))
+}
+
+func TestCancelLeavesARunningExecutionItsSlot(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, "## Tests\n- [ ] [backend] `go test ./...`\n- [ ] [frontend] `npm test`\n")
+	f.repo.AddFile("a1", ".gantt/workflows.yml", twoWorkflows)
+	n := f.ready()
+	f.plan()
+	f.exec(`update workflow_executions set status = 'running', attempts = 1 where workflow = 'backend'`) // as a drive has it
+	f.repo.EditPull(n, func(p *githubtest.Pull) { p.Draft = true })
+	f.poll()
+	// The running one is the worker's to stop and remove from the runner; until then nothing starts beside it.
+	f.expectExecutions(executionRow{"backend", "running", 1}, executionRow{"frontend", "cancelled", 0})
+	f.expectResults(resultRow{1, "skipped", "", "backend", true}, resultRow{2, "skipped", "", "frontend", true})
+	f.repo.EditPull(n, func(p *githubtest.Pull) { p.Draft = false })
+	f.poll()
+	f.work()
+	f.expectCalls()
+
+	// The API stopped before it removed it: recovery cancels it.
+	if err := f.Automation.Recover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	f.work()
+	f.expectExecutions(executionRow{"backend", "cancelled", 1}, executionRow{"frontend", "cancelled", 0},
+		executionRow{"backend", "passed", 1}, executionRow{"frontend", "queued", 0})
+}
+
+func TestQueueSkipsExecutionsOfEndedRuns(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, twoTests)
+	f.ready()
+	f.plan()
+	f.exec(`update test_runs set status = 'cancelled', finished_at = now()`) // left queued by a cancel racing the plan
+	f.work()
+	f.expectCalls()
+	if err := f.Automation.Recover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	f.expectExecutions(executionRow{"default", "cancelled", 0})
+}
+
 func TestRunnerRestartThenPasses(t *testing.T) {
 	f := withLLM(t)
 	f.tests(1, twoTests)

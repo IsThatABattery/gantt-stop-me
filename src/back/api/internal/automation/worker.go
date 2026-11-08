@@ -88,20 +88,22 @@ func (a *Automation) claimAll(ctx context.Context, drives *sync.WaitGroup) {
 // claim takes the next queued workflow execution the queue allows, as Queue and restarts says: in id order across the
 // install, while fewer than MaxConcurrentWorkflows run, never beside a running one of the same project and workflow,
 // and never for a paused project, skipping those in skip. It marks the execution and its run running and counts the
-// attempt. It returns nil when the queue allows none.
+// attempt. It returns nil when the queue allows none. An execution of a run that ended, or whose row a cancel holds,
+// is not claimed: the run is locked with the execution, so a claim never waits on a cancel that waits on it.
 func (a *Automation) claim(ctx context.Context, skip []int64) (*execution, error) {
 	e := &execution{claimed: time.Now()}
 	var spec []byte
 	err := a.DB.QueryRow(ctx, `
 		with next as (
 			select e.id from workflow_executions e
+			join test_runs r on r.id = e.run_id and r.status in ('queued', 'running')
 			join project_automation pa on pa.project_id = e.project_id and pa.paused_reason is null
 			where e.status = 'queued' and e.id <> all($2)
 				and (select count(*) from workflow_executions where status = 'running') < $1
 				and not exists (select from workflow_executions o
 					where o.status = 'running' and o.project_id = e.project_id and o.workflow = e.workflow)
 			order by e.id limit 1
-			for update of e skip locked),
+			for update of e, r skip locked),
 		claimed as (
 			update workflow_executions e set status = 'running', started_at = now(), attempts = e.attempts + 1
 			from next where e.id = next.id
@@ -125,6 +127,7 @@ func (a *Automation) claim(ctx context.Context, skip []int64) (*execution, error
 // Recover readies the queue when the API starts with automation on: it has the runner remove every execution,
 // logging a failure and going on, then puts the workflow executions that were running back on the queue, once. One
 // interrupted a second time ends instead, its unfinished tests a runner error, and the next pass finishes its run.
+// One whose run was cancelled meanwhile, which the API stopped before it could remove it, is cancelled.
 func (a *Automation) Recover(ctx context.Context) error {
 	if a.RunnerURL == "" {
 		return nil
@@ -137,6 +140,12 @@ func (a *Automation) Recover(ctx context.Context) error {
 	}
 	return pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
+			update workflow_executions e set status = 'cancelled', finished_at = now() from test_runs r
+			where r.id = e.run_id and e.status in ('queued', 'running') and r.status not in ('queued', 'running')`)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
 			update test_results set status = 'error', detail = $1 where status = 'pending' and execution_id in
 				(select id from workflow_executions where status = 'running' and attempts >= 2)`, interruptedTwice)
 		if err != nil {

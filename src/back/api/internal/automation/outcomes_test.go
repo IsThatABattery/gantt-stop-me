@@ -115,9 +115,32 @@ func TestRunFails(t *testing.T) {
 	f.expectComments("**Tests failed** on a1.\n\n" +
 		"- failed: `go test ./...` (default)\n- passed: `go vet ./...` (default)\n\n" + f.link())
 
-	// The draft the run made reaches the triggers, which cancel nothing: the run is over.
+	// The record has the draft the run made, so a drag back into Testing before the triggers read GitHub finds no ready
+	// pull request, and then the triggers see no change.
+	if r := f.record(n); r == nil || !r.Draft {
+		t.Fatalf("record = %+v, want the draft saved", r)
+	}
+	failed := testRun{Issue: 1, PR: n, Head: "a1", Status: "failed", Finished: true}
+	f.move(1, "testing")
 	f.poll()
+	f.expectRuns(failed, testRun{Issue: 1, Status: "error", Reason: "No linked pull request.", Finished: true})
+}
+
+func TestFailureTurnsThePullRequestBackToDraftWhereverTheTaskIs(t *testing.T) {
+	f := withLLM(t)
+	f.tests(1, twoTests)
+	f.Runner.Script(0, runnertest.Script{Command: runnertest.Exit{Code: 1}})
+	n := f.ready()
+	f.plan()
+	f.place("backlog") // as a label added on GitHub would
+	f.work()
 	f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "failed", Finished: true})
+	if got := f.task(1); got.Column != "backlog" {
+		t.Fatalf("task = %+v, want it left in Backlog", got)
+	}
+	if !f.repo.Issue(n).Pull.Draft {
+		t.Fatal("the pull request is still ready for review, want it back in draft")
+	}
 }
 
 // twoWorkflows is a workflows file with backend and frontend.
@@ -141,6 +164,19 @@ func TestRunnerErrors(t *testing.T) {
 			f.repo.AddFile("a1", ".gantt/workflows.yml", "workflows:\n  backend:\n    port: 80\n")
 			f.ready()
 		}, ".gantt/workflows.yml: workflows.backend.description: is required (line 2)"},
+		{"a NUL in the workflows file", func(f *fixture) {
+			f.repo.AddFile("a1", ".gantt/workflows.yml", "workflows:\n  backend:\n    description: Go API\n    env: {A: \"x\\0y\"}\n")
+			f.ready()
+		}, ".gantt/workflows.yml: workflows.backend.env.A: holds a NUL character (line 4)"},
+		{"a test the database cannot store", func(f *fixture) {
+			f.tests(1, "## Tests\n- [ ] `printf 'a\x00b'`\n")
+			f.ready()
+		}, "The tests could not be saved: invalid byte sequence for encoding \"UTF8\": 0x00."},
+		{"an issue by someone without write access", func(f *fixture) {
+			f.member("mallory", "triage")
+			f.repo.EditIssue(1, func(is *githubtest.Issue) { is.Author = "mallory" })
+			f.ready()
+		}, "The issue was opened by someone without write access to the repository, so its tests do not run."},
 		{"build failure", func(f *fixture) {
 			f.Runner.Script(0, runnertest.Script{Failure: &runner.Failure{Stage: "build", Log: "no Dockerfile"}})
 			f.ready()

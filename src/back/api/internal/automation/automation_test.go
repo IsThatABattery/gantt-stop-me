@@ -14,7 +14,8 @@ import (
 	"gantt-stop-me/api/internal/projects"
 )
 
-// fixture is octo/hello, with one open issue, added as a project by ada, who can push to it and has a provider.
+// fixture is octo/hello, with one open issue of ada's, added as a project by ada, who can push to it and has a
+// provider.
 type fixture struct {
 	*apptest.Env
 	t        *testing.T
@@ -32,7 +33,7 @@ func setup(t *testing.T, configure ...func(*app.Config)) *fixture {
 	t.Helper()
 	env := apptest.New(t, configure...)
 	f := &fixture{Env: env, t: t, repo: env.GitHub.AddRepo("octo", "hello")}
-	f.repo.AddIssue("One")
+	f.repo.EditIssue(f.repo.AddIssue("One"), func(is *githubtest.Issue) { is.Author = "ada" })
 	f.ada, f.adaID, f.token = f.member("ada", "push")
 	f.project = env.AddProject(f.ada, "octo", "hello")
 	f.provider = f.addProvider(f.adaID, "luna", "chat")
