@@ -68,6 +68,7 @@ export function PlansPage() {
       <section className="flex flex-col gap-2">
         <h2 className="eyebrow m-0">Plans</h2>
         {plans.error && <p className="m-0 text-sm text-critical">{plans.error.message}</p>}
+        {plans.data?.length === 0 && <p className="m-0 text-[13px] text-text-muted">No plans yet.</p>}
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {plans.data?.map((p) => (
             <li key={p.id}>
