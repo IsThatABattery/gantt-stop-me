@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -215,6 +216,49 @@ func (c *Client) WorkflowFile(ctx context.Context, token string, repoID int64, s
 	}
 	defer res.Body.Close()
 	return io.ReadAll(io.LimitReader(res.Body, maxWorkflowFile))
+}
+
+// WorkflowsPath is where a repository keeps its workflows.
+const WorkflowsPath = ".gantt/workflows.yml"
+
+// DefaultWorkflows returns the repository's workflows file on its default branch and the file's blob sha, both ""
+// when the branch has none.
+func (c *Client) DefaultWorkflows(ctx context.Context, token string, repoID int64) (content, sha string, err error) {
+	var f struct {
+		Content string `json:"content"` // base64, in lines
+		SHA     string `json:"sha"`
+	}
+	_, err = c.do(ctx, http.MethodGet, c.repo(repoID)+"/contents/"+WorkflowsPath, token, nil, nil, &f)
+	var ghErr *Error
+	if errors.As(err, &ghErr) && ghErr.Status == http.StatusNotFound {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(f.Content, "\n", ""))
+	if err != nil {
+		return "", "", fmt.Errorf("github: workflows file: %w", err)
+	}
+	return string(data), f.SHA, nil
+}
+
+// PutDefaultWorkflows commits content as the workflows file on the default branch with message, replacing the
+// blob sha, or creating the file when sha is "". A sha that is no longer the file's fails with *Error{Status: 409}, and
+// creating a file that exists with *Error{Status: 422}.
+// It returns the new blob's sha.
+func (c *Client) PutDefaultWorkflows(ctx context.Context, token string, repoID int64, content, sha, message string) (string, error) {
+	in := map[string]string{"message": message, "content": base64.StdEncoding.EncodeToString([]byte(content))}
+	if sha != "" {
+		in["sha"] = sha
+	}
+	var out struct {
+		Content struct {
+			SHA string `json:"sha"`
+		} `json:"content"`
+	}
+	_, err := c.do(ctx, http.MethodPut, c.repo(repoID)+"/contents/"+WorkflowsPath, token, nil, in, &out)
+	return out.Content.SHA, err
 }
 
 // Tarball streams the repository's source at commit sha: GitHub's .tar.gz, with everything in one owner-repo-sha/

@@ -280,3 +280,15 @@ describe('project automation', () => {
     expect(await screen.findByText('Automation is off.')).toHaveFocus()
   })
 })
+
+describe('workflows', () => {
+  it('adds a workflow and commits the file', async () => {
+    fake.automation = enabled
+    renderApp('/projects/1/automation')
+    await userEvent.click(await screen.findByRole('button', { name: 'Add a workflow' }))
+    expect((screen.getByLabelText('Workflows file') as HTMLTextAreaElement).value).toContain('workflows:\n  workflow-2:')
+    await userEvent.click(screen.getByRole('button', { name: 'Commit workflows' }))
+    expect(await screen.findByText('Committed to the default branch.')).toBeInTheDocument()
+    expect(fake.requests.find((r) => r.method === 'PUT' && r.path === '/api/projects/1/workflows')?.body).toMatchObject({ sha: null })
+  })
+})

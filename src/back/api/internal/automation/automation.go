@@ -49,6 +49,8 @@ func (a *Automation) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{id}/automation", a.Accounts.Require(a.show))
 	mux.HandleFunc("PUT /api/projects/{id}/automation", a.Accounts.Require(a.enable))
 	mux.HandleFunc("DELETE /api/projects/{id}/automation", a.Accounts.Require(a.disable))
+	mux.HandleFunc("GET /api/projects/{id}/workflows", a.Accounts.Require(a.showWorkflows))
+	mux.HandleFunc("PUT /api/projects/{id}/workflows", a.Accounts.Require(a.saveWorkflows))
 	mux.HandleFunc("POST /api/projects/{id}/automation/webhook", a.Accounts.Require(a.webhookSecret))
 	mux.HandleFunc("POST /api/github/webhook/{projectID}", a.webhook)
 	mux.HandleFunc("GET /api/projects/{id}/tasks/{taskID}/runs", a.Accounts.Require(a.listRuns))

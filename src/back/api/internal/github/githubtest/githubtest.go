@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"cmp"
 	"compress/gzip"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -141,6 +142,7 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("PUT /repositories/{id}/pulls/{number}/merge", f.mergePull)
 	f.mux.HandleFunc("GET /repositories/{id}/collaborators/{login}/permission", f.permission)
 	f.mux.HandleFunc("GET /repositories/{id}/contents/{path...}", f.contents)
+	f.mux.HandleFunc("PUT /repositories/{id}/contents/{path...}", f.putContents)
 	f.mux.HandleFunc("GET /repositories/{id}/tarball/{sha}", f.tarball)
 	f.mux.HandleFunc("GET "+codeload+"/{owner}/{name}/legacy.tar.gz/{sha}", f.codeload)
 	f.mux.HandleFunc("POST /graphql", f.graphql)
@@ -851,7 +853,48 @@ func (f *Fake) contents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"type": "file", "name": path.Base(p), "path": p, "size": len(content),
-		"encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content))})
+		"encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content)), "sha": blobSHA(content)})
+}
+
+// blobSHA stands in for a file's blob sha: it changes when the content does.
+func blobSHA(content string) string { return fmt.Sprintf("%x", sha1.Sum([]byte(content))) }
+
+// putContents serves PUT /repositories/{id}/contents/{path...} on the default branch, which the fake keeps as
+// ref "", with GitHub's sha check: 409 when sha is not the file's, and 422 when it is missing for a file that exists.
+func (f *Fake) putContents(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, true)
+	if !ok {
+		return
+	}
+	var in struct{ Message, Content, SHA string }
+	json.NewDecoder(r.Body).Decode(&in)
+	data, err := base64.StdEncoding.DecodeString(in.Content)
+	if err != nil || in.Message == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "Invalid request."})
+		return
+	}
+	p := r.PathValue("path")
+	old, exists := rp.files[""][p]
+	switch {
+	case exists && in.SHA == "":
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": `"sha" wasn't supplied.`})
+		return
+	case exists && in.SHA != blobSHA(old), !exists && in.SHA != "":
+		writeJSON(w, http.StatusConflict, map[string]string{"message": "is at " + blobSHA(old) + " but expected " + in.SHA})
+		return
+	}
+	if rp.files == nil {
+		rp.files = map[string]map[string]string{}
+	}
+	if rp.files[""] == nil {
+		rp.files[""] = map[string]string{}
+	}
+	rp.files[""][p] = string(data)
+	status := http.StatusOK
+	if !exists {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, map[string]any{"content": map[string]any{"path": p, "sha": blobSHA(string(data))}})
 }
 
 // codeload stands in for codeload.github.com, where GitHub redirects tarball downloads. Server.Client() sends every

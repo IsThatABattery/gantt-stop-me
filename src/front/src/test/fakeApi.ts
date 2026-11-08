@@ -57,6 +57,8 @@ function fresh() {
     /** The account the session cookie belongs to; null when signed out */
     signedInId: null as number | null,
     github: { login: 'ada', kind: 'pat' } as GitHubLink | null,
+    /** GET /api/projects/{id}/workflows */
+    workflows: { content: '', sha: null as string | null, workflows: [{ name: 'default', description: '' }], error: null as string | null },
     /** GET /api/projects/{id}/assignees */
     assignable: [
       { login: 'ada', avatarUrl: 'https://avatars.example/ada' },
@@ -368,6 +370,16 @@ export const handlers = [
       taskAgent: checkAgent(body.taskAgent as AgentSettings),
     }
     return HttpResponse.json(fake.planning)
+  }),
+  route('get', '/projects/:id/workflows', ({ params }) => {
+    projectAccess(params.id)
+    return HttpResponse.json(fake.workflows)
+  }),
+  route('put', '/projects/:id/workflows', ({ params, body }) => {
+    projectAccess(params.id)
+    if (!String(body.content).startsWith('workflows:')) return fail(400, 'invalid_workflows', 'workflows: is required')
+    fake.workflows = { content: String(body.content), sha: 'sha2', workflows: [{ name: 'app', description: '' }], error: null }
+    return HttpResponse.json(fake.workflows)
   }),
   route('get', '/projects/:id/automation', ({ params }) => {
     automationAccess(params.id, false)

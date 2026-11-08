@@ -4,6 +4,7 @@ import { flushSync } from 'react-dom'
 import { useParams } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { AgentEditor, NoProviders } from '../../components/AgentEditor'
+import { Workflows } from './Workflows'
 import { Button } from '../../components/controls'
 import { Eyebrow } from '../../components/Eyebrow'
 import { Icon } from '../../components/Icon'
@@ -67,6 +68,7 @@ export function AutomationPage() {
           me={me.data}
         />
       )}
+      {automation.data && <Workflows projectId={projectId} readOnly={project.permission === 'read'} />}
     </div>
   )
 }
