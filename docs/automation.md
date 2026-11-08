@@ -58,9 +58,9 @@ Turns automation on with the caller as its owner, or takes it over: the caller r
 | `session` | cookie | string | required |
 | `id` | path | integer | a project's `id`; write access |
 | `decisionProviderId` | body | integer | one of the caller's providers |
-| `decisionModel` | body | string | one of that provider's chosen `models`, serving the OpenAI Decisions API |
+| `decisionModel` | body | string | one of that provider's chosen `models`; picks workflows, so it should serve the OpenAI Decisions API |
 | `chatProviderId` | body | integer | one of the caller's providers, the same or another |
-| `chatModel` | body | string | one of that provider's chosen `models`, with tool calling |
+| `chatModel` | body | string | one of that provider's chosen `models`; runs LLM checks, so it should support tool calling |
 
 ```json
 { "decisionProviderId": 1, "decisionModel": "gpt-6-luna", "chatProviderId": 2, "chatModel": "gpt-5" }

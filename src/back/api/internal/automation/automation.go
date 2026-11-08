@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gantt-stop-me/api/internal/accounts"
-	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/secret"
 )
@@ -21,9 +21,8 @@ type Automation struct {
 	Accounts  *accounts.Accounts // guards every route
 	Projects  *projects.Projects // checks access to the project first
 	Secrets   *secret.Box        // opens owners' GitHub credentials and seals webhook secrets
-	GitHub    *github.Client
-	PublicURL string // base URL users open, without a trailing slash
-	RunnerURL string // the runner's base URL; automation is off while it is empty
+	PublicURL string             // base URL users open, without a trailing slash
+	RunnerURL string             // the runner's base URL; automation is off while it is empty
 }
 
 // Register adds the automation routes to mux, or none while RunnerURL is empty, so they answer 404 like any unknown route.
@@ -56,10 +55,12 @@ type owner struct {
 	Login *string `json:"login"` // nil once they unlink GitHub
 }
 
-// settings loads the project's automation settings, or pgx.ErrNoRows while it is off.
-func (a *Automation) settings(ctx context.Context, projectID int64) (settings, error) {
+// settings loads the project's automation settings through db, the pool or a transaction, or pgx.ErrNoRows while it is off.
+func (a *Automation) settings(ctx context.Context, db interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, projectID int64) (settings, error) {
 	s := settings{Enabled: true, PayloadURL: a.payloadURL(projectID)}
-	err := a.DB.QueryRow(ctx, `
+	err := db.QueryRow(ctx, `
 		select pa.owner_id, gl.login, pa.decision_provider, pa.decision_model, pa.chat_provider, pa.chat_model,
 			pa.paused_reason, pa.webhook_secret_enc is not null
 		from project_automation pa left join github_links gl on gl.user_id = pa.owner_id

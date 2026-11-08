@@ -99,7 +99,6 @@ func (f *fixture) automation() *automation.Automation {
 		DB:        f.DB,
 		Projects:  &projects.Projects{DB: f.DB, Secrets: f.Config.Secrets, GitHub: f.Config.GitHub},
 		Secrets:   f.Config.Secrets,
-		GitHub:    f.Config.GitHub,
 		PublicURL: f.Config.PublicURL,
 		RunnerURL: f.Config.RunnerURL,
 	}

@@ -34,17 +34,22 @@ func (a *Automation) enable(w http.ResponseWriter, r *http.Request) {
 	if !a.chosenModel(w, r, userID, in.DecisionProviderID, in.DecisionModel) || !a.chosenModel(w, r, userID, in.ChatProviderID, in.ChatModel) {
 		return
 	}
-	if _, err := a.DB.Exec(ctx, `
-		insert into project_automation (project_id, owner_id, decision_provider, decision_model, chat_provider, chat_model)
-		values ($1, $2, $3, $4, $5, $6)
-		on conflict (project_id) do update set owner_id = excluded.owner_id,
-			decision_provider = excluded.decision_provider, decision_model = excluded.decision_model,
-			chat_provider = excluded.chat_provider, chat_model = excluded.chat_model, paused_reason = null`,
-		p.ID, userID, in.DecisionProviderID, in.DecisionModel, in.ChatProviderID, in.ChatModel); err != nil {
-		httpx.Internal(w, r, err)
-		return
-	}
-	s, err := a.settings(ctx, p.ID)
+	var s settings
+	// One transaction, so the answer is this write's row: a concurrent PUT or DELETE waits on its row lock.
+	err := pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `
+			insert into project_automation (project_id, owner_id, decision_provider, decision_model, chat_provider, chat_model)
+			values ($1, $2, $3, $4, $5, $6)
+			on conflict (project_id) do update set owner_id = excluded.owner_id,
+				decision_provider = excluded.decision_provider, decision_model = excluded.decision_model,
+				chat_provider = excluded.chat_provider, chat_model = excluded.chat_model, paused_reason = null`,
+			p.ID, userID, in.DecisionProviderID, in.DecisionModel, in.ChatProviderID, in.ChatModel); err != nil {
+			return err
+		}
+		var err error
+		s, err = a.settings(ctx, tx, p.ID)
+		return err
+	})
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return

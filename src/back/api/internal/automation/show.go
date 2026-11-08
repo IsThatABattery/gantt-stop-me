@@ -16,7 +16,7 @@ func (a *Automation) show(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s, err := a.settings(r.Context(), p.ID)
+	s, err := a.settings(r.Context(), a.DB, p.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.JSON(w, http.StatusOK, map[string]bool{"enabled": false})
 		return

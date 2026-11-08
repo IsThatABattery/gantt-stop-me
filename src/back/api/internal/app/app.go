@@ -54,7 +54,6 @@ func New(db *pgxpool.Pool, cfg Config) http.Handler {
 		Accounts:  acc,
 		Projects:  prj,
 		Secrets:   cfg.Secrets,
-		GitHub:    cfg.GitHub,
 		PublicURL: cfg.PublicURL,
 		RunnerURL: cfg.RunnerURL,
 	}).Register(mux)
