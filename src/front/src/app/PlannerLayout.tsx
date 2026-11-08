@@ -24,7 +24,7 @@ export function PlannerLayout() {
 
   return (
     <div className="stars min-h-screen bg-background text-text">
-      <header className="flex flex-wrap items-center gap-x-8 gap-y-4 border-b border-line-soft bg-rail px-8 py-3.5">
+      <header className="flex flex-wrap items-center gap-x-8 gap-y-4 border-b border-line-soft bg-rail px-8 py-4">
         <Link to={`/projects/${projectId}`} className="no-underline">
           <Logo />
         </Link>

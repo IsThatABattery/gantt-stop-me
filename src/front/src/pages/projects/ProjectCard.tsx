@@ -28,7 +28,7 @@ export function ProjectCard({ project: p, favorite, onToggleFavorite }: ProjectC
     <div className="relative">
       <Link
         to={`/projects/${p.id}`}
-        className="flex h-full flex-col gap-4 rounded-[14px] border border-line bg-surface p-5 text-text no-underline transition-[border-color,translate] hover:-translate-y-px hover:border-ion hover:text-text"
+        className="flex h-full flex-col gap-4 rounded-card border border-line bg-surface p-5 text-text no-underline transition-[border-color,translate] hover:-translate-y-px hover:border-ion hover:text-text"
       >
         <div className="pr-10">
           <div className="min-w-0">
@@ -39,15 +39,15 @@ export function ProjectCard({ project: p, favorite, onToggleFavorite }: ProjectC
 
         <div className="flex items-center justify-between gap-2">
           {p.archived ? (
-            <Chip tone="neutral" className="px-2.5">
+            <Chip tone="neutral" className="px-3">
               Archived
             </Chip>
           ) : sprint ? (
-            <Chip tone="ion" className="px-2.5">
+            <Chip tone="ion" className="px-3">
               {labels.inSprint(sprint.number)}
             </Chip>
           ) : (
-            <Chip tone="neutral" className="px-2.5">
+            <Chip tone="neutral" className="px-3">
               {labels.betweenSprints}
             </Chip>
           )}
@@ -77,7 +77,7 @@ export function ProjectCard({ project: p, favorite, onToggleFavorite }: ProjectC
           </Chip>
         </div>
 
-        <div className="mt-auto flex items-center justify-between border-t border-line-soft pt-3.5">
+        <div className="mt-auto flex items-center justify-between border-t border-line-soft pt-4">
           <div className="flex">
             {members.map((u) => (
               <UserAvatar key={u.id} user={u} stacked />

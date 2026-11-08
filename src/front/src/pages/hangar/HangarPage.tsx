@@ -26,7 +26,7 @@ export function HangarPage() {
           <Eyebrow>
             {labels.project} · {project.name}
           </Eyebrow>
-          <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.backlog}</h1>
+          <h1 className="mt-2 mb-0 font-heading text-[26px] font-semibold">{labels.backlog}</h1>
         </header>
         {isPending ? (
           <StatusMessage title={`Loading ${lower(labels.backlog)}…`} />
@@ -75,7 +75,7 @@ function HangarList({ board }: { board: Board }) {
     ) : null
   }
 
-  const th = 'px-4 py-2.5 text-left text-xs font-medium text-text-muted'
+  const th = 'px-4 py-3 text-left text-xs font-medium text-text-muted'
   const td = 'px-4 py-3 align-middle'
 
   return (
@@ -106,7 +106,7 @@ function HangarList({ board }: { board: Board }) {
                   <td className={td}>
                     <Link
                       to={`/projects/${board.project.id}/backlog/tasks/${t.id}`}
-                      className="flex flex-col gap-0.5 text-text no-underline hover:text-ion"
+                      className="flex flex-col gap-1 text-text no-underline hover:text-ion"
                     >
                       <span className="font-mono text-xs text-text-muted">{t.key}</span>
                       <span className="font-medium">{t.title}</span>
@@ -116,7 +116,7 @@ function HangarList({ board }: { board: Board }) {
                   <td className={td}>
                     {e && (
                       <span className="flex items-center gap-2 text-text-muted-strong">
-                        <span aria-hidden="true" className="size-2 flex-none rounded-full" style={{ background: e.color }} />
+                        <span aria-hidden="true" className="size-2 flex-none rounded-control" style={{ background: e.color }} />
                         {e.name}
                       </span>
                     )}

@@ -26,7 +26,7 @@ export function ActivityFilters({
             type="button"
             aria-pressed={on}
             onClick={() => onChange(f)}
-            className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border px-3.5 font-[inherit] ${
+            className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border px-4 font-[inherit] ${
               on ? 'border-ion bg-ion/10 text-text' : 'border-line bg-transparent text-text-muted-strong hover:border-line-strong hover:text-text'
             }`}
           >
@@ -102,11 +102,11 @@ function Entry({ event: e, lookup }: { event: ActivityEvent; lookup: Lookup }) {
   const task = e.taskId ? lookup.task.get(e.taskId) : undefined
   return (
     <li
-      className={`flex gap-3 rounded-control border px-3.5 py-3 text-[13px] leading-normal ${
+      className={`flex gap-3 rounded-control border px-4 py-3 text-[13px] leading-normal ${
         e.needsAction ? 'border-warning/70 bg-warning/6' : 'border-line-soft bg-surface'
       }`}
     >
-      <time dateTime={e.at} className="w-11 flex-none pt-0.5 font-mono text-xs text-text-muted">
+      <time dateTime={e.at} className="w-11 flex-none pt-1 font-mono text-xs text-text-muted">
         {clockTime(e.at)}
       </time>
       <ActorMark actor={e.actor} lookup={lookup} />
@@ -123,7 +123,7 @@ function Entry({ event: e, lookup }: { event: ActivityEvent; lookup: Lookup }) {
         </p>
         {e.detail && <p className="m-0 break-words text-text-muted-strong">{e.detail}</p>}
         {e.needsAction && (
-          <Chip tone="warning" className="mt-0.5 self-start">
+          <Chip tone="warning" className="mt-1 self-start">
             <Icon name="alert" size={12} />
             {labels.needsAction}
           </Chip>
@@ -137,13 +137,13 @@ function Entry({ event: e, lookup }: { event: ActivityEvent; lookup: Lookup }) {
 function ActorMark({ actor, lookup }: { actor: Assignee; lookup: Lookup }) {
   if (actor.kind === 'agent') {
     return (
-      <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-lg border border-astronaut bg-astronaut/10 text-astronaut">
+      <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-control border border-astronaut bg-astronaut/10 text-astronaut">
         <Icon name="helmet" size={16} />
       </span>
     )
   }
   return (
-    <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-full bg-line text-[11px] font-semibold text-text">
+    <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-control bg-line text-[11px] font-semibold text-text">
       {lookup.user.get(actor.id)?.initials ?? '?'}
     </span>
   )

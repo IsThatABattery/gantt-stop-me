@@ -39,7 +39,7 @@ export function UserMenu() {
         aria-controls={menuId}
         aria-label={`Account menu, signed in as ${session.email}`}
         onClick={() => setOpen((o) => !o)}
-        className="flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0"
+        className="flex size-11 cursor-pointer items-center justify-center rounded-control border-0 bg-transparent p-0"
       >
         <UserAvatar user={user} size="lg" />
       </button>
@@ -60,7 +60,7 @@ export function UserMenu() {
               signOut()
               navigate('/login', { replace: true })
             }}
-            className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-left font-[inherit] text-text hover:bg-nav-active"
+            className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control border-0 bg-transparent px-3 text-left font-[inherit] text-text hover:bg-nav-active"
           >
             <Icon name="signOut" />
             Sign out

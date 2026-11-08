@@ -33,9 +33,13 @@
   --font-heading: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --radius-control: 10px;
-  --radius-card: 12px;
-  --radius-dialog: 16px;
+  /* Spacing is a 4px grid: one Tailwind step is 4px, so use whole steps (p-3, gap-5), never half steps or
+     off-grid px values. Corners are 0 (rounded-none) or 4px (these tokens). No pills or circles unless a
+     design calls for one. */
+  --spacing: 4px;
+  --radius-control: 4px;
+  --radius-card: 4px;
+  --radius-dialog: 4px;
 
   --animate-orbit-pulse: orbit-pulse 2.4s ease-in-out infinite;
 

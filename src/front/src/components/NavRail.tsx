@@ -10,7 +10,7 @@ interface Item {
   end?: boolean
 }
 
-const itemBase = 'flex min-h-11 items-center gap-3 rounded-lg px-3 no-underline'
+const itemBase = 'flex min-h-11 items-center gap-3 rounded-control px-3 no-underline'
 
 function RailLink({ item, className = '' }: { item: Item; className?: string }) {
   return (

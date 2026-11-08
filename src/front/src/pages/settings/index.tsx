@@ -31,17 +31,17 @@ export function SettingsPage() {
         <Eyebrow>
           {labels.workspace} · {workspace?.name ?? '…'}
         </Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.settings}</h1>
+        <h1 className="mt-2 mb-0 font-heading text-[26px] font-semibold">{labels.settings}</h1>
       </header>
 
       <div className="flex flex-wrap items-start gap-7">
-        <nav aria-label="Settings sections" className="flex flex-[1_1_180px] flex-col gap-0.5 lg:sticky lg:top-6 lg:max-w-60">
+        <nav aria-label="Settings sections" className="flex flex-[1_1_180px] flex-col gap-1 lg:sticky lg:top-6 lg:max-w-60">
           {sectionNav.map((s) => (
             <Link
               key={s.id}
               to={{ hash: s.id }}
               aria-current={s.id === active ? 'true' : undefined}
-              className={`flex min-h-11 items-center rounded-lg border px-3 no-underline ${
+              className={`flex min-h-11 items-center rounded-control border px-3 no-underline ${
                 s.id === active ? 'border-line bg-surface font-medium text-text' : 'border-transparent text-text-muted-strong hover:text-text'
               }`}
             >

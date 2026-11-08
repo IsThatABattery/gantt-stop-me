@@ -29,7 +29,7 @@ export function PlanDonePage() {
     <div className="mx-auto flex max-w-[920px] flex-col gap-6 pt-5">
       <div>
         <div className="eyebrow">STEP 4 · {plannerLabels.steps[3].toUpperCase()}</div>
-        <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">{draft.name} is ready</h1>
+        <h1 className="mt-2 mb-0 font-heading text-[28px] font-semibold">{draft.name} is ready</h1>
         <p className="mt-2 mb-0 leading-normal text-text-muted-strong">
           The {labels.feature.toLowerCase()} doc is approved and the reviewed {labels.tasks.toLowerCase()} are on the board.
         </p>
@@ -37,14 +37,14 @@ export function PlanDonePage() {
 
       <ul aria-label="Summary" className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 p-0">
         {tiles.map((t) => (
-          <li key={t.text} className={`rounded-card border p-[18px] ${t.tone}`}>
+          <li key={t.text} className={`rounded-card border p-5 ${t.tone}`}>
             <div className="font-mono text-2xl">{t.n}</div>
             <div className="mt-1 text-text-soft">{t.text}</div>
           </li>
         ))}
       </ul>
 
-      <section aria-labelledby="added-h" className="rounded-[14px] border border-line bg-surface p-6">
+      <section aria-labelledby="added-h" className="rounded-card border border-line bg-surface p-6">
         <h2 id="added-h" className="mt-0 mb-1 font-heading text-lg font-semibold">
           Added to the board
         </h2>
@@ -53,10 +53,10 @@ export function PlanDonePage() {
         ) : (
           <ul className="m-0 list-none p-0">
             {summary.approved.map((a) => (
-              <li key={a.taskId} className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft py-3.5 first:border-t-0">
+              <li key={a.taskId} className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft py-4 first:border-t-0">
                 <Link to={`/projects/${projectId}/tasks/${a.taskId}`} className="text-text no-underline hover:text-text">
                   <span className="font-mono text-xs text-text-muted">{a.key}</span>
-                  <span className="mt-0.5 block hover:underline">{a.title}</span>
+                  <span className="mt-1 block hover:underline">{a.title}</span>
                 </Link>
                 <Chip tone="neutral">{a.column === 'backlog' ? `In the ${labels.backlog}` : columnLabels[a.column].name}</Chip>
               </li>

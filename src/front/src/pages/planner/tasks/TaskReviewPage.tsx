@@ -34,7 +34,7 @@ export function TaskReviewPage() {
   const header = (
     <div>
       <div className="eyebrow">STEP 3 · {plannerLabels.steps[2].toUpperCase()}</div>
-      <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">Review proposed {tasksWord}</h1>
+      <h1 className="mt-2 mb-0 font-heading text-[28px] font-semibold">Review proposed {tasksWord}</h1>
       <p className="mt-2 mb-0 max-w-[680px] leading-normal text-text-muted-strong">
         Approved {tasksWord} go to the {labels.backlog}. Denied ones go back to the planning {agentWord} with your feedback.
       </p>
@@ -95,8 +95,8 @@ function Review({ list, context, summary, base, children }: ReviewProps) {
           <div role="status" className="text-[13px]">
             {reviewed} of {list.length} reviewed · {approved} approved · {sentBack} sent back
           </div>
-          <div role="img" aria-label={`${reviewed} of ${list.length} reviewed`} className="mt-2 h-1.5 overflow-hidden rounded-[3px] bg-line-soft">
-            <div className="h-1.5 bg-good" style={{ width: `${Math.round((reviewed / list.length) * 100)}%` }} />
+          <div role="img" aria-label={`${reviewed} of ${list.length} reviewed`} className="mt-2 h-2 overflow-hidden rounded-control bg-line-soft">
+            <div className="h-2 bg-good" style={{ width: `${Math.round((reviewed / list.length) * 100)}%` }} />
           </div>
         </div>
         <Link to={`${base}/done`} className={buttonClass(left === 0 ? 'primary' : 'secondary')}>

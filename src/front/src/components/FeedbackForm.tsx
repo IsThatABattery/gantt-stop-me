@@ -67,12 +67,12 @@ export function FeedbackForm({
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
       <div>
         <Eyebrow>Deny with feedback</Eyebrow>
-        <h2 className="mt-1.5 mb-0 font-heading text-lg font-semibold">{heading}</h2>
-        <p className="mt-1.5 mb-0 leading-normal text-text-muted-strong">{intro}</p>
+        <h2 className="mt-2 mb-0 font-heading text-lg font-semibold">{heading}</h2>
+        <p className="mt-2 mb-0 leading-normal text-text-muted-strong">{intro}</p>
       </div>
 
-      <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
-        <legend className="mb-2.5 p-0 text-[13px] text-text-soft">What should happen next?</legend>
+      <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+        <legend className="mb-3 p-0 text-[13px] text-text-soft">What should happen next?</legend>
         {(Object.keys(outcomes) as FeedbackOutcome[]).map((o) => (
           <RadioCard
             key={o}
@@ -98,7 +98,7 @@ export function FeedbackForm({
       </fieldset>
 
       {sections && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label htmlFor={`${id}-section`} className="text-[13px] text-text-soft">
             Applies to
           </label>
@@ -113,7 +113,7 @@ export function FeedbackForm({
         </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <label htmlFor={`${id}-text`} className="text-[13px] text-text-soft">
           Feedback <span className="text-text-muted">(required)</span>
         </label>
@@ -132,7 +132,7 @@ export function FeedbackForm({
         </span>
       </div>
 
-      <div className="flex flex-wrap justify-end gap-2.5">
+      <div className="flex flex-wrap justify-end gap-3">
         <Button onClick={onCancel}>Cancel</Button>
         <Button type="submit" variant="primary" disabled={submitting}>
           Send feedback

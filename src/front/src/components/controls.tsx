@@ -11,10 +11,10 @@ export function Button({ variant = 'secondary', className = '', type = 'button',
 }
 
 const fieldControl =
-  'min-h-[46px] box-border rounded-control border border-line bg-surface-sunken text-text font-[inherit] placeholder:text-text-muted focus:border-ion focus:outline-none'
+  'min-h-12 box-border rounded-control border border-line bg-surface-sunken text-text font-[inherit] placeholder:text-text-muted focus:border-ion focus:outline-none'
 
 export function TextInput({ className = '', ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cx(`${fieldControl} w-full px-3.5`, className)} {...rest} />
+  return <input className={cx(`${fieldControl} w-full px-4`, className)} {...rest} />
 }
 
 export function Select({ className = '', ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
@@ -22,7 +22,7 @@ export function Select({ className = '', ...rest }: SelectHTMLAttributes<HTMLSel
 }
 
 export function Textarea({ className = '', ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cx(`${fieldControl} w-full px-3.5 py-3 leading-normal`, className)} rows={4} {...rest} />
+  return <textarea className={cx(`${fieldControl} w-full px-4 py-3 leading-normal`, className)} rows={4} {...rest} />
 }
 
 interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
@@ -31,8 +31,8 @@ interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'typ
 
 export function Checkbox({ label, className = '', ...rest }: CheckboxProps) {
   return (
-    <label className={`flex min-h-11 cursor-pointer items-center gap-2.5 text-sm text-text-soft ${className}`}>
-      <input type="checkbox" className="size-[18px] accent-ion" {...rest} />
+    <label className={`flex min-h-11 cursor-pointer items-center gap-3 text-sm text-text-soft ${className}`}>
+      <input type="checkbox" className="size-5 accent-ion" {...rest} />
       {label}
     </label>
   )
@@ -48,7 +48,7 @@ interface FieldProps {
 
 export function Field({ id, label, aside, children }: FieldProps) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <label htmlFor={id} className="text-[13px] text-text-soft">
           {label}

@@ -14,7 +14,7 @@ export function LogoMark({ size = 28 }: { size?: number }) {
 
 export function Logo({ size = 28, textSize = 'text-lg' }: { size?: number; textSize?: string }) {
   return (
-    <span className="flex items-center gap-2.5">
+    <span className="flex items-center gap-3">
       <LogoMark size={size} />
       <span className={`font-heading font-semibold tracking-[.01em] text-text ${textSize}`}>{labels.appName}</span>
     </span>

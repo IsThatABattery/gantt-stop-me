@@ -30,9 +30,9 @@ export function ActivityPage() {
         <Eyebrow>
           {labels.project} · {project.name}
         </Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.activity}</h1>
+        <h1 className="mt-2 mb-0 font-heading text-[26px] font-semibold">{labels.activity}</h1>
         {events.data && events.data.length > 0 && (
-          <p className="m-0 mt-1.5 text-[13px] text-text-muted-strong">
+          <p className="m-0 mt-2 text-[13px] text-text-muted-strong">
             {events.data.length} entries · {needsAction > 0 ? `${needsAction} need action` : 'nothing needs you'}
           </p>
         )}

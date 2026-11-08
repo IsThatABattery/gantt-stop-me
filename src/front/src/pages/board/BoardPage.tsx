@@ -279,7 +279,7 @@ function BoardView({ board }: { board: Board }) {
         {rejection && (
           <div
             role="alert"
-            className="mb-4 flex items-center justify-between gap-3 rounded-control border border-critical/60 bg-critical/8 px-3.5 py-2 text-[13px] text-critical"
+            className="mb-4 flex items-center justify-between gap-3 rounded-control border border-critical/60 bg-critical/8 px-4 py-2 text-[13px] text-critical"
           >
             <span>{rejection}</span>
             <button

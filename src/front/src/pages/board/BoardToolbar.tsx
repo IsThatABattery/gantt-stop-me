@@ -14,7 +14,7 @@ interface BoardToolbarProps {
   onClear?: () => void
 }
 
-const kbd = 'rounded border border-line bg-surface px-1.5 font-mono text-[11px] text-text-muted-strong'
+const kbd = 'rounded-control border border-line bg-surface px-2 font-mono text-[11px] text-text-muted-strong'
 
 // The objective filter narrows the cards to one feature. The links open the
 // create dialogs and the objective editor (feature/frontend-forms).

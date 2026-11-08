@@ -3,7 +3,7 @@ import { autonomyLabels, labels, roleLabels } from '../labels/labels'
 import { Icon } from './Icon'
 
 const userSizes = {
-  sm: 'size-[26px] text-[11px]',
+  sm: 'size-7 text-[11px]',
   md: 'size-7 text-[11px]',
   lg: 'size-10 text-sm',
 }
@@ -20,8 +20,8 @@ export function UserAvatar({ user, size = 'md', stacked }: UserAvatarProps) {
     <span
       role="img"
       aria-label={`${roleLabels[user.role]} ${user.initials}`}
-      className={`inline-flex flex-none items-center justify-center rounded-full bg-line font-semibold text-text ${userSizes[size]} ${
-        stacked ? '-mr-1.5 border-2 border-surface' : ''
+      className={`inline-flex flex-none items-center justify-center rounded-control bg-line font-semibold text-text ${userSizes[size]} ${
+        stacked ? '-mr-2 border-2 border-surface' : ''
       }`}
     >
       {user.initials}
@@ -50,7 +50,7 @@ interface AgentAvatarProps {
 }
 
 export function AgentAvatar({ agent, active, hail, size = 'lg' }: AgentAvatarProps) {
-  const box = size === 'lg' ? 'size-10 rounded-[10px]' : 'size-7 rounded-lg'
+  const box = size === 'lg' ? 'size-10 rounded-control' : 'size-7 rounded-control'
   return (
     <span
       role="img"
@@ -60,10 +60,10 @@ export function AgentAvatar({ agent, active, hail, size = 'lg' }: AgentAvatarPro
       }`}
     >
       <Icon name="helmet" size={size === 'lg' ? 20 : 16} />
-      <span className="absolute -right-1.5 -bottom-1.5 rounded-full bg-background p-px">
+      <span className="absolute -right-2 -bottom-2 rounded-control bg-background ring-1 ring-background">
         <AutonomyRings level={agent.autonomy} />
       </span>
-      {hail && <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-background bg-warning" />}
+      {hail && <span className="absolute -top-1 -right-1 size-3 rounded-control border-2 border-background bg-warning" />}
     </span>
   )
 }
@@ -78,7 +78,7 @@ interface AgentTagProps {
 export function AgentTag({ agent, active, hail }: AgentTagProps) {
   return (
     <span
-      className={`relative inline-flex h-[26px] items-center gap-1.5 rounded-lg border border-astronaut pr-2 pl-1 text-xs text-astronaut-text ${
+      className={`relative inline-flex h-7 items-center gap-2 rounded-control border border-astronaut pr-2 pl-1 text-xs text-astronaut-text ${
         active ? 'animate-orbit-pulse' : ''
       }`}
     >
@@ -88,7 +88,7 @@ export function AgentTag({ agent, active, hail }: AgentTagProps) {
       <span className="sr-only">, {autonomyLabels[agent.autonomy]}</span>
       <AutonomyRings level={agent.autonomy} size={12} />
       {hail && (
-        <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-surface bg-warning">
+        <span className="absolute -top-1 -right-1 size-3 rounded-control border-2 border-surface bg-warning">
           <span className="sr-only">, {labels.hail} raised</span>
         </span>
       )}

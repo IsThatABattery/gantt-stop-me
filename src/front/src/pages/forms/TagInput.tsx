@@ -27,19 +27,19 @@ export function TagInput({ id, label, tags, onChange }: TagInputProps) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <label htmlFor={id} className="text-[13px] text-text-soft">
         {label}
       </label>
-      <div className="flex min-h-[46px] flex-wrap items-center gap-2 rounded-control border border-line bg-surface-sunken px-2.5 py-1.5 focus-within:border-ion">
+      <div className="flex min-h-12 flex-wrap items-center gap-2 rounded-control border border-line bg-surface-sunken px-3 py-2 focus-within:border-ion">
         {tags.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-lg border border-line-strong py-0.5 pr-0.5 pl-2.5 text-[13px]">
+          <span key={tag} className="inline-flex items-center gap-1 rounded-control border border-line-strong py-1 pr-1 pl-3 text-[13px]">
             {tag}
             <button
               type="button"
               aria-label={`Remove tag ${tag}`}
               onClick={() => onChange(tags.filter((t) => t !== tag))}
-              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-text-muted-strong hover:text-text"
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-control border-0 bg-transparent text-text-muted-strong hover:text-text"
             >
               ×
             </button>

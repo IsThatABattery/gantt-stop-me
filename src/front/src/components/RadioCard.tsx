@@ -12,7 +12,7 @@ export function RadioCard({ label, description, tone = 'ion', checked, className
   const on = tone === 'astronaut' ? 'border-astronaut bg-astronaut/10' : 'border-ion bg-ion/8'
   return (
     <label
-      className={`flex cursor-pointer flex-col gap-1.5 rounded-control border p-3.5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ion ${
+      className={`flex cursor-pointer flex-col gap-2 rounded-control border p-4 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ion ${
         checked ? on : 'border-line'
       } ${className}`}
     >

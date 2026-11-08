@@ -17,15 +17,15 @@ const toneText: Record<Tone, string> = {
 interface ChipProps {
   tone: Tone
   children: ReactNode
-  /** pill (999px) for status, tag (8px) for counts and labels */
+  /** pill for status, tag for counts and labels; both 4px corners, the tag a little wider */
   shape?: 'pill' | 'tag'
   className?: string
 }
 
 export function Chip({ tone, children, shape = 'pill', className = '' }: ChipProps) {
-  const shapeClass = shape === 'pill' ? 'rounded-full px-2 py-0.5' : 'rounded-lg px-2.5 py-[3px]'
+  const shapeClass = shape === 'pill' ? 'rounded-control px-2 py-1' : 'rounded-control px-3 py-1'
   return (
-    <span className={cx(`inline-flex items-center gap-1.5 border text-xs leading-[18px] whitespace-nowrap ${shapeClass} ${toneText[tone]}`, className)}>
+    <span className={cx(`inline-flex items-center gap-2 border text-xs leading-[18px] whitespace-nowrap ${shapeClass} ${toneText[tone]}`, className)}>
       {children}
     </span>
   )

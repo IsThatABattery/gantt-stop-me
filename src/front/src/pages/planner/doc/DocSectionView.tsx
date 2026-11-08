@@ -8,7 +8,7 @@ export function WithTargets({ text }: { text: string }) {
     <>
       {parts.map((part, i) =>
         part === '[TARGET]' ? (
-          <mark key={i} className="rounded bg-warning/20 px-1 font-mono text-[0.9em] text-warning">
+          <mark key={i} className="rounded-control bg-warning/20 px-1 font-mono text-[0.9em] text-warning">
             [TARGET]
             <span className="sr-only"> (placeholder, needs a real value)</span>
           </mark>

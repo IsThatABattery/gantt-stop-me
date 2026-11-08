@@ -28,7 +28,7 @@ export function drawTrail(from: DOMRect, to: DOMRect) {
     top: `${y1 - 2}px`,
     width: `${length}px`,
     height: '4px',
-    borderRadius: '999px',
+    borderRadius: '4px',
     pointerEvents: 'none',
     zIndex: '50',
     transformOrigin: '0 50%',

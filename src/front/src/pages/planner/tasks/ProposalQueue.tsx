@@ -13,7 +13,7 @@ interface ProposalQueueProps {
 export function ProposalQueue({ proposals, selectedId, onSelect }: ProposalQueueProps) {
   return (
     <nav aria-label={`${labels.task} proposals`} className="flex min-w-0 max-w-[400px] flex-[1_1_320px] flex-col">
-      <ol className="m-0 flex list-none flex-col gap-2.5 p-0">
+      <ol className="m-0 flex list-none flex-col gap-3 p-0">
         {proposals.map((p) => {
           const selected = p.id === selectedId
           return (
@@ -22,7 +22,7 @@ export function ProposalQueue({ proposals, selectedId, onSelect }: ProposalQueue
                 type="button"
                 aria-current={selected ? 'true' : undefined}
                 onClick={() => onSelect(p.id)}
-                className={`flex w-full cursor-pointer flex-col gap-2 rounded-card border p-3.5 text-left font-[inherit] text-text ${
+                className={`flex w-full cursor-pointer flex-col gap-2 rounded-card border p-4 text-left font-[inherit] text-text ${
                   selected ? 'border-ion bg-ion/8' : 'border-line bg-surface hover:border-line-strong'
                 }`}
               >

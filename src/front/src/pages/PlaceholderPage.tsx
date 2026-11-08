@@ -18,14 +18,14 @@ export function PlaceholderPage({ title, branch, doc }: PlaceholderPageProps) {
     <div className="flex flex-col gap-6 px-8 py-7">
       <header>
         <Eyebrow>{project ? `${labels.project} · ${project.name}` : labels.appName}</Eyebrow>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{title}</h1>
+        <h1 className="mt-2 mb-0 font-heading text-[26px] font-semibold">{title}</h1>
       </header>
       {branch && doc ? (
         <NotBuilt branch={branch} doc={doc} />
       ) : (
         <div
           role="status"
-          className="max-w-xl rounded-[14px] border border-dashed border-line-strong bg-surface/60 p-6 leading-normal text-text-muted-strong"
+          className="max-w-xl rounded-card border border-dashed border-line-strong bg-surface/60 p-6 leading-normal text-text-muted-strong"
         >
           <div className="mb-1 font-medium text-text">Not built yet</div>
           This screen needs a design before it gets a branch.

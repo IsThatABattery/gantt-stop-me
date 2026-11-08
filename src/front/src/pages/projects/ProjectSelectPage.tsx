@@ -71,9 +71,9 @@ export function ProjectSelectPage() {
             <Eyebrow>
               {labels.flightDeck} · {liveCount} {labels.projects}
             </Eyebrow>
-            <h1 className="mt-1.5 mb-0 font-heading text-[32px] font-semibold">{labels.selectProject}</h1>
+            <h1 className="mt-2 mb-0 font-heading text-[32px] font-semibold">{labels.selectProject}</h1>
           </div>
-          <button type="button" onClick={() => setCreating(true)} className={buttonClass('primary', 'min-h-[46px] px-5')}>
+          <button type="button" onClick={() => setCreating(true)} className={buttonClass('primary', 'min-h-12 px-5')}>
             <Icon name="plus" size={16} strokeWidth={2.25} />
             {labels.newProject}
           </button>
@@ -82,7 +82,7 @@ export function ProjectSelectPage() {
         {needs.top && (
           <section
             aria-label="Needs your attention"
-            className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-warning bg-warning/6 px-[18px] py-3.5"
+            className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-warning bg-warning/6 px-5 py-4"
           >
             <span className="flex items-center gap-2 font-semibold text-warning">
               <Icon name="alert" size={16} />
@@ -165,7 +165,7 @@ export function ProjectSelectPage() {
               <button
                 type="button"
                 onClick={() => setCreating(true)}
-                className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-[14px] border border-dashed border-line-strong bg-transparent p-5 font-[inherit] text-text-muted-strong hover:border-ion"
+                className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center gap-3 rounded-card border border-dashed border-line-strong bg-transparent p-5 font-[inherit] text-text-muted-strong hover:border-ion"
               >
                 <Icon name="plus" size={28} />
                 <span className="font-medium text-text">{labels.newProject}</span>

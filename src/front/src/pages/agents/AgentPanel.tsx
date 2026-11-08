@@ -68,10 +68,10 @@ export function AgentPanel({ row, projectId }: { row: AgentRow; projectId: strin
       </div>
 
       {openHail && (
-        <form onSubmit={send} noValidate className="mt-4 rounded-control border border-warning bg-warning/6 p-3.5">
+        <form onSubmit={send} noValidate className="mt-4 rounded-control border border-warning bg-warning/6 p-4">
           <div className="text-[13px] font-medium text-warning">{agent.name} asks</div>
-          <p className="m-0 mt-1.5 leading-normal">{openHail.question}</p>
-          <div className="mt-3 flex flex-wrap gap-2.5">
+          <p className="m-0 mt-2 leading-normal">{openHail.question}</p>
+          <div className="mt-3 flex flex-wrap gap-3">
             <label htmlFor={`${id}-reply`} className="sr-only">
               Reply to {agent.name}
             </label>
@@ -87,7 +87,7 @@ export function AgentPanel({ row, projectId }: { row: AgentRow; projectId: strin
               }}
               className="flex-[1_1_260px] bg-surface"
             />
-            <Button type="submit" variant="primary" disabled={answer.isPending} className="px-[18px]">
+            <Button type="submit" variant="primary" disabled={answer.isPending} className="px-5">
               {actionLabels.reply}
             </Button>
           </div>
@@ -99,7 +99,7 @@ export function AgentPanel({ row, projectId }: { row: AgentRow; projectId: strin
         </form>
       )}
 
-      <h3 className="eyebrow m-0 mt-[18px]">Trace</h3>
+      <h3 className="eyebrow m-0 mt-5">Trace</h3>
       {trace.length === 0 ? (
         <p className="m-0 mt-2 text-[13px] text-text-muted">No trace yet.</p>
       ) : (

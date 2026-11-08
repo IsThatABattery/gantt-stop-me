@@ -74,7 +74,7 @@ export function TaskCard({ task, epic, feature, owner, to, overlay = false }: Ta
           : 'transition-[border-color,translate] hover:-translate-y-px hover:border-ion focus-visible:-translate-y-px focus-visible:border-ion'
       }`}
     >
-      <div className="flex flex-col gap-2.5 p-3">
+      <div className="flex flex-col gap-3 p-3">
         <div className="flex items-center justify-between">
           <span className="font-mono text-xs text-text-muted">{task.key}</span>
           {epic && (
@@ -86,7 +86,7 @@ export function TaskCard({ task, epic, feature, owner, to, overlay = false }: Ta
         </div>
         <div className="line-clamp-2 text-sm leading-[1.4] font-medium">{task.title}</div>
         {feature && (
-          <div className="flex items-center gap-1.5 text-xs text-text-muted-strong">
+          <div className="flex items-center gap-2 text-xs text-text-muted-strong">
             <Icon name="target" size={14} />
             <span className="sr-only">{labels.feature}: </span>
             {feature.name}
@@ -104,7 +104,7 @@ export function TaskCard({ task, epic, feature, owner, to, overlay = false }: Ta
           </Chip>
         </div>
         {task.status === 'blocked' && task.blockedReason && (
-          <div className="flex items-start gap-1.5 rounded-lg border border-critical/60 bg-critical/8 px-2 py-1.5 text-xs text-critical">
+          <div className="flex items-start gap-2 rounded-control border border-critical/60 bg-critical/8 px-2 py-2 text-xs text-critical">
             <span className="sr-only">Blocked because: </span>
             {task.blockedReason}
           </div>

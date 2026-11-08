@@ -74,12 +74,12 @@ function NewItemForm({ kind, project, options, onCancel }: NewItemFormProps) {
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-[18px] p-7">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-5 p-7">
       <div className="pr-10">
         <Eyebrow>
           {project.name.toUpperCase()} · {t.eyebrowNew.toUpperCase()}
         </Eyebrow>
-        <h2 className="mt-1.5 mb-0 font-heading text-2xl font-semibold">{t.titleNew}</h2>
+        <h2 className="mt-2 mb-0 font-heading text-2xl font-semibold">{t.titleNew}</h2>
         <p className="mt-2 mb-0 leading-normal text-text-muted-strong">{t.intro}</p>
       </div>
 
@@ -91,7 +91,7 @@ function NewItemForm({ kind, project, options, onCancel }: NewItemFormProps) {
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap justify-end gap-2.5 border-t border-line-soft pt-4">
+      <div className="mt-2 flex flex-wrap justify-end gap-3 border-t border-line-soft pt-4">
         {kind === 'feature' && (
           <Link
             to={`/projects/${project.id}/plan/${SAMPLE_BRIEFING}/briefing`}
@@ -102,7 +102,7 @@ function NewItemForm({ kind, project, options, onCancel }: NewItemFormProps) {
           </Link>
         )}
         <Button onClick={onCancel}>{actionLabels.cancel}</Button>
-        <Button type="submit" variant="primary" disabled={mutation.isPending} className="px-[22px]">
+        <Button type="submit" variant="primary" disabled={mutation.isPending} className="px-6">
           {kind === 'feature' ? actionLabels.createFeature : actionLabels.createTask}
         </Button>
       </div>

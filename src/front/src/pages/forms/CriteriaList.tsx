@@ -25,7 +25,7 @@ export function CriteriaList({ heading, help, criteria, onChange }: CriteriaList
   }
 
   return (
-    <section aria-labelledby="criteria-heading" className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-surface p-6">
+    <section aria-labelledby="criteria-heading" className="flex flex-col gap-4 rounded-card border border-line bg-surface p-6">
       <div className="flex items-baseline justify-between gap-3">
         <h2 id="criteria-heading" className="m-0 font-heading text-lg font-semibold">
           {heading}
@@ -44,7 +44,7 @@ export function CriteriaList({ heading, help, criteria, onChange }: CriteriaList
                 checked={c.met}
                 onChange={(e) => update(c.id, { met: e.target.checked })}
                 aria-label={`Met: ${c.text || `criterion ${i + 1}`}`}
-                className="size-[18px] flex-none accent-good"
+                className="size-5 flex-none accent-good"
               />
               <input
                 type="text"
@@ -63,7 +63,7 @@ export function CriteriaList({ heading, help, criteria, onChange }: CriteriaList
                 type="button"
                 aria-label={`Remove criterion ${i + 1}`}
                 onClick={() => onChange(criteria.filter((x) => x.id !== c.id))}
-                className="inline-flex size-9 flex-none cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-text-muted-strong hover:text-text"
+                className="inline-flex size-9 flex-none cursor-pointer items-center justify-center rounded-control border-0 bg-transparent text-text-muted-strong hover:text-text"
               >
                 ×
               </button>

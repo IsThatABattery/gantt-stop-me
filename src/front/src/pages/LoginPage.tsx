@@ -42,15 +42,15 @@ export function LoginPage() {
       <div className="box-border flex w-full max-w-[420px] flex-col gap-5 rounded-dialog border border-line bg-surface/95 p-8">
         <div>
           <Eyebrow>{labels.flightDeckAccess}</Eyebrow>
-          <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">Sign in</h1>
+          <h1 className="mt-2 mb-0 font-heading text-[26px] font-semibold">Sign in</h1>
         </div>
 
-        <div className="flex flex-col gap-2.5">
-          <Button className="min-h-[46px] bg-surface-sunken font-medium">
+        <div className="flex flex-col gap-3">
+          <Button className="min-h-12 bg-surface-sunken font-medium">
             <Icon name="github" />
             Continue with GitHub
           </Button>
-          <Button className="min-h-[46px] bg-surface-sunken font-medium">
+          <Button className="min-h-12 bg-surface-sunken font-medium">
             <Icon name="lock" />
             Continue with SSO
           </Button>
@@ -63,7 +63,7 @@ export function LoginPage() {
         </div>
 
         <form onSubmit={onSubmit} className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-4">
             <Field id="email" label="Email">
               <TextInput
                 id="email"

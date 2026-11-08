@@ -13,13 +13,13 @@ export function DrawerHeader({ detail }: { detail: TaskDetail }) {
 
   return (
     <header className="flex flex-col gap-3 border-b border-line-soft px-6 pt-5 pb-4">
-      <div className="flex flex-wrap items-center gap-2.5 pr-12">
+      <div className="flex flex-wrap items-center gap-3 pr-12">
         <span className="font-mono text-[13px] text-text-muted">{task.key}</span>
         <Chip tone={look.tone}>
           {look.icon && <Icon name={look.icon} size={12} />}
           {columnLabels[task.column].name} · {plainStatus[task.status]}
         </Chip>
-        <Link to={`/projects/${task.projectId}/tasks/${task.id}/edit`} className={buttonClass('secondary', 'ml-auto px-3.5')}>
+        <Link to={`/projects/${task.projectId}/tasks/${task.id}/edit`} className={buttonClass('secondary', 'ml-auto px-4')}>
           <Icon name="edit" size={16} />
           {actionLabels.editTask}
         </Link>
@@ -37,7 +37,7 @@ export function DrawerHeader({ detail }: { detail: TaskDetail }) {
         <span>{sprint ? labels.sprintName(sprint.number) : labels.notScheduled}</span>
       </div>
       {task.status === 'blocked' && task.blockedReason && (
-        <div className="flex items-start gap-1.5 rounded-lg border border-critical/60 bg-critical/8 px-2.5 py-2 text-[13px] text-critical">
+        <div className="flex items-start gap-2 rounded-control border border-critical/60 bg-critical/8 px-3 py-2 text-[13px] text-critical">
           <Icon name="alert" size={16} />
           <span>
             <span className="sr-only">Blocked because: </span>
@@ -62,7 +62,7 @@ function Owner({ detail }: { detail: TaskDetail }) {
   }
   const autonomy = task.autonomyOverride ?? assignee.agent.autonomy
   return (
-    <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-astronaut pr-2.5 pl-1.5 text-astronaut-text">
+    <span className="inline-flex h-7 items-center gap-2 rounded-control border border-astronaut pr-3 pl-2 text-astronaut-text">
       <Icon name="helmet" size={16} className="text-astronaut" />
       <span className="sr-only">{labels.agent} </span>
       {assignee.agent.name} · {autonomyLabels[autonomy]}

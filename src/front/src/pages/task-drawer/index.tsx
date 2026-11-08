@@ -59,7 +59,7 @@ function DrawerBody({ detail, notice }: { detail: TaskDetail; notice: string | n
   const showTrace = detail.assignee?.kind === 'agent' || detail.trace.length > 0
   return (
     <>
-      <div className="h-[3px]" style={{ background: detail.epic?.color ?? 'var(--color-ion)' }} />
+      <div className="h-1" style={{ background: detail.epic?.color ?? 'var(--color-ion)' }} />
       <DrawerHeader detail={detail} />
       <div role="status" aria-live="polite">
         {notice && (

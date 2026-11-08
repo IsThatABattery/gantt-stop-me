@@ -62,11 +62,11 @@ function BriefTab({ detail }: { detail: TaskDetail }) {
         ) : (
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {task.acceptanceCriteria.map((c) => (
-              <li key={c.id} className="flex items-start gap-2.5 text-[13px] leading-normal">
+              <li key={c.id} className="flex items-start gap-3 text-[13px] leading-normal">
                 {c.met ? (
-                  <Icon name="check" size={16} className="mt-0.5 flex-none text-good" />
+                  <Icon name="check" size={16} className="mt-1 flex-none text-good" />
                 ) : (
-                  <span className="mt-[3px] size-3.5 flex-none rounded-full border border-text-muted" aria-hidden="true" />
+                  <span className="mt-1 size-4 flex-none rounded-control border border-text-muted" aria-hidden="true" />
                 )}
                 <span className={c.met ? 'text-text-soft' : 'text-text'}>
                   <span className="sr-only">{c.met ? 'Met: ' : 'Not met: '}</span>
@@ -82,7 +82,7 @@ function BriefTab({ detail }: { detail: TaskDetail }) {
         <dt className="text-text-muted">{formLabels.priority}</dt>
         <dd className="m-0">{priorityLabels[task.priority]}</dd>
         <dt className="text-text-muted">{formLabels.tags}</dt>
-        <dd className="m-0 flex flex-wrap gap-1.5">
+        <dd className="m-0 flex flex-wrap gap-2">
           {task.tags.length === 0 ? <span className="text-text-muted">None</span> : task.tags.map((t) => <Chip key={t} tone="neutral" shape="tag">{t}</Chip>)}
         </dd>
       </dl>
@@ -153,7 +153,7 @@ function FlightLogTab({ detail }: { detail: TaskDetail }) {
   return (
     <div className={panel}>
       {open.map((h) => (
-        <div key={h.id} className="flex flex-col gap-2 rounded-control border border-warning bg-warning/6 p-3.5">
+        <div key={h.id} className="flex flex-col gap-2 rounded-control border border-warning bg-warning/6 p-4">
           <Chip tone="warning" className="self-start">
             <Icon name="chat" size={12} />
             {labels.hail} · {labels.waitingOnYou}
@@ -242,7 +242,7 @@ function CargoTab({ pr }: { pr: PullRequest | null }) {
   const checks = checksLook[pr.checks]
   return (
     <div className={panel}>
-      <div className="flex flex-col gap-2 rounded-control border border-line bg-surface-sunken p-3.5">
+      <div className="flex flex-col gap-2 rounded-control border border-line bg-surface-sunken p-4">
         <div className="flex items-center justify-between gap-3 text-[13px]">
           <span className="inline-flex min-w-0 items-center gap-2">
             <Icon name="pr" size={16} className="flex-none text-ion" />

@@ -188,8 +188,8 @@ export function SettingsForm({ settings, user }: { settings: WorkspaceSettings; 
       <Section title={settingsLabels.approvalRules}>
         <ul className="m-0 list-none p-0">
           {settings.approvalRules.map((r) => (
-            <li key={r.id} className="flex min-h-14 items-center gap-4 border-t border-line-soft py-2.5">
-              <span className="flex flex-1 flex-col gap-0.5">
+            <li key={r.id} className="flex min-h-14 items-center gap-4 border-t border-line-soft py-3">
+              <span className="flex flex-1 flex-col gap-1">
                 <span className="font-medium">{r.title}</span>
                 <span className="text-[13px] text-text-muted-strong">{r.description}</span>
               </span>
@@ -254,10 +254,10 @@ export function SettingsForm({ settings, user }: { settings: WorkspaceSettings; 
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-2.5">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div role="status" className="mr-auto text-[13px]">
           {saved && (
-            <span className="inline-flex items-center gap-1.5 text-good">
+            <span className="inline-flex items-center gap-2 text-good">
               <Icon name="check" size={16} />
               Settings saved
             </span>
@@ -268,7 +268,7 @@ export function SettingsForm({ settings, user }: { settings: WorkspaceSettings; 
         <Button onClick={cancel} disabled={saving}>
           {actionLabels.cancel}
         </Button>
-        <Button variant="primary" onClick={save} disabled={saving} className="px-[22px]">
+        <Button variant="primary" onClick={save} disabled={saving} className="px-6">
           {actionLabels.save}
         </Button>
       </div>
@@ -279,12 +279,12 @@ export function SettingsForm({ settings, user }: { settings: WorkspaceSettings; 
 function Section({ id, title, intro, children }: { id?: string; title: string; intro?: string; children: ReactNode }) {
   const headingId = useId()
   return (
-    <section id={id} aria-labelledby={headingId} className="flex scroll-mt-6 flex-col gap-[18px] rounded-[14px] border border-line bg-surface p-6">
+    <section id={id} aria-labelledby={headingId} className="flex scroll-mt-6 flex-col gap-5 rounded-card border border-line bg-surface p-6">
       <div>
         <h2 id={headingId} className="m-0 font-heading text-lg font-semibold">
           {title}
         </h2>
-        {intro && <p className="m-0 mt-1.5 leading-normal text-text-muted-strong">{intro}</p>}
+        {intro && <p className="m-0 mt-2 leading-normal text-text-muted-strong">{intro}</p>}
       </div>
       {children}
     </section>

@@ -20,7 +20,7 @@ export function Counter({ tone, count, label, onClick }: CounterProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-control border px-3.5 text-text ${t.box}`}
+      className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-control border px-4 text-text ${t.box}`}
     >
       <span className={`font-mono text-lg ${t.num}`}>{count}</span>
       {label}

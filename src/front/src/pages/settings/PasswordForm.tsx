@@ -82,7 +82,7 @@ export function PasswordForm() {
         </Button>
         <div role="status" className="text-[13px]">
           {done && (
-            <span className="inline-flex items-center gap-1.5 text-good">
+            <span className="inline-flex items-center gap-2 text-good">
               <Icon name="check" size={16} />
               Password changed
             </span>

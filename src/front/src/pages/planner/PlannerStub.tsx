@@ -9,7 +9,7 @@ export function PlannerStub({ step, branch, doc }: { step: number; branch: strin
         <div className="eyebrow">
           Step {step + 1} · {plannerLabels.steps[step]}
         </div>
-        <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{plannerLabels.steps[step]}</h1>
+        <h1 className="mt-2 mb-0 font-heading text-[26px] font-semibold">{plannerLabels.steps[step]}</h1>
       </div>
       <NotBuilt branch={branch} doc={doc} />
     </div>

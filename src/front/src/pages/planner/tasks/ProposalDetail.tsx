@@ -104,8 +104,8 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
 
   return (
     <article aria-label={`Selected ${labels.task.toLowerCase()}`} className={card}>
-      <div className="flex flex-wrap items-center gap-2.5">
-        <Chip tone={statusTone[p.status]} className="px-2.5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Chip tone={statusTone[p.status]} className="px-3">
           {proposalStatusLabels[p.status]}
         </Chip>
         <span className="font-mono text-xs text-text-muted">
@@ -182,10 +182,10 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
       </dl>
 
       {(p.agentNote || p.source) && (
-        <div className="rounded-control border border-astronaut bg-astronaut/8 px-4 py-3.5 leading-normal">
+        <div className="rounded-control border border-astronaut bg-astronaut/8 px-4 py-4 leading-normal">
           <span className="text-astronaut-text">{plannerLabels.planningAgent}</span>
           {p.source && <> · Source: doc section {p.source}.</>} {p.agentNote}
-          {quote && <blockquote className="mx-0 mt-2.5 mb-0 border-l-2 border-astronaut pl-3 text-[13px] text-text-muted-strong">{quote}</blockquote>}
+          {quote && <blockquote className="mx-0 mt-3 mb-0 border-l-2 border-astronaut pl-3 text-[13px] text-text-muted-strong">{quote}</blockquote>}
         </div>
       )}
 
@@ -197,7 +197,7 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
 
       {open ? (
         <>
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap gap-3">
             <Button variant="primary" onClick={doApprove} disabled={approve.isPending}>
               {plannerLabels.approveTask}
             </Button>
@@ -228,7 +228,7 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
   )
 }
 
-const card = 'flex min-w-0 flex-[999_1_520px] flex-col gap-5 rounded-[14px] border border-line bg-surface p-7'
+const card = 'flex min-w-0 flex-[999_1_520px] flex-col gap-5 rounded-card border border-line bg-surface p-7'
 
 function Fact({ term, children }: { term: string; children: ReactNode }) {
   return (

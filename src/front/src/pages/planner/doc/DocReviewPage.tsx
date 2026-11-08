@@ -67,16 +67,16 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
     <div className="flex flex-col gap-6">
       <div>
         <div className="eyebrow">STEP 2 · {plannerLabels.steps[1].toUpperCase()}</div>
-        <h1 className="mt-1.5 mb-0 font-heading text-[28px] font-semibold">
+        <h1 className="mt-2 mb-0 font-heading text-[28px] font-semibold">
           {mode === 'deny' ? `Deny the ${featureWord} doc` : `Review the ${featureWord} doc`}
         </h1>
       </div>
 
       <div className="flex flex-wrap items-start gap-6">
-        <article aria-label={`${labels.feature} doc`} className="flex min-w-0 flex-[999_1_600px] flex-col gap-5 rounded-[14px] border border-line bg-surface p-8">
+        <article aria-label={`${labels.feature} doc`} className="flex min-w-0 flex-[999_1_600px] flex-col gap-5 rounded-card border border-line bg-surface p-8">
           <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <Chip tone={statusTone[draft.status]} className="px-2.5">
+            <div className="flex flex-wrap items-center gap-3">
+              <Chip tone={statusTone[draft.status]} className="px-3">
                 {draftStatusLabels[draft.status]}
               </Chip>
               <span className="text-xs text-text-muted">
@@ -109,7 +109,7 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
           className="flex min-w-0 flex-[1_1_380px] flex-col gap-4"
         >
           {mode === 'deny' ? (
-            <div className="rounded-[14px] border border-line bg-surface-sunken p-6">
+            <div className="rounded-card border border-line bg-surface-sunken p-6">
               <FeedbackForm
                 heading="Why are you denying this doc?"
                 intro={`The briefing ${agentWord} will revise the doc and bring it back for review. Your feedback stays attached to this version.`}
@@ -161,8 +161,8 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
           )}
 
           {draft.comments.length > 0 && (
-            <section aria-labelledby="comments-h" className="rounded-[14px] border border-line bg-surface-sunken p-5">
-              <h3 id="comments-h" className="mt-0 mb-2.5 font-heading text-[15px] font-semibold">
+            <section aria-labelledby="comments-h" className="rounded-card border border-line bg-surface-sunken p-5">
+              <h3 id="comments-h" className="mt-0 mb-3 font-heading text-[15px] font-semibold">
                 Comments ({draft.comments.length})
               </h3>
               <ul className="m-0 flex list-none flex-col gap-3 p-0">
@@ -192,7 +192,7 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
 
 function Panel({ title, tone, children }: { title: string; tone: string; children: ReactNode }) {
   return (
-    <section className={`flex flex-col gap-3 rounded-[14px] border bg-surface-sunken p-6 ${tone}`}>
+    <section className={`flex flex-col gap-3 rounded-card border bg-surface-sunken p-6 ${tone}`}>
       <h2 className="m-0 font-heading text-lg font-semibold">{title}</h2>
       {children}
     </section>

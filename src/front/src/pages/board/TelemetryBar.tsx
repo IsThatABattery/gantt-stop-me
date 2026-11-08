@@ -36,10 +36,10 @@ export function TelemetryBar({ project, sprint, counts, active, onToggle }: Tele
           {labels.project} · {project.name}
           {sprint && ` · ${labels.sprintName(sprint.number)}`}
         </div>
-        <h1 className="mt-1.5 mb-0 font-heading text-2xl font-semibold">{sprint ? sprint.goal : project.name}</h1>
+        <h1 className="mt-2 mb-0 font-heading text-2xl font-semibold">{sprint ? sprint.goal : project.name}</h1>
       </div>
 
-      <div className="flex items-center gap-3 rounded-control border border-line bg-surface px-3.5 py-2">
+      <div className="flex items-center gap-3 rounded-control border border-line bg-surface px-4 py-2">
         {sprint ? (
           <>
             <span className="text-xs text-text-muted">{labels.tMinus}</span>
@@ -65,7 +65,7 @@ export function TelemetryBar({ project, sprint, counts, active, onToggle }: Tele
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2.5">
+      <div className="flex flex-wrap gap-3">
         {counters.map((c) => (
           <FilterCounter
             key={c.filter}
@@ -114,7 +114,7 @@ function FilterCounter({
       type="button"
       aria-pressed={pressed}
       onClick={onClick}
-      className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-control border px-3.5 text-text ${t.box} ${pressed ? t.on : ''}`}
+      className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-control border px-4 text-text ${t.box} ${pressed ? t.on : ''}`}
     >
       <span className={`font-mono text-lg ${t.num}`}>{count}</span>
       {label}

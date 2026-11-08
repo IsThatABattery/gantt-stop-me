@@ -56,7 +56,7 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
   }
 
   return (
-    <div className="flex flex-[1_1_260px] flex-col gap-2.5 rounded-card border border-line bg-surface-sunken p-5">
+    <div className="flex flex-[1_1_260px] flex-col gap-3 rounded-card border border-line bg-surface-sunken p-5">
       <h3 className="m-0 mb-1 font-heading text-[15px] font-semibold">Controls</h3>
 
       <Button
@@ -107,7 +107,7 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
         </Button>
       )}
 
-      <fieldset className="m-0 mt-1.5 flex flex-col gap-2 border-0 p-0">
+      <fieldset className="m-0 mt-2 flex flex-col gap-2 border-0 p-0">
         <legend className="pb-2 text-xs text-text-muted">{actionLabels.changeAutonomy}</legend>
         {([0, 1, 2] as Autonomy[]).map((level) => {
           const locked = level === 2 && !canGrantFreeFlight
@@ -136,7 +136,7 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
       </fieldset>
 
       {mode === 'recall' && task ? (
-        <div role="alertdialog" aria-labelledby={`${id}-recall`} className="mt-auto flex flex-col gap-2.5 rounded-control border border-critical bg-critical/8 p-3">
+        <div role="alertdialog" aria-labelledby={`${id}-recall`} className="mt-auto flex flex-col gap-3 rounded-control border border-critical bg-critical/8 p-3">
           <p id={`${id}-recall`} className="m-0 text-[13px] leading-normal">
             Recall {agent.name}? {task.key} goes back to the {labels.backlog} and {agent.name} stops work on it.
           </p>

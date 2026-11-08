@@ -55,7 +55,7 @@ export function RosterTile({ row, selected, onSelect }: RosterTileProps) {
         )}
       </span>
       <span className="flex w-full items-center justify-between text-xs text-text-muted">
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-2">
           Autonomy: {autonomyLabels[agent.autonomy]} <AutonomyRings level={agent.autonomy} size={12} />
         </span>
         <span className="font-mono">

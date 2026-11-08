@@ -11,14 +11,14 @@ export function Trace({ steps }: { steps: TraceStep[] }) {
       </h2>
       <ol className="m-0 list-none p-0">
         {steps.map((s, i) => (
-          <li key={s.id} className="flex gap-3.5">
+          <li key={s.id} className="flex gap-4">
             <div className="flex flex-col items-center" aria-hidden="true">
-              <span className={`inline-flex size-[26px] flex-none items-center justify-center rounded-full border font-mono text-xs ${traceTone[s.kind]}`}>
+              <span className={`inline-flex size-7 flex-none items-center justify-center rounded-control border font-mono text-xs ${traceTone[s.kind]}`}>
                 {i + 1}
               </span>
               {i < steps.length - 1 && <span className="min-h-4 w-px flex-1 bg-line" />}
             </div>
-            <div className="min-w-0 pb-[18px]">
+            <div className="min-w-0 pb-5">
               <div className="flex items-baseline gap-2">
                 <span className="font-medium">{traceKindLabels[s.kind]}</span>
                 <time dateTime={s.at} className="font-mono text-xs text-text-muted">

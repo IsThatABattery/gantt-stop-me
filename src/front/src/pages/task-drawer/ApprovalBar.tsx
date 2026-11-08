@@ -87,7 +87,7 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
       <p className="m-0 text-[13px]">{who} is waiting for your call on this payload.</p>
 
       {noting ? (
-        <form onSubmit={sendBack} className="flex flex-col gap-2.5" noValidate>
+        <form onSubmit={sendBack} className="flex flex-col gap-3" noValidate>
           <label htmlFor={noteId} className="text-[13px] text-text-soft">
             What should change? (required)
           </label>
@@ -107,7 +107,7 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
               {noteError}
             </p>
           )}
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={busy} className="flex-[1_1_160px] border-warning text-warning hover:border-warning hover:text-warning">
               Send back for changes
             </Button>
@@ -123,7 +123,7 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
           </div>
         </form>
       ) : (
-        <div className="flex flex-wrap gap-2.5">
+        <div className="flex flex-wrap gap-3">
           <Button variant="primary" disabled={busy} onClick={actions.approve} className="flex-[1_1_160px]">
             {actionLabels.approveLand}
           </Button>

@@ -37,7 +37,7 @@ export function AgentsPage() {
           <Eyebrow>
             {labels.agents} · {active} active · {needsYou} {labels.needsYou.toLowerCase()}
           </Eyebrow>
-          <h1 className="mt-1.5 mb-0 font-heading text-[26px] font-semibold">{labels.agent} console</h1>
+          <h1 className="mt-2 mb-0 font-heading text-[26px] font-semibold">{labels.agent} console</h1>
         </div>
         <Link to={board} className={buttonClass('secondary')}>
           {actionLabels.backToBoard}
