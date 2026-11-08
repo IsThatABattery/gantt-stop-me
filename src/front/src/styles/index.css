@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Tokens from docs/ganttstopme-plan/design/tokens.json. Dark mode only for now. */
+/* Tokens from docs/ganttstopme-plan/design/tokens.json. Dark by default; a light palette follows. */
 @theme {
   --color-background: #070b16;
   --color-surface: #0f1626;
@@ -59,6 +59,20 @@
       box-shadow: 0 0 0 4px rgba(167, 139, 250, 0);
     }
   }
+}
+
+/* Light palette: the same semantic tokens, swapped when the root has data-theme="light". Dark stays the default. */
+:root[data-theme='light'] {
+  --color-background: #f6f8fc;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #eef2f8;
+  --color-line: #d5dce8;
+  --color-line-soft: #e3e8f0;
+  --color-line-strong: #b8c3d6;
+  --color-text: #0f1626;
+  --color-text-soft: #2a3550;
+  --color-text-muted: #5b6780;
+  --color-text-muted-strong: #4a5670;
 }
 
 @layer base {
