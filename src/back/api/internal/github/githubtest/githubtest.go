@@ -135,6 +135,7 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("DELETE /repositories/{id}/issues/{number}/labels/{label}", f.removeLabel)
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/comments", f.createComment)
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/assignees", f.addAssignees)
+	f.mux.HandleFunc("GET /repositories/{id}/assignees", f.listAssignable)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls", f.listPulls)
 	f.mux.HandleFunc("GET /repositories/{id}/pulls/{number}", f.getPull)
 	f.mux.HandleFunc("PUT /repositories/{id}/pulls/{number}/merge", f.mergePull)
@@ -625,11 +626,21 @@ func (f *Fake) editIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Title *string `json:"title"`
-		Body  *string `json:"body"`
-		State *string `json:"state"`
+		Title     *string   `json:"title"`
+		Body      *string   `json:"body"`
+		State     *string   `json:"state"`
+		Assignees *[]string `json:"assignees"`
 	}
 	json.NewDecoder(r.Body).Decode(&in)
+	if in.Assignees != nil {
+		// Like GitHub, a login that cannot be assigned is dropped without an error.
+		is.Assignees = []string{}
+		for _, login := range *in.Assignees {
+			if slices.Contains(f.assignable(rp), login) {
+				is.Assignees = append(is.Assignees, login)
+			}
+		}
+	}
 	if in.Title != nil {
 		is.Title = *in.Title
 	}
@@ -691,6 +702,33 @@ func (f *Fake) createComment(w http.ResponseWriter, r *http.Request) {
 	is.UpdatedAt = time.Now()
 	f.lastID++
 	writeJSON(w, http.StatusCreated, map[string]any{"id": f.lastID, "body": in.Body, "user": author})
+}
+
+// assignable returns the logins of the users granted a role on the repository, sorted, as the ones its issues can
+// be assigned to. The caller holds f.mu.
+func (f *Fake) assignable(rp *Repo) []string {
+	logins := []string{}
+	for token := range rp.roles {
+		if u, ok := f.users[token]; ok {
+			logins = append(logins, u.Login)
+		}
+	}
+	slices.Sort(logins)
+	return logins
+}
+
+// listAssignable serves GET /repositories/{id}/assignees.
+func (f *Fake) listAssignable(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, false)
+	if !ok {
+		return
+	}
+	users := []map[string]any{}
+	for _, login := range f.assignable(rp) {
+		u, _ := f.byLogin(login)
+		users = append(users, map[string]any{"id": u.ID, "login": login, "avatar_url": avatarURL(login)})
+	}
+	writePage(w, r, users, 100)
 }
 
 // addAssignees serves POST /repositories/{id}/issues/{number}/assignees, which needs push access, like GitHub.

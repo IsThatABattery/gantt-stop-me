@@ -13,6 +13,7 @@ const task = (id: number, columnId: number, position: number, extra: Partial<Tas
   url: '',
   runStatus: null,
   needsAttention: null,
+  assignees: [],
   ...extra,
 })
 

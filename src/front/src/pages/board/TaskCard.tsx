@@ -28,7 +28,7 @@ export function TaskCard({ task, to, overlay = false }: TaskCardProps) {
       aria-describedby={overlay ? undefined : 'board-keys'}
       // The board's own drag replaces the browser's native link drag.
       draggable={false}
-      aria-label={`#${task.issueNumber}: ${task.title}${status ? `. ${status}` : ''}`}
+      aria-label={`#${task.issueNumber}: ${task.title}${status ? `. ${status}` : ''}${task.assignees.length ? `. Assigned to ${task.assignees.map((a) => a.login).join(', ')}` : ''}`}
       className={`relative block overflow-hidden rounded-control border bg-surface text-text no-underline outline-none hover:text-text ${
         task.needsAttention ? 'border-critical' : 'border-line'
       } ${overlay ? 'shadow-xl shadow-black/40' : ''} ${
@@ -38,7 +38,16 @@ export function TaskCard({ task, to, overlay = false }: TaskCardProps) {
       }`}
     >
       <div className="flex flex-col gap-2.5 p-3">
-        <span className="font-mono text-xs text-text-muted">#{task.issueNumber}</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-xs text-text-muted">#{task.issueNumber}</span>
+          {task.assignees.length > 0 && (
+            <span className="flex -space-x-1.5" title={task.assignees.map((a) => a.login).join(', ')}>
+              {task.assignees.slice(0, 3).map((a) => (
+                <img key={a.login} src={a.avatarUrl} alt="" className="size-5 rounded-full border border-surface" />
+              ))}
+            </span>
+          )}
+        </div>
         <div className="line-clamp-2 text-sm leading-[1.4] font-medium">{task.title}</div>
         {(run || closed) && (
           <div className="flex flex-wrap items-center gap-2">

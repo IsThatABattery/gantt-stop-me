@@ -231,10 +231,20 @@ func (c *Client) Tarball(ctx context.Context, token string, repoID int64, sha st
 }
 
 // UpdateIssue sets an issue's fields, any of "title", "body" and "state".
-func (c *Client) UpdateIssue(ctx context.Context, token string, repoID int64, number int, fields map[string]string) (Issue, error) {
+func (c *Client) UpdateIssue(ctx context.Context, token string, repoID int64, number int, fields map[string]any) (Issue, error) {
 	var is Issue
 	_, err := c.do(ctx, http.MethodPatch, c.issue(repoID, number), token, nil, fields, &is)
 	return is, err
+}
+
+// Assignable lists the users the repository's issues can be assigned to.
+func (c *Client) Assignable(ctx context.Context, token string, repoID int64) ([]User, error) {
+	users := []User{}
+	_, err := pages(ctx, c, token, c.repo(repoID)+"/assignees?per_page=100", "", func(page []User) bool {
+		users = append(users, page...)
+		return true
+	})
+	return users, err
 }
 
 // AddAssignees assigns logins to an issue and returns the issue as it is now.

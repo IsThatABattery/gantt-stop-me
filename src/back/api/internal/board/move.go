@@ -238,6 +238,6 @@ func (b *Board) relabel(ctx context.Context, token string, p projects.Project, t
 	default:
 		return state, labels, nil
 	}
-	is, err := gh.UpdateIssue(ctx, token, p.RepoID, t.IssueNumber, map[string]string{"state": state})
+	is, err := gh.UpdateIssue(ctx, token, p.RepoID, t.IssueNumber, map[string]any{"state": state})
 	return state, projects.Labels(is), err
 }

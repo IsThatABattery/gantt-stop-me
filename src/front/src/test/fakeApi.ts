@@ -44,6 +44,7 @@ function fresh() {
     url: `https://github.com/ada/gantt/issues/${issueNumber}`,
     runStatus: null,
     needsAttention: null,
+    assignees: [],
     body: '',
     labels: [],
     tests: [],
@@ -56,6 +57,11 @@ function fresh() {
     /** The account the session cookie belongs to; null when signed out */
     signedInId: null as number | null,
     github: { login: 'ada', kind: 'pat' } as GitHubLink | null,
+    /** GET /api/projects/{id}/assignees */
+    assignable: [
+      { login: 'ada', avatarUrl: 'https://avatars.example/ada' },
+      { login: 'bob', avatarUrl: 'https://avatars.example/bob' },
+    ],
     /** GET /api/projects: what the user has opened */
     opened: [] as Project[],
     project,
@@ -295,6 +301,7 @@ export const handlers = [
       url: '',
       runStatus: null,
       needsAttention: null,
+      assignees: [],
       body: String(body.body ?? ''),
       labels: [{ name: 'board:backlog', color: 'ededed' }],
       tests: [],
@@ -311,7 +318,11 @@ export const handlers = [
   route('patch', '/projects/:id/tasks/:taskId', ({ params, body }) => {
     projectAccess(params.id)
     const task = findTask(params.taskId)
-    if (body.title === undefined && body.body === undefined) return fail(400, 'bad_request', 'Send a title or a body.')
+    if (body.title === undefined && body.body === undefined && body.assignees === undefined) return fail(400, 'bad_request', 'Send a title, a body or assignees.')
+    if (body.assignees !== undefined) {
+      // Like GitHub, someone who can't be assigned is dropped.
+      task.assignees = fake.assignable.filter((a) => (body.assignees as string[]).includes(a.login))
+    }
     if (body.title !== undefined) {
       const title = String(body.title).trim()
       if (!title || title.length > 256) return fail(400, 'invalid_title', 'Give the task a title of 1 to 256 characters.')
@@ -319,6 +330,10 @@ export const handlers = [
     }
     if (body.body !== undefined) task.body = String(body.body)
     return HttpResponse.json(brief(task))
+  }),
+  route('get', '/projects/:id/assignees', ({ params }) => {
+    projectAccess(params.id)
+    return HttpResponse.json({ assignees: fake.assignable })
   }),
   route('post', '/projects/:id/tasks/:taskId/move', ({ params, body }) => {
     projectAccess(params.id)

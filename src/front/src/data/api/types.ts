@@ -52,6 +52,13 @@ export interface Task {
   runStatus: RunStatus | null
   /** Why it waits in Testing after a runner error; null while clear */
   needsAttention: string | null
+  /** The issue's assignees, as last read from GitHub */
+  assignees: GitHubUser[]
+}
+
+export interface GitHubUser {
+  login: string
+  avatarUrl: string
 }
 
 export interface Label {

@@ -3,7 +3,10 @@ package board
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"regexp"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -12,21 +15,23 @@ import (
 	"gantt-stop-me/api/internal/projects"
 )
 
-// editTask changes the title or body of a task's issue on GitHub, then the cached title, body and labels, and takes
-// the card's tests from the body.
+// editTask changes the title, body or assignees of a task's issue on GitHub, then the cached title, body, labels and
+// assignees, and takes the card's tests from the body. GitHub drops an assignee who cannot be assigned, so the answer
+// shows who was.
 func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 	p, token, ok := b.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
 	var in struct {
-		Title *string `json:"title"`
-		Body  *string `json:"body"`
+		Title     *string   `json:"title"`
+		Body      *string   `json:"body"`
+		Assignees *[]string `json:"assignees"` // logins; replaces the issue's assignees
 	}
 	if !httpx.Decode(w, r, &in) {
 		return
 	}
-	fields := map[string]string{}
+	fields := map[string]any{}
 	if in.Title != nil {
 		title, ok := validTitle(w, *in.Title)
 		if !ok {
@@ -40,8 +45,15 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 		}
 		fields["body"] = *in.Body
 	}
+	if in.Assignees != nil {
+		logins, ok := validAssignees(w, *in.Assignees)
+		if !ok {
+			return
+		}
+		fields["assignees"] = logins
+	}
 	if len(fields) == 0 {
-		httpx.Error(w, http.StatusBadRequest, "bad_request", "Change the title or the body.")
+		httpx.Error(w, http.StatusBadRequest, "bad_request", "Change the title, the body or the assignees.")
 		return
 	}
 	// Under the project's lock, as a tests edit is, so neither writes the issue body over the other's.
@@ -91,4 +103,25 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, t)
+}
+
+// maxAssignees is GitHub's limit on an issue's assignees.
+const maxAssignees = 10
+
+// login is a GitHub login: letters, digits and single hyphens, not at either end, at most 39 characters.
+var login = regexp.MustCompile(`^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$`)
+
+// validAssignees checks a task's new assignees, or answers 400 invalid_assignees and returns false.
+func validAssignees(w http.ResponseWriter, logins []string) ([]string, bool) {
+	if len(logins) > maxAssignees {
+		httpx.Error(w, http.StatusBadRequest, "invalid_assignees", fmt.Sprintf("Assign at most %d people.", maxAssignees))
+		return nil, false
+	}
+	for i, l := range logins {
+		if !login.MatchString(l) || slices.Contains(logins[:i], l) {
+			httpx.Error(w, http.StatusBadRequest, "invalid_assignees", "Each assignee must be a GitHub login, once.")
+			return nil, false
+		}
+	}
+	return logins, true
 }

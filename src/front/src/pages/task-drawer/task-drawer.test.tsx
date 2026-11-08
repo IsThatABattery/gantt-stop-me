@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import { fake } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
 async function openDrawer(id: number) {
@@ -46,5 +47,15 @@ describe('payload drawer', () => {
     const { router } = await openDrawer(7)
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1'))
+  })
+})
+
+describe('assignees', () => {
+  it('assigns people to the task on GitHub', async () => {
+    renderApp('/projects/1/tasks/7')
+    await userEvent.click(await screen.findByLabelText('Assignees'))
+    await userEvent.click(screen.getByRole('option', { name: 'bob' }))
+    await waitFor(() => expect(fake.requests.find((r) => r.method === 'PATCH')?.body).toEqual({ assignees: ['bob'] }))
+    expect(fake.tasks.find((t) => t.id === 7)?.assignees.map((a) => a.login)).toEqual(['bob'])
   })
 })

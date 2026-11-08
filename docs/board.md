@@ -241,7 +241,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
 
 ## Edit task
 
-Changes the title or body of a task's issue on GitHub.
+Changes the title, body or assignees of a task's issue on GitHub. GitHub drops an assignee who cannot be assigned to the repository's issues without an error, so the answer's `assignees` show who was.
 
 `PATCH /api/projects/{id}/tasks/{taskID}`
 
@@ -252,8 +252,11 @@ Changes the title or body of a task's issue on GitHub.
 | `session` | cookie | string | required |
 | `id` | path | integer | a project's `id` |
 | `taskID` | path | integer | a task's `id` in the project |
-| `title` | body | string | trimmed, 1 to 256 characters; optional when `body` is sent |
-| `body` | body | string | at most 65536 characters; optional when `title` is sent |
+| `title` | body | string | trimmed, 1 to 256 characters; optional |
+| `body` | body | string | at most 65536 characters; optional |
+| `assignees` | body | string array | optional; GitHub logins, at most 10, each once; replaces the issue's assignees, and `[]` unassigns everyone |
+
+At least one of `title`, `body` and `assignees` is sent.
 
 ```json
 { "title": "Draw the timeline by week", "body": "One bar per task." }
@@ -264,7 +267,7 @@ Changes the title or body of a task's issue on GitHub.
 | Status | Body |
 | --- | --- |
 | `200` | task |
-| `400` | `invalid_title`, `invalid_body`, `bad_request` |
+| `400` | `invalid_title`, `invalid_body`, `invalid_assignees`, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
@@ -284,6 +287,33 @@ Changes the title or body of a task's issue on GitHub.
   "needsAttention": null,
   "assignees": []
 }
+```
+
+## List assignable users
+
+Returns the people the project's tasks can be assigned to, as GitHub lists the repository's assignable users.
+
+`GET /api/projects/{id}/assignees`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id`; read access |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | `assignees`, each a `login` and `avatarUrl` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked` |
+| `404` | `not_found` |
+| `502` | `github_error` |
+
+```json
+{ "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }] }
 ```
 
 ## Set tests

@@ -7,6 +7,7 @@ import { useBoard } from '../../data/views/board'
 import { useTask } from '../../data/views/tasks'
 import { actionLabels, formLabels, labels } from '../../labels/labels'
 import { DrawerHeader } from './DrawerHeader'
+import { Assignees } from './Assignees'
 import { TestRuns } from './TestRuns'
 
 // Payload drawer over the board (PayloadDetail.dc.html), showing the GitHub
@@ -50,6 +51,7 @@ export function TaskDrawerPage() {
       <div className="h-[3px] bg-ion" />
       <DrawerHeader projectId={projectId} task={task} column={column?.key} />
       <div className="flex flex-col gap-4 px-6 py-5">
+        <Assignees projectId={projectId} task={task} />
         {shown.length > 0 && (
           <section className="flex flex-col gap-2">
             <h2 className="eyebrow m-0">Labels</h2>
