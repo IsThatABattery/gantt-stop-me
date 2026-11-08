@@ -2,8 +2,10 @@
 // refresh starts from the same sample data. View modules in src/data/views/
 // read and write it; components never touch it directly.
 
-import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
+import { NotFoundError } from '../errors'
 import * as fx from './fixtures'
+
+export { ConflictError, NotFoundError } from '../errors'
 
 function fresh() {
   return structuredClone({
@@ -47,40 +49,13 @@ export function delay<T>(value: T, ms = LATENCY_MS): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), ms))
 }
 
-export class NotFoundError extends Error {
-  constructor(what: string) {
-    super(`${what} not found`)
-    this.name = 'NotFoundError'
-  }
-}
-
-/** Rejected writes, e.g. a move against a stale version. */
-export class ConflictError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'ConflictError'
-  }
-}
-
 /** Find a row or throw NotFoundError. */
 export function mustFind<T>(rows: T[], pred: (row: T) => boolean, what: string): T {
   const row = rows.find(pred)
-  if (!row) throw new NotFoundError(what)
+  if (!row) throw new NotFoundError(`${what} not found`)
   return row
 }
 
 let nextId = 1000
 /** A new unique id with a readable prefix, e.g. newId('t') → "t-1000". */
 export const newId = (prefix: string) => `${prefix}-${nextId++}`
-
-/**
- * A TanStack mutation over a mock api function. After it succeeds, every
- * query whose key starts with one of `invalidate` refetches.
- */
-export function useMockMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>, invalidate: QueryKey[]) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: fn,
-    onSuccess: () => Promise.all(invalidate.map((queryKey) => client.invalidateQueries({ queryKey }))),
-  })
-}

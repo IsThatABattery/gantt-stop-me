@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { keys } from '../keys'
-import { db, delay, mustFind, newId, signedInUserId, useMockMutation } from '../mock/store'
+import { db, delay, mustFind, newId, signedInUserId } from '../mock/store'
+import { useApiMutation } from '../api/client'
 import type { Agent, ColumnKey, Epic, Feature, FeedbackOutcome, ID, Task, TaskProposal, User } from '../types'
 
 export function listProposals(draftId: ID): Promise<TaskProposal[]> {
@@ -163,7 +164,7 @@ export function useDenyProposal(draftId: ID) {
 }
 
 export const useApproveProposal = (draftId: ID, projectId: ID) =>
-  useMockMutation(approveProposal, [keys.proposals(draftId), keys.board(projectId), keys.activity(projectId), ['feature', projectId]])
+  useApiMutation(approveProposal, [keys.proposals(draftId), keys.board(projectId), keys.activity(projectId), ['feature', projectId]])
 
 // ---- Done (step 4) ----
 

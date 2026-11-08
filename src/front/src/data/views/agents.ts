@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { keys } from '../keys'
-import { db, delay, mustFind, newId, signedInUserId, useMockMutation } from '../mock/store'
+import { db, delay, mustFind, newId, signedInUserId } from '../mock/store'
+import { useApiMutation } from '../api/client'
 import type { ActivityVerb, Agent, Autonomy, Hail, ID, Task, TraceStep, WorkspaceSettings } from '../types'
 
 export interface AgentRow {
@@ -161,8 +162,8 @@ export function recallAgent({ projectId, agentId }: AgentRef): Promise<Agent> {
 
 const refresh = (projectId: ID) => [keys.agents(projectId), keys.board(projectId), keys.activity(projectId), ['task', projectId]]
 
-export const useAnswerHail = (projectId: ID) => useMockMutation(answerHail, refresh(projectId))
-export const useSetPaused = (projectId: ID) => useMockMutation(setPaused, refresh(projectId))
-export const useRedirectAgent = (projectId: ID) => useMockMutation(redirectAgent, refresh(projectId))
-export const useSetAutonomy = (projectId: ID) => useMockMutation(setAutonomy, refresh(projectId))
-export const useRecallAgent = (projectId: ID) => useMockMutation(recallAgent, refresh(projectId))
+export const useAnswerHail = (projectId: ID) => useApiMutation(answerHail, refresh(projectId))
+export const useSetPaused = (projectId: ID) => useApiMutation(setPaused, refresh(projectId))
+export const useRedirectAgent = (projectId: ID) => useApiMutation(redirectAgent, refresh(projectId))
+export const useSetAutonomy = (projectId: ID) => useApiMutation(setAutonomy, refresh(projectId))
+export const useRecallAgent = (projectId: ID) => useApiMutation(recallAgent, refresh(projectId))

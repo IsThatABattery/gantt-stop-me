@@ -3,12 +3,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { keys } from '../keys'
 import { briefingScript, doneMessage, fallbackQuestion, notedMessage, revisingMessage } from '../mock/plannerDoc'
-import { db, delay, mustFind, newId, NotFoundError, signedInUserId, useMockMutation } from '../mock/store'
+import { db, delay, mustFind, newId, NotFoundError, signedInUserId } from '../mock/store'
+import { useApiMutation } from '../api/client'
 import type { DocSection, Feature, FeatureDraft, FeedbackOutcome, ID } from '../types'
 
 export function getDraft(draftId: ID): Promise<FeatureDraft> {
   const d = db.featureDrafts.find((x) => x.id === draftId)
-  return d ? delay(d) : Promise.reject(new NotFoundError('Draft'))
+  return d ? delay(d) : Promise.reject(new NotFoundError('Draft not found'))
 }
 
 export const useDraft = (draftId: ID) => useQuery({ queryKey: keys.draft(draftId), queryFn: () => getDraft(draftId) })
@@ -156,10 +157,10 @@ export async function denyDoc({ draftId, feedback }: { draftId: ID; feedback: Do
 
 const draftKeys = (draftId: ID) => [keys.draft(draftId)]
 
-export const useAnswerQuestion = (draftId: ID) => useMockMutation(answerQuestion, draftKeys(draftId))
-export const useSkipQuestion = (draftId: ID) => useMockMutation(skipQuestion, draftKeys(draftId))
-export const useDraftDoc = (draftId: ID) => useMockMutation(draftDoc, draftKeys(draftId))
-export const useUpdateSections = (draftId: ID) => useMockMutation(updateSections, draftKeys(draftId))
-export const useDenyDoc = (draftId: ID) => useMockMutation(denyDoc, draftKeys(draftId))
+export const useAnswerQuestion = (draftId: ID) => useApiMutation(answerQuestion, draftKeys(draftId))
+export const useSkipQuestion = (draftId: ID) => useApiMutation(skipQuestion, draftKeys(draftId))
+export const useDraftDoc = (draftId: ID) => useApiMutation(draftDoc, draftKeys(draftId))
+export const useUpdateSections = (draftId: ID) => useApiMutation(updateSections, draftKeys(draftId))
+export const useDenyDoc = (draftId: ID) => useApiMutation(denyDoc, draftKeys(draftId))
 export const useApproveDoc = (draftId: ID, projectId: ID) =>
-  useMockMutation(approveDoc, [keys.draft(draftId), keys.board(projectId), keys.formOptions(projectId), keys.proposals(draftId)])
+  useApiMutation(approveDoc, [keys.draft(draftId), keys.board(projectId), keys.formOptions(projectId), keys.proposals(draftId)])

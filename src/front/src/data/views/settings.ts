@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { keys } from '../keys'
-import { db, delay, mustFind, useMockMutation } from '../mock/store'
+import { db, delay, mustFind } from '../mock/store'
+import { useApiMutation } from '../api/client'
 import type { Autonomy, ID, User, WorkspaceSettings } from '../types'
 
 export function getSettings(): Promise<WorkspaceSettings> {
@@ -55,7 +56,7 @@ export function saveSettings(input: SettingsInput): Promise<WorkspaceSettings> {
   })
 }
 
-export const useSaveSettings = () => useMockMutation(saveSettings, [keys.settings])
+export const useSaveSettings = () => useApiMutation(saveSettings, [keys.settings])
 
 export interface ProfileInput {
   userId: ID
@@ -76,7 +77,7 @@ export function saveProfile({ userId, name, email }: ProfileInput): Promise<User
   })
 }
 
-export const useSaveProfile = (userId: ID) => useMockMutation(saveProfile, [keys.user(userId)])
+export const useSaveProfile = (userId: ID) => useApiMutation(saveProfile, [keys.user(userId)])
 
 export interface PasswordInput {
   current: string
@@ -101,4 +102,4 @@ export function changePassword(input: PasswordInput): Promise<void> {
   })
 }
 
-export const useChangePassword = () => useMockMutation(changePassword, [])
+export const useChangePassword = () => useApiMutation(changePassword, [])
