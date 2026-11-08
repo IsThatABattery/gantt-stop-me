@@ -7,7 +7,8 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   // localhost:8080 is the API in the dev container, or nginx when the compose stack runs on the host.
-  server: { proxy: { '/api': 'http://localhost:8080' } },
+  // Bind IPv4 loopback: Node resolves localhost to ::1 only, which VS Code's dev container port forwarding can't reach.
+  server: { host: '127.0.0.1', proxy: { '/api': 'http://localhost:8080' } },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

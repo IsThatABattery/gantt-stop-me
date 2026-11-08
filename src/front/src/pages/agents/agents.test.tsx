@@ -113,7 +113,7 @@ describe('astronaut console', () => {
   })
 
   it('shows an empty state for a mission with no astronauts', async () => {
-    await openConsole('deep-field')
+    await openConsole('lunar-relay')
     expect(await screen.findByRole('heading', { name: 'No astronauts on this mission yet' })).toBeInTheDocument()
   })
 })
