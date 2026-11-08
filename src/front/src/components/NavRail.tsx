@@ -63,6 +63,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 function projectItems(projectId: string): Item[] {
   return [
     { label: labels.board, to: `/projects/${projectId}`, icon: 'board', end: true },
+    { label: labels.backlog, to: `/projects/${projectId}/backlog`, icon: 'hangar' },
     { label: labels.plans, to: `/projects/${projectId}/plans`, icon: 'target' },
     { label: labels.automation, to: `/projects/${projectId}/automation`, icon: 'orbit' },
   ]

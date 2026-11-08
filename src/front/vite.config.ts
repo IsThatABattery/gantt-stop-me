@@ -9,7 +9,9 @@ const API = 'http://localhost:8080'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Bind IPv4 loopback: Node resolves localhost to ::1 only, which VS Code's dev container port forwarding can't reach.
   server: {
+    host: '127.0.0.1',
     proxy: {
       '/api': {
         target: API,

@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
 import { Drawer } from '../../components/Drawer'
 import { StatusMessage } from '../../components/StatusMessage'
@@ -17,7 +17,9 @@ import { TestRuns } from './TestRuns'
 export function TaskDrawerPage() {
   const { projectId = '', taskId = '' } = useParams()
   const navigate = useNavigate()
-  const close = () => navigate(`/projects/${projectId}`)
+  const { pathname } = useLocation()
+  // Close back to the page under the drawer: the board, or the Hangar list.
+  const close = () => navigate(pathname.slice(0, pathname.lastIndexOf('/tasks/')))
   const { data: task, isPending, error } = useTask(projectId, taskId)
   const { data: board } = useBoard(projectId)
   const column = board?.columns.find((c) => c.id === task?.columnId)

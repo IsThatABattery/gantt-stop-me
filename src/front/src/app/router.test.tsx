@@ -97,18 +97,18 @@ describe('project routes', () => {
   })
 
   it('does not route the screens still on mock data', async () => {
-    for (const path of ['agents', 'activity', 'backlog', 'new/feature']) {
+    for (const path of ['agents', 'activity', 'new/feature']) {
       const { unmount } = renderApp(`/projects/1/${path}`)
       expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
       unmount()
     }
   })
 
-  it('offers the board, planning and automation in the rail', async () => {
+  it('offers the board, the Hangar, planning and automation in the rail', async () => {
     renderApp('/projects/1')
     const rail = await screen.findByRole('navigation', { name: 'Primary' })
     // The project's pages show once the missions list answered, so they don't jump into it.
     await within(rail).findByRole('link', { name: 'Automation' })
-    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Add a mission', 'All missions', 'Mission control', 'Plan a feature', 'Automation', 'Settings'])
+    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Add a mission', 'All missions', 'Mission control', 'Hangar', 'Plan a feature', 'Automation', 'Settings'])
   })
 })

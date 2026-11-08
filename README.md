@@ -76,7 +76,7 @@ Run and Debug entries:
 
 ## Frontend only
 
-To work on the UI without the backend, run Vite on its own. Every frontend screen works, since they all use mock data.
+To work on the UI with hot reload, run Vite on its own. Its screens call the API through `/api`, which Vite proxies to the API on :8080, so keep the API running (`docker compose up db api runner`).
 
 ```sh
 cd src/front
@@ -86,7 +86,7 @@ npm run dev      # http://localhost:5173, hot reload
 
 | Command | Does |
 | --- | --- |
-| `npm run dev` | Dev server with hot reload |
+| `npm run dev` | Dev server with hot reload, proxying `/api` to :8080 |
 | `npm test` | Vitest and Testing Library (`npm run test:watch` to keep it running) |
 | `npm run lint` | oxlint |
 | `npm run build` | Type check and production build |

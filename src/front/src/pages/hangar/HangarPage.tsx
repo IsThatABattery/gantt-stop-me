@@ -1,23 +1,18 @@
-import { Link, Outlet } from 'react-router'
+import { Link, Outlet, useParams } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
-import { AgentTag, UserAvatar } from '../../components/Avatar'
-import { Chip } from '../../components/Chip'
 import { Eyebrow } from '../../components/Eyebrow'
-import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useBoard } from '../../data/views/board'
-import type { Board, Task } from '../../data/types'
-import { labels, priorityLabels, taskStatusLabels } from '../../labels/labels'
-import { cardLook } from '../board/TaskCard'
-import { plural } from '../projects/filters'
+import { labels, runStatusLabels } from '../../labels/labels'
 
 const lower = (s: string) => s.toLowerCase()
 
-// The Hangar tab: every payload in the Hangar column as one list, in board
-// order. A row opens the payload drawer over the list.
+/** The Hangar tab: the Hangar (Backlog) column as a list, in board order. The drawer opens over it. */
 export function HangarPage() {
   const project = useProjectContext()
-  const { data: board, isPending, error } = useBoard(project.id)
+  const { projectId = '' } = useParams()
+  const { data: board, isPending, error } = useBoard(projectId)
+  const tasks = board?.columns.find((c) => c.key === 'backlog')?.tasks ?? []
 
   return (
     <>
@@ -32,111 +27,40 @@ export function HangarPage() {
           <StatusMessage title={`Loading ${lower(labels.backlog)}…`} />
         ) : error ? (
           <StatusMessage title="Something went wrong" body={error.message} />
+        ) : tasks.length === 0 ? (
+          <p role="status" className="m-0 py-10 text-center text-text-muted-strong">
+            The {labels.backlog} is empty. New {lower(labels.tasks)} wait here until they launch.
+          </p>
         ) : (
-          <HangarList board={board} />
+          <>
+            <p className="m-0 text-sm text-text-muted">
+              {tasks.length} {lower(tasks.length === 1 ? labels.task : labels.tasks)}
+            </p>
+            <ul aria-label={`${labels.backlog} ${lower(labels.tasks)}`} className="m-0 flex max-w-4xl list-none flex-col gap-1.5 p-0">
+              {tasks.map((t) => (
+                <li key={t.id}>
+                  <Link
+                    to={`tasks/${t.id}`}
+                    className="flex min-h-12 items-center gap-3 rounded-lg border border-line-strong bg-surface-sunken px-4 text-text no-underline hover:border-ion"
+                  >
+                    <span className="w-12 flex-none font-mono text-xs text-text-muted">#{t.issueNumber}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
+                    {t.runStatus && <span className="text-xs text-text-muted">{runStatusLabels[t.runStatus]}</span>}
+                    <span className="flex -space-x-1.5" title={t.assignees.map((a) => a.login).join(', ') || 'Unassigned'}>
+                      {t.assignees.length === 0 ? (
+                        <span className="text-xs text-text-muted">Unassigned</span>
+                      ) : (
+                        t.assignees.slice(0, 3).map((a) => <img key={a.login} src={a.avatarUrl} alt="" className="size-5 rounded-full border border-surface" />)
+                      )}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
       <Outlet />
     </>
-  )
-}
-
-function HangarList({ board }: { board: Board }) {
-  const tasks = board.columns.find((c) => c.key === 'backlog')?.tasks ?? []
-  const epic = new Map(board.epics.map((e) => [e.id, e]))
-  const feature = new Map(board.features.map((f) => [f.id, f]))
-  const user = new Map(board.users.map((u) => [u.id, u]))
-  const agent = new Map(board.agents.map((a) => [a.id, a]))
-
-  if (tasks.length === 0) {
-    return (
-      <p role="status" className="m-0 py-10 text-center text-text-muted-strong">
-        The {labels.backlog} is empty. New {lower(labels.tasks)} wait here until they launch.
-      </p>
-    )
-  }
-
-  /** The active launch window by number; any other is still ahead. */
-  const windowOf = (t: Task) =>
-    !t.sprintId ? labels.notScheduled : t.sprintId === board.sprint?.id ? labels.sprintName(board.sprint.number) : 'Upcoming'
-
-  const owner = (t: Task) => {
-    if (!t.assignee) return <span className="text-text-muted">{labels.unassigned}</span>
-    if (t.assignee.kind === 'agent') {
-      const a = agent.get(t.assignee.id)
-      return a ? <AgentTag agent={a} active={t.status === 'working'} hail={t.status === 'hail'} /> : null
-    }
-    const u = user.get(t.assignee.id)
-    return u ? (
-      <span className="flex items-center gap-2">
-        <UserAvatar user={u} size="sm" />
-        {u.name}
-      </span>
-    ) : null
-  }
-
-  const th = 'px-4 py-2.5 text-left text-xs font-medium text-text-muted'
-  const td = 'px-4 py-3 align-middle'
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="m-0 text-[13px] text-text-muted-strong">
-        {plural(tasks.length, lower(labels.task), lower(labels.tasks))}
-      </p>
-      <div className="overflow-x-auto rounded-card border border-line bg-surface">
-        <table aria-label={`${labels.backlog} ${lower(labels.tasks)}`} className="w-full min-w-[960px] border-collapse text-sm">
-          <thead className="border-b border-line-soft bg-surface-sunken">
-            <tr>
-              <th scope="col" className={th}>{labels.task}</th>
-              <th scope="col" className={th}>{labels.feature}</th>
-              <th scope="col" className={th}>{labels.epic}</th>
-              <th scope="col" className={th}>Assignee</th>
-              <th scope="col" className={th}>Priority</th>
-              <th scope="col" className={`${th} text-right`}>Estimate</th>
-              <th scope="col" className={th}>{labels.sprint}</th>
-              <th scope="col" className={th}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tasks.map((t) => {
-              const l = cardLook(t.status, t.assignee?.kind === 'agent')
-              const e = epic.get(t.epicId)
-              return (
-                <tr key={t.id} className="border-b border-line-soft last:border-b-0 hover:bg-surface-sunken/60">
-                  <td className={td}>
-                    <Link
-                      to={`/projects/${board.project.id}/backlog/tasks/${t.id}`}
-                      className="flex flex-col gap-0.5 text-text no-underline hover:text-ion"
-                    >
-                      <span className="font-mono text-xs text-text-muted">{t.key}</span>
-                      <span className="font-medium">{t.title}</span>
-                    </Link>
-                  </td>
-                  <td className={`${td} text-text-muted-strong`}>{feature.get(t.featureId)?.name}</td>
-                  <td className={td}>
-                    {e && (
-                      <span className="flex items-center gap-2 text-text-muted-strong">
-                        <span aria-hidden="true" className="size-2 flex-none rounded-full" style={{ background: e.color }} />
-                        {e.name}
-                      </span>
-                    )}
-                  </td>
-                  <td className={td}>{owner(t)}</td>
-                  <td className={`${td} text-text-muted-strong`}>{priorityLabels[t.priority]}</td>
-                  <td className={`${td} text-right font-mono text-xs text-text-muted-strong`}>{t.estimate} pt</td>
-                  <td className={`${td} text-text-muted-strong`}>{windowOf(t)}</td>
-                  <td className={td}>
-                    <Chip tone={l.tone}>
-                      {l.icon && <Icon name={l.icon} size={12} />}
-                      {taskStatusLabels[t.status]}
-                    </Chip>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
   )
 }

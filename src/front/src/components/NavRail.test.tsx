@@ -12,7 +12,7 @@ describe('NavRail', () => {
     const missions = within(await screen.findByRole('region', { name: 'Missions' }))
 
     const links = missions.getAllByRole('link').map((l) => l.textContent)
-    expect(links).toEqual(['other', 'gantt', 'Mission control', 'Plan a feature', 'Automation'])
+    expect(links).toEqual(['other', 'gantt', 'Mission control', 'Hangar', 'Plan a feature', 'Automation'])
     expect(missions.getByRole('link', { name: 'gantt' })).toHaveAttribute('aria-current', 'true')
   })
 
