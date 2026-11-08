@@ -145,7 +145,7 @@ describe('board filters', () => {
     expect(screen.getAllByRole('link', { name: /^#/ }).map((l) => l.getAttribute('aria-label')!.split(':')[0])).toEqual(['#16'])
 
     await userEvent.click(screen.getByRole('button', { name: /Clear filters/ }))
-    await userEvent.click(screen.getByRole('button', { name: /Static fires running/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Flight checks running/ }))
     expect(screen.getAllByRole('link', { name: /^#/ }).map((l) => l.getAttribute('aria-label')!.split(':')[0])).toEqual(['#14'])
   })
 })
