@@ -55,13 +55,18 @@ export const useRun = (projectId: string, runId: number | undefined) =>
 const after = (projectId: string, taskId: string) => [keys.board(projectId), keys.task(projectId, taskId), keys.runs(projectId, taskId), ['run', projectId]]
 
 export const useApprove = (projectId: string, taskId: string) =>
-  useApiMutation((checked: number[]) => api<Run>('POST', `/projects/${projectId}/tasks/${taskId}/approve`, { checked }), after(projectId, taskId))
+  useApiMutation((checked: number[]) => api<Run>('POST', `/projects/${projectId}/tasks/${taskId}/approve`, { checked }), after(projectId, taskId), {
+    settled: true,
+  })
 
 export const useRetest = (projectId: string, taskId: string) =>
-  useApiMutation(() => api('POST', `/projects/${projectId}/tasks/${taskId}/retest`), after(projectId, taskId))
+  useApiMutation(() => api('POST', `/projects/${projectId}/tasks/${taskId}/retest`), after(projectId, taskId), {
+    settled: true,
+  })
 
 export const useRequestChanges = (projectId: string, taskId: string) =>
   useApiMutation(
     (feedback: string) => api('POST', `/projects/${projectId}/tasks/${taskId}/request-changes`, { feedback }),
     after(projectId, taskId),
+    { settled: true },
   )
