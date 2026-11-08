@@ -3,6 +3,7 @@ package board_test
 import (
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	apiboard "gantt-stop-me/api/internal/board"
@@ -14,6 +15,7 @@ func TestBranchName(t *testing.T) {
 		"Establish centralized Tailwind theme tokens": "feature/28-establish-centralized-tailwind-theme",
 		"  Fix: the *board*!  ":                       "feature/28-fix-the-board",
 		"日本語":                                         "feature/28",
+		strings.Repeat("a", 50):                       "feature/28-" + strings.Repeat("a", 40),
 	} {
 		if got := apiboard.BranchName(28, title); got != want {
 			t.Errorf("BranchName(28, %q) = %q, want %q", title, got, want)

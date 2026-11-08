@@ -273,6 +273,8 @@ func BranchName(issue int, title string) string {
 	if len(slug) > 40 { // at a word's end
 		if slug = slug[:41]; strings.LastIndex(slug, "-") > 0 {
 			slug = slug[:strings.LastIndex(slug, "-")]
+		} else {
+			slug = slug[:40] // one long word
 		}
 		slug = strings.TrimRight(slug, "-")
 	}
