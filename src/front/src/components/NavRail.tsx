@@ -52,7 +52,7 @@ export function NavRail({ projectId }: { projectId?: string }) {
   return (
     <nav
       aria-label="Primary"
-      className="box-border flex flex-[1_1_200px] flex-col gap-1 border-r border-line-soft bg-rail px-4 py-6"
+      className="box-border flex flex-[1_1_200px] flex-col gap-1 border-r border-line-soft bg-rail px-4 py-6 md:sticky md:top-0 md:h-screen md:self-start md:overflow-y-auto"
     >
       <Link to="/" className="px-2 pb-6 no-underline">
         <Logo />

@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import type { AgentSettings, Provider } from '../data/api/types'
 import { INSTRUCTIONS_MAX, instructionsLength, type AgentErrors, type AgentField } from '../data/views/agentSettings'
-import { Field, Select, Textarea } from './controls'
+import { Field, SearchInput, Select, Textarea } from './controls'
 
 interface AgentEditorProps {
   /** Prefix of the field ids, `${id}-provider` and so on, so the form can focus them */
@@ -15,12 +16,27 @@ interface AgentEditorProps {
   errors?: AgentErrors
   /** It must have a model; otherwise "None" is a choice */
   required?: boolean
+  /** Default to a high-reasoning model when a provider is picked */
+  deep?: boolean
 }
 
+// Names of high-reasoning models across providers; a guess from naming, not from the provider.
+const deepModel = /opus|-pro\b|thinking|reason|^o\d/i
+
+/** The model an agent starts with when its provider is picked: the first of the provider's chosen models, or for a deep agent the first high-reasoning one. */
+const defaultModel = (models: string[], deep?: boolean) => (deep && models.find((m) => deepModel.test(m))) || models[0] || null
+
 /** One LLM agent's provider, model and extra instructions. */
-export function AgentEditor({ id, name, description, providers, value, onChange, errors = {}, required }: AgentEditorProps) {
+export function AgentEditor({ id, name, description, providers, value, onChange, errors = {}, required, deep }: AgentEditorProps) {
   const provider = providers.find((p) => p.id === value.providerId)
   const models = provider?.models ?? []
+  // What's typed in the model box; the model changes only once it names one of the provider's models.
+  const [text, setText] = useState(value.model ?? '')
+  const [shown, setShown] = useState(value.model)
+  if (shown !== value.model) {
+    setShown(value.model)
+    setText(value.model ?? '')
+  }
   const length = instructionsLength(value.instructions)
   const fieldId = (f: AgentField) => `${id}-${f}`
   const describedBy = (f: AgentField, ...extra: string[]) =>
@@ -47,14 +63,15 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
           <Select
             id={fieldId('provider')}
             value={value.providerId ?? ''}
+            disabled={providers.length === 0}
             aria-invalid={!!errors.provider}
             aria-describedby={describedBy('provider')}
             onChange={(e) => {
               const p = providers.find((x) => x.id === Number(e.target.value))
-              onChange({ ...value, providerId: p?.id ?? null, model: p?.models[0] ?? null })
+              onChange({ ...value, providerId: p?.id ?? null, model: p ? defaultModel(p.models, deep) : null })
             }}
           >
-            <option value="">{required ? 'Choose a provider' : 'None'}</option>
+            <option value="">{providers.length === 0 ? 'No provider added' : required ? 'Choose a provider' : 'None'}</option>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -64,30 +81,34 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
           {error('provider')}
         </Field>
         <Field id={fieldId('model')} label="Model">
-          <Select
+          <SearchInput
             id={fieldId('model')}
-            value={value.model ?? ''}
+            options={models}
+            value={text}
             disabled={!provider}
+            placeholder={provider ? 'Search models' : 'No provider'}
+            // Secondary to the provider, so it reads quieter.
+            className="border-line-soft bg-transparent text-text-muted-strong"
             aria-invalid={!!errors.model}
             aria-describedby={describedBy('model')}
-            onChange={(e) => onChange({ ...value, model: e.target.value })}
-          >
-            {value.model === null ? (
-              <option value="">{provider ? 'No models chosen' : 'None'}</option>
-            ) : (
-              // A saved model the provider no longer offers stays visible until it's changed.
-              !models.includes(value.model) && <option value={value.model}>{value.model} (not available)</option>
-            )}
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </Select>
+            onChange={(e) => {
+              setText(e.target.value)
+              if (models.includes(e.target.value)) onChange({ ...value, model: e.target.value })
+            }}
+            onBlur={() => setText(value.model ?? '')}
+          />
+          {value.model && provider && !models.includes(value.model) && <span className="text-xs text-warning">{value.model} is no longer available.</span>}
           {error('model')}
         </Field>
       </div>
-      <Field id={fieldId('instructions')} label="Your instructions">
+      <Field
+        id={fieldId('instructions')}
+        label={
+          <>
+            Your instructions <span className="text-text-muted">(optional)</span>
+          </>
+        }
+      >
         <Textarea
           id={fieldId('instructions')}
           value={value.instructions}

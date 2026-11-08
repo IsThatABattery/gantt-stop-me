@@ -7,7 +7,7 @@ import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { PlanningSettings, Provider } from '../../data/api/types'
 import { agentProblems, firstError, usePlaceApiError, usePlanning, useSavePlanning, type AgentErrors } from '../../data/views/agentSettings'
 import { useProviders } from '../../data/views/settings'
-import { llmAgentLabels, settingsLabels } from '../../labels/labels'
+import { labels, llmAgentLabels, settingsLabels } from '../../labels/labels'
 import { Section } from './Section'
 import { sectionIds } from './sections'
 
@@ -92,21 +92,22 @@ function PlanningForm({ initial, providers }: { initial: PlanningSettings; provi
         </span>
         <Toggle label={settingsLabels.review} checked={form.review} onChange={(review) => update({ ...form, review })} />
       </div>
-      {providers.length === 0 ? (
-        <NoProviders />
-      ) : (
-        agents.map((a) => (
-          <AgentEditor
-            key={a}
-            id={`${id}-${a}`}
-            {...llmAgentLabels[a]}
-            providers={providers}
-            value={form[a]}
-            errors={errors[a]}
-            onChange={(v) => update({ ...form, [a]: v })}
-          />
-        ))
-      )}
+      {providers.length === 0 && <NoProviders />}
+      {agents.map((a) => (
+        <AgentEditor
+          key={a}
+          id={`${id}-${a}`}
+          {...llmAgentLabels[a]}
+          deep
+          providers={providers}
+          value={form[a]}
+          errors={errors[a]}
+          onChange={(v) => update({ ...form, [a]: v })}
+        />
+      ))}
+      <p className="m-0 text-[13px] text-text-muted-strong">
+        The test agents, {llmAgentLabels.decision.name.toLowerCase()} and {llmAgentLabels.chat.name.toLowerCase()}, are set per {labels.project.toLowerCase()} on its {labels.automation} page.
+      </p>
       <UnsavedChangesGuard when={dirty && !save.isPending} />
       <div className="flex flex-wrap items-center justify-end gap-2.5">
         <div role="status" className="mr-auto text-[13px]">

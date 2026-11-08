@@ -224,24 +224,21 @@ function AutomationForm({
         )}
       </div>
 
-      {providers.length === 0 ? (
-        <NoProviders />
-      ) : (
-        <fieldset disabled={readOnly} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
-          {agentKeys.map((a) => (
-            <AgentEditor
-              key={a}
-              id={`${id}-${a}`}
-              {...llmAgentLabels[a]}
-              required
-              providers={providers}
-              value={agents[a]}
-              errors={errors[a]}
-              onChange={(v) => update({ ...agents, [a]: v })}
-            />
-          ))}
-        </fieldset>
-      )}
+      {providers.length === 0 && <NoProviders />}
+      <fieldset disabled={readOnly} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
+        {agentKeys.map((a) => (
+          <AgentEditor
+            key={a}
+            id={`${id}-${a}`}
+            {...llmAgentLabels[a]}
+            required
+            providers={providers}
+            value={agents[a]}
+            errors={errors[a]}
+            onChange={(v) => update({ ...agents, [a]: v })}
+          />
+        ))}
+      </fieldset>
 
       {takesOver && (
         <p id={`${id}-takeover`} className="m-0 flex items-start gap-2 rounded-control border border-warning bg-warning/6 px-3 py-2 text-[13px]">

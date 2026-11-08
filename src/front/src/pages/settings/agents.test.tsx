@@ -27,7 +27,8 @@ async function openAgents(set: { providers?: Provider[]; planning?: PlanningSett
   return { form: within(form), agent }
 }
 
-const options = (select: HTMLElement) => within(select).getAllByRole('option').map((o) => o.textContent)
+// The model box suggests from its datalist.
+const options = (input: HTMLElement) => Array.from(document.getElementById(input.getAttribute('list')!)!.querySelectorAll('option'), (o) => o.value)
 
 describe('agent settings', () => {
   it('loads the planning settings and saves them as one PUT', async () => {
@@ -39,7 +40,7 @@ describe('agent settings', () => {
 
     await userEvent.click(form.getByRole('switch', { name: 'Review plan docs before tasks are made' }))
     await userEvent.selectOptions(agent('Task agent').getByLabelText('Provider'), 'Local')
-    await userEvent.type(agent('Task agent').getByLabelText('Your instructions'), 'Keep tasks small.')
+    await userEvent.type(agent('Task agent').getByLabelText(/^Your instructions/), 'Keep tasks small.')
     await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
 
     expect(await form.findByText('Agent settings saved')).toBeInTheDocument()
@@ -67,12 +68,16 @@ describe('agent settings', () => {
 
     await userEvent.selectOptions(agent('Interviewer').getByLabelText('Provider'), 'None')
     expect(model()).toBeDisabled()
-    expect(model()).toHaveDisplayValue('None')
+    expect(model()).toHaveValue('')
+
+    // Planning agents default to a high-reasoning model.
+    await userEvent.selectOptions(agent('Interviewer').getByLabelText('Provider'), 'OpenAI')
+    expect(model()).toHaveValue('o3')
   })
 
   it('counts instructions and refuses more than 4000 characters', async () => {
     const { form, agent } = await openAgents()
-    const instructions = agent('Interviewer').getByLabelText('Your instructions')
+    const instructions = agent('Interviewer').getByLabelText(/^Your instructions/)
     expect(instructions).toHaveAccessibleDescription(/added to the agent's built-in instructions\. they don't replace them\. 0 \/ 4000/i)
 
     await userEvent.click(instructions)
@@ -88,7 +93,7 @@ describe('agent settings', () => {
 
   it('counts characters as the server does, not UTF-16 units', async () => {
     const { form, agent } = await openAgents()
-    await userEvent.click(agent('Interviewer').getByLabelText('Your instructions'))
+    await userEvent.click(agent('Interviewer').getByLabelText(/^Your instructions/))
     await userEvent.paste(`  ${'🚀'.repeat(3000)}  `)
     expect(agent('Interviewer').getByText('3000 / 4000')).toBeInTheDocument()
     await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
@@ -99,7 +104,7 @@ describe('agent settings', () => {
 
   it('trims as the server does, keeping U+FEFF and dropping U+0085', async () => {
     const { form, agent } = await openAgents()
-    await userEvent.click(agent('Interviewer').getByLabelText('Your instructions'))
+    await userEvent.click(agent('Interviewer').getByLabelText(/^Your instructions/))
     await userEvent.paste('\u0085\u3000\uFEFFx\u0085')
     expect(agent('Interviewer').getByText('2 / 4000')).toBeInTheDocument()
     await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
@@ -109,7 +114,7 @@ describe('agent settings', () => {
 
   it('refuses a NUL character', async () => {
     const { form, agent } = await openAgents()
-    const instructions = agent('Task agent').getByLabelText('Your instructions')
+    const instructions = agent('Task agent').getByLabelText(/^Your instructions/)
     await userEvent.click(instructions)
     await userEvent.paste('a\0b')
     await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
@@ -137,7 +142,7 @@ describe('agent settings', () => {
 
   it('warns before leaving with unsaved agent settings', async () => {
     const { form, agent } = await openAgents()
-    await userEvent.type(agent('Interviewer').getByLabelText('Your instructions'), 'Be brief.')
+    await userEvent.type(agent('Interviewer').getByLabelText(/^Your instructions/), 'Be brief.')
     expect(form.getByText('Unsaved changes')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('You have unsaved changes')
@@ -147,7 +152,8 @@ describe('agent settings', () => {
     // The fake API refuses the retired model as the real one does.
     const message = "Pick one of this provider's chosen models."
     const { form, agent } = await openAgents({ planning: { ...planning, taskAgent: { providerId: 1, model: 'retired', instructions: '' } } })
-    expect(agent('Task agent').getByLabelText('Model')).toHaveDisplayValue('retired (not available)')
+    expect(agent('Task agent').getByLabelText('Model')).toHaveValue('retired')
+    expect(agent('Task agent').getByText('retired is no longer available.')).toBeInTheDocument()
     await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
 
     const model = agent('Task agent').getByLabelText('Model')
@@ -170,17 +176,19 @@ describe('agent settings', () => {
 
   it('keeps the form and its edits when refetching providers fails', async () => {
     const { form, agent } = await openAgents()
-    await userEvent.type(agent('Interviewer').getByLabelText('Your instructions'), 'Be brief.')
+    await userEvent.type(agent('Interviewer').getByLabelText(/^Your instructions/), 'Be brief.')
     failNext('PUT /api/me/planning', { status: 400, code: 'invalid_model', message: 'Pick a chosen model.' })
     failNext('GET /api/providers', { status: 500, code: 'internal', message: 'Something broke.' })
     await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
     expect(await form.findByText('Pick a chosen model.')).toBeInTheDocument()
-    expect(agent('Interviewer').getByLabelText('Your instructions')).toHaveValue('Be brief.')
+    expect(agent('Interviewer').getByLabelText(/^Your instructions/)).toHaveValue('Be brief.')
   })
 
-  it('links to the providers instead of empty selects when there are none', async () => {
-    const { form } = await openAgents({ providers: [] })
+  it('shows the agents with no provider added, and links to the providers, when there are none', async () => {
+    const { form, agent } = await openAgents({ providers: [] })
     expect(form.getByRole('link', { name: 'Add a provider' })).toHaveAttribute('href', '/settings#providers')
-    expect(form.queryByLabelText('Provider')).not.toBeInTheDocument()
+    expect(agent('Interviewer').getByLabelText('Provider')).toHaveDisplayValue('No provider added')
+    expect(agent('Interviewer').getByLabelText('Provider')).toBeDisabled()
+    expect(agent('Task agent').getByLabelText('Model')).toBeDisabled()
   })
 })

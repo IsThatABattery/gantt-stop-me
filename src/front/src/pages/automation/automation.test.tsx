@@ -51,10 +51,11 @@ describe('project automation', () => {
     expect(await screen.findByText('Automation is on.')).toBeInTheDocument()
     expect(screen.getByText(/Owner: ada\./)).toBeInTheDocument()
     expect(agent('Decision agent').getByLabelText('Model')).toHaveDisplayValue('gpt-6-luna')
-    expect(agent('Check agent').getByLabelText('Your instructions')).toHaveValue('Use the staging login.')
+    expect(agent('Check agent').getByLabelText(/^Your instructions/)).toHaveValue('Use the staging login.')
     expect(screen.queryByText(/Saving makes you the owner/)).not.toBeInTheDocument()
 
-    await userEvent.selectOptions(agent('Decision agent').getByLabelText('Model'), 'gpt-5')
+    await userEvent.clear(agent('Decision agent').getByLabelText('Model'))
+    await userEvent.type(agent('Decision agent').getByLabelText('Model'), 'gpt-5')
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('Automation saved')).toBeInTheDocument()
     expect(sent('PUT').map((r) => r.body)).toEqual([
@@ -93,7 +94,7 @@ describe('project automation', () => {
     expect(screen.getByText('Decision agent: gpt-6-luna. Check agent: llama.')).toBeInTheDocument()
     for (const name of ['Decision agent', 'Check agent']) {
       expect(agent(name).getByLabelText('Provider')).toHaveDisplayValue('Choose a provider')
-      expect(agent(name).getByLabelText('Model')).toHaveDisplayValue('None')
+      expect(agent(name).getByLabelText('Model')).toHaveValue('')
     }
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
   })
@@ -117,7 +118,7 @@ describe('project automation', () => {
       // Write access was lost on GitHub after the page loaded.
       const { agent } = await openAutomation({ ...enabled, owner: { id: 7, login: 'bob' } })
       await screen.findByText('Automation is on.')
-    await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
+    await userEvent.type(agent('Check agent').getByLabelText(/^Your instructions/), ' Then log out.')
       failNext(`${method} /api${PATH}`, { status: 403, code: 'forbidden', message: 'You need write access.' })
       if (method === 'PUT') await userEvent.click(await screen.findByRole('button', { name: 'Save changes' }))
       else {
@@ -127,8 +128,8 @@ describe('project automation', () => {
       expect(await screen.findByText(/You have read access only/)).toHaveFocus()
       expect(agent('Decision agent').getByLabelText('Model')).toBeDisabled()
       // It shows what's saved, not the edits.
-      expect(agent('Check agent').getByLabelText('Your instructions')).toHaveValue('Use the staging login.')
-      expect(agent('Check agent').getByLabelText('Your instructions')).toBeDisabled()
+      expect(agent('Check agent').getByLabelText(/^Your instructions/)).toHaveValue('Use the staging login.')
+      expect(agent('Check agent').getByLabelText(/^Your instructions/)).toBeDisabled()
       // The project, with its permission, is refetched.
       expect(fake.requests.filter((r) => r.method === 'GET' && r.path === '/api/projects/1/board')).toHaveLength(2)
       expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
@@ -149,12 +150,12 @@ describe('project automation', () => {
   it('keeps the form and its edits when refetching providers fails', async () => {
     const { agent } = await openAutomation(enabled)
     await screen.findByText('Automation is on.')
-    await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
+    await userEvent.type(agent('Check agent').getByLabelText(/^Your instructions/), ' Then log out.')
     failNext(`PUT /api${PATH}`, { status: 400, code: 'invalid_model', message: 'Pick a chosen model.' })
     failNext('GET /api/providers', { status: 500, code: 'internal', message: 'Something broke.' })
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('Pick a chosen model.')).toBeInTheDocument()
-    expect(agent('Check agent').getByLabelText('Your instructions')).toHaveValue('Use the staging login. Then log out.')
+    expect(agent('Check agent').getByLabelText(/^Your instructions/)).toHaveValue('Use the staging login. Then log out.')
   })
 
   it("doesn't carry one project's read-only state to another", async () => {
@@ -236,7 +237,7 @@ describe('project automation', () => {
   it('warns before leaving with unsaved changes', async () => {
     const { agent } = await openAutomation(enabled)
     await screen.findByText('Automation is on.')
-    await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
+    await userEvent.type(agent('Check agent').getByLabelText(/^Your instructions/), ' Then log out.')
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))
     const dialog = within(await screen.findByRole('alertdialog'))
@@ -249,7 +250,7 @@ describe('project automation', () => {
   it('leaves without asking once the changes are saved', async () => {
     const { agent } = await openAutomation(enabled)
     await screen.findByText('Automation is on.')
-    await userEvent.type(agent('Check agent').getByLabelText('Your instructions'), ' Then log out.')
+    await userEvent.type(agent('Check agent').getByLabelText(/^Your instructions/), ' Then log out.')
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByText('Automation saved')
     await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))

@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,11 @@ var (
 	errUnreachable = errors.New("provider unreachable")
 )
 
+type listedModel struct {
+	ID      string `json:"id"`
+	Created int64  `json:"created"` // Unix seconds; 0 when the endpoint omits it
+}
+
 // listModels returns the model ids an OpenAI-compatible endpoint offers to key, from GET {baseURL}/models.
 func (s *Settings) listModels(ctx context.Context, baseURL, key string) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/models", nil)
@@ -36,13 +42,13 @@ func (s *Settings) listModels(ctx context.Context, baseURL, key string) ([]strin
 		return nil, errKeyRejected
 	}
 	var body struct {
-		Data *[]struct { // a pointer, so a body without a data list is not an empty listing
-			ID string `json:"id"`
-		} `json:"data"`
+		Data *[]listedModel `json:"data"` // a pointer, so a body without a data list is not an empty listing
 	}
 	if res.StatusCode/100 != 2 || json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&body) != nil || body.Data == nil {
 		return nil, errUnreachable
 	}
+	// Newest first, so the UI can show recent models; a stable sort keeps the endpoint's order for undated ones.
+	slices.SortStableFunc(*body.Data, func(a, b listedModel) int { return cmp.Compare(b.Created, a.Created) })
 	ids := make([]string, len(*body.Data))
 	for i, m := range *body.Data {
 		ids[i] = m.ID

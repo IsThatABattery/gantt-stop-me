@@ -100,7 +100,7 @@ describe('LLM providers', () => {
     await userEvent.click(within(s.getByRole('form', { name: 'Add provider' })).getByRole('button', { name: 'Add provider' }))
 
     const pick = await s.findByRole('form', { name: 'Pick models for OpenAI' })
-    await userEvent.click(within(pick).getByLabelText('qwen2'))
+    await userEvent.type(within(pick).getByLabelText('Add a model'), 'qwen2')
     await userEvent.click(within(pick).getByRole('button', { name: 'Save models' }))
 
     await waitFor(() => expect(fake.providers.find((p) => p.name === 'OpenAI')).toMatchObject({ keyLast4: '1234', models: ['qwen2'] }))
@@ -125,7 +125,7 @@ describe('LLM providers', () => {
     const s = within(section('LLM providers'))
     await userEvent.click(await s.findByRole('button', { name: 'Edit Local' }))
     const form = s.getByRole('form', { name: 'Edit Local' })
-    await userEvent.click(await within(form).findByLabelText('mistral'))
+    await userEvent.type(await within(form).findByLabelText('Add a model'), 'mistral')
     await userEvent.click(within(form).getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(fake.providers[0].models).toEqual(['llama3', 'mistral']))

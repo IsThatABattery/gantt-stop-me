@@ -154,6 +154,18 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestCreateListsNewestFirst(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":[{"id":"old","created":1},{"id":"undated"},{"id":"new","created":3},{"id":"mid","created":2}]}`))
+	})
+	p := create(t, env, session, "OpenAI", url, key)
+	if want := []string{"new", "mid", "old", "undated"}; !slices.Equal(p.AvailableModels, want) {
+		t.Fatalf("available %v, want %v", p.AvailableModels, want)
+	}
+}
+
 func TestCreateWithoutModels(t *testing.T) {
 	env := apptest.New(t)
 	session := env.SignUp("ada@example.com", "correct horse")

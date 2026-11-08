@@ -17,6 +17,20 @@ export function TextInput({ className = '', ...rest }: InputHTMLAttributes<HTMLI
   return <input className={cx(`${fieldControl} w-full px-3.5`, className)} {...rest} />
 }
 
+/** A text box that suggests `options` as you type, with the browser's own datalist. */
+export function SearchInput({ id, options, ...rest }: InputHTMLAttributes<HTMLInputElement> & { id: string; options: string[] }) {
+  return (
+    <>
+      <TextInput id={id} list={`${id}-options`} autoComplete="off" spellCheck={false} {...rest} />
+      <datalist id={`${id}-options`}>
+        {options.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
+    </>
+  )
+}
+
 export function Select({ className = '', ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={cx(`${fieldControl} px-3`, className)} {...rest} />
 }
