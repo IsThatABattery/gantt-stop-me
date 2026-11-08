@@ -144,7 +144,7 @@ Opens an issue labeled `board:backlog` on GitHub and adds its task at the end of
 
 ## Get task
 
-Returns a task with its issue's title, state, body and labels as last read from GitHub, syncing the tasks from the repository's issues first when the last sync is over 30 seconds old.
+Returns a task with its issue's title, state, body and labels as last read from GitHub, and its tests, syncing the tasks from the repository's issues first when the last sync is over 30 seconds old.
 
 `GET /api/projects/{id}/tasks/{taskID}`
 
@@ -160,11 +160,21 @@ Returns a task with its issue's title, state, body and labels as last read from 
 
 | Status | Body |
 | --- | --- |
-| `200` | task, with its issue's body and labels |
+| `200` | task, with its issue's body and labels, its tests and `testsError` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
 | `404` | `not_found` |
 | `502` | `github_error` |
+
+`tests` are the task's own, which [test runs](automation.md) run. The `## Tests` section of the issue body is GitHub's view of them, kept in step both ways: [Set tests](#set-tests) writes it, and every read of the issue (adding the project, a sync, [Create task](#create-task), [Edit task](#edit-task), a test run) takes a section changed on GitHub. A deleted section takes no tests. A section that does not parse, such as one with more than 64 tests, is not taken: the task keeps its tests, and `testsError` says why until the section parses or is put back, else it is `null`. Each test is:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | string | its line; for a script written as one code span, its command |
+| `kind` | string | `script`, a command whose exit code decides, or `check`, a plain-English check for an LLM |
+| `command` | string | a script's command, `""` for a check |
+| `details` | string | a check's indented block, such as its steps, `""` when none or for a script |
+| `workflow` | string or null | the workflow its `[name]` pin names, as written, else `null` for the decision model to pick |
 
 ```json
 {
@@ -178,11 +188,16 @@ Returns a task with its issue's title, state, body and labels as last read from 
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": "failed",
   "needsAttention": null,
-  "body": "One bar per task, by week.",
+  "body": "One bar per task, by week.\n\n## Tests\n- [ ] `npm test`\n- [ ] The timeline shows one bar per task\n  1. Open a board with two tasks.\n",
   "labels": [
     { "name": "board:in-progress", "color": "fbca04" },
     { "name": "enhancement", "color": "a2eeef" }
-  ]
+  ],
+  "tests": [
+    { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null },
+    { "name": "The timeline shows one bar per task", "kind": "check", "command": "", "details": "1. Open a board with two tasks.", "workflow": null }
+  ],
+  "testsError": null
 }
 ```
 
@@ -229,6 +244,79 @@ Changes the title or body of a task's issue on GitHub.
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": null,
   "needsAttention": null
+}
+```
+
+## Set tests
+
+Replaces a task's tests, writing them to the Tests section of its issue on GitHub first.
+
+`PUT /api/projects/{id}/tasks/{taskID}/tests`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `id` | path | integer | a project's `id` |
+| `taskID` | path | integer | a task's `id` in the project |
+| `tests` | body | array | required, `[]` for none; at most 64 tests, as [Get task](#get-task) shows them; at most 64 KiB as a Tests section; no NUL anywhere |
+| `tests[].name` | body | string | one line, not blank |
+| `tests[].kind` | body | string | `script` or `check` |
+| `tests[].command` | body | string | a script's, not blank; ignored for a check |
+| `tests[].details` | body | string | optional; ignored for a script |
+| `tests[].workflow` | body | string or null | optional; 2 to 32 lowercase letters, digits or `-`, starting with a letter and ending in a letter or digit |
+| `base` | body | array | required: the task's `tests` as you last loaded them, from [Get task](#get-task) or this endpoint's last answer |
+
+```json
+{
+  "tests": [
+    { "name": "npm test", "kind": "script", "command": "npm test" },
+    { "name": "The timeline shows one bar per task", "kind": "check", "details": "1. Open a board with two tasks.", "workflow": "frontend" }
+  ],
+  "base": [
+    { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null }
+  ]
+}
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | the tests, and the issue's `body` as GitHub now has it |
+| `400` | `invalid_tests`, `invalid_body` when the issue body would pass 65536 characters, `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `github_not_linked`, `forbidden` |
+| `404` | `not_found` |
+| `409` | `tests_changed`, and the task's `tests` and `testsError` as they now are, and the issue's `body` |
+| `502` | `github_error` |
+
+The issue's Tests section becomes the tests as an unticked checklist, each after its `[workflow]` pin: a script whose name is its command as that command in code, any other script as its name over an `sh` code block, and a check as its name over its indented details. The section is appended when the body has none and removed for no tests. The section runs from its `## Tests` line to the next `#` or `##` heading, and all of it is rewritten: text in it that is no test, such as a note after the list, is dropped. The rest of the body stays as it is, byte for byte. The task keeps the tests as the section reads back, so the answer may differ from the input: a check named only by a code span is a script, for one.
+
+The issue's section is read first. When it changed on GitHub since the task last read it, the task takes it. If that changes the task's tests or gives a new `testsError`, or the task's tests are no longer `base`, such as after a sync took a GitHub edit, nothing is written, and the answer is `409` with the task as it now is. Sending the edit again with those tests as `base` replaces them. A change that leaves the tests as they are, such as a ticked box or a mended section, does not stop the edit. Both answers carry the issue's body: send that, not an older copy, to [Edit task](#edit-task), whose body's Tests section the task takes.
+
+```json
+{
+  "tests": [
+    { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null },
+    { "name": "The timeline shows one bar per task", "kind": "check", "command": "", "details": "1. Open a board with two tasks.", "workflow": "frontend" }
+  ],
+  "body": "One bar per task, by week.\n\n## Tests\n- [ ] `npm test`\n- [ ] [frontend] The timeline shows one bar per task\n  1. Open a board with two tasks.\n"
+}
+```
+
+```json
+{
+  "error": {
+    "code": "tests_changed",
+    "message": "The tests changed on GitHub since you loaded them. They are shown as they are now."
+  },
+  "tests": [
+    { "name": "npm test", "kind": "script", "command": "npm test", "details": "", "workflow": null }
+  ],
+  "testsError": null,
+  "body": "One bar per task, by week.\n\n## Tests\n- [x] `npm test`\n"
 }
 ```
 

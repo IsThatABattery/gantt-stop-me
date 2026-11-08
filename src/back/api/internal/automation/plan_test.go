@@ -3,13 +3,72 @@ package automation_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"reflect"
 	"slices"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/llm/llmtest"
+	"gantt-stop-me/api/internal/tasktests"
 )
+
+// A run tests the card's tests, as the tests endpoint set them, and stores each as the issue shows it.
+func TestPlanRunsTheCardsTests(t *testing.T) {
+	f := withLLM(t)
+	pin := "default"
+	f.setTests(1,
+		tasktests.Test{Name: "go vet ./...", Kind: "script", Command: "go vet ./..."},
+		tasktests.Test{Name: "Builds", Kind: "script", Command: "make\nmake check", Workflow: &pin})
+	n := f.ready()
+	f.work()
+	f.expectRuns(pass(n))
+	f.expectResults(resultRow{1, "passed", "Exit code 0.", "default", false}, resultRow{2, "passed", "Exit code 0.", "default", true})
+	f.expectCalls("prepare 1", "command 1 go vet ./...", "command 1 make\nmake check", "delete 1")
+	rows, _ := f.DB.Query(context.Background(), `select text from test_results order by position`)
+	texts, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if want := []string{"`go vet ./...`", "Builds\n```sh\nmake\nmake check\n```"}; err != nil || !slices.Equal(texts, want) {
+		t.Fatalf("texts = %q, %v; want %q", texts, err, want)
+	}
+}
+
+// A Tests section the card wrote or took after a run read the issue is newer than that read: the run tests it, and
+// the card keeps it, whether a tests edit or a sync of a GitHub edit put it there.
+func TestPlanKeepsATestsEditMadeAfterItsRead(t *testing.T) {
+	for name, edit := range map[string]func(f *fixture){
+		"tests edit": func(f *fixture) { f.setTests(1, tasktests.Test{Name: "make", Kind: "script", Command: "make"}) },
+		"sync of a GitHub edit": func(f *fixture) {
+			f.tests(1, "## Tests\n- [ ] `make`\n")
+			f.exec(`update projects set synced_at = now() - interval '1 minute'`)
+			f.Do("GET", f.path(fmt.Sprintf("/tasks/%d", f.taskID(1))), nil, f.ada).Expect(http.StatusOK, "")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := withLLM(t)
+			f.setTests(1, tasktests.Test{Name: "true", Kind: "script", Command: "true"})
+			n := f.ready()
+			next, edited := f.Config.GitHub.HTTP.Transport, false
+			f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+				res, err := next.RoundTrip(r)
+				if r.Method == "GET" && r.URL.Path == fmt.Sprintf("/repositories/%d/issues/1", f.repo.ID) && !edited {
+					edited = true
+					edit(f)
+				}
+				return res, err
+			})}
+			f.work()
+			f.expectRuns(pass(n))
+			f.expectCalls("prepare 1", "command 1 make", "delete 1")
+			var tests []tasktests.Test
+			if err := f.DB.QueryRow(context.Background(), `select tests from tasks`).Scan(&tests); err != nil || len(tests) != 1 || tests[0].Command != "make" {
+				t.Fatalf("card = %+v, %v; want the edit kept", tests, err)
+			}
+		})
+	}
+}
 
 // probabilities returns the stored probabilities of the project's test results, by run and position.
 func (f *fixture) probabilities() []map[string]float64 {

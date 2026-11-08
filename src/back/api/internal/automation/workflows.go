@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v4"
+
+	"gantt-stop-me/api/internal/tasktests"
 )
 
 // Workflow is one workflow of a repository's .gantt/workflows.yml, with its defaults applied. Its JSON is the
@@ -41,11 +43,8 @@ type Service struct {
 	Port       *int              `json:"port"`             // dialled until it accepts
 }
 
-// namePattern is the rule for workflow and sidecar names, which a test's [name] pin also follows. A name ends in a
-// letter or digit because the runner puts it last in image names and hostnames, where a trailing - is invalid.
-const namePattern = `[a-z][a-z0-9-]{0,30}[a-z0-9]`
-
-var nameRule = regexp.MustCompile(`^` + namePattern + `$`)
+// nameRule is tasktests.NamePattern, the rule for workflow and sidecar names.
+var nameRule = regexp.MustCompile(`^` + tasktests.NamePattern + `$`)
 
 // cacheRule is the characters the runner allows in a cache path. The path goes into docker's --mount flag, where
 // a comma or = would add mount options, such as a host bind mount.

@@ -2,6 +2,7 @@ package projects
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"time"
@@ -89,11 +90,12 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 
 // AddTask adds an open issue as a task at the end of the first column, in board order, whose board:<key> label
 // it carries, else Backlog. Closing columns are skipped: an open issue does not belong in one. The task records
-// those labels as seen, so a sync moves it only for a label added later.
+// those labels as seen, so a sync moves it only for a label added later, and takes its tests from the body.
 // An issue that already has a task keeps it as it is. Call it holding Lock.
 func AddTask(ctx context.Context, tx pgx.Tx, projectID int64, is github.Issue) error {
 	labels := BoardLabels(is)
-	_, err := tx.Exec(ctx, `
+	var id int64
+	err := tx.QueryRow(ctx, `
 		insert into tasks (project_id, issue_number, github_issue_id, column_id, position, title, state, board_labels, body, labels)
 		select $1, $2, $3, c.id, coalesce((select max(position) from tasks where column_id = c.id), 0) + 1, $4, 'open', $5, $6, $7
 		from columns c
@@ -102,7 +104,14 @@ func AddTask(ctx context.Context, tx pgx.Tx, projectID int64, is github.Issue) e
 			 where project_id = $1 and not closes_issue and 'board:' || key = any($5)
 			 order by position limit 1),
 			'backlog')
-		on conflict do nothing`,
-		projectID, is.Number, is.ID, is.Title, labels, is.Body, Labels(is))
+		on conflict do nothing
+		returning id`,
+		projectID, is.Number, is.ID, is.Title, labels, is.Body, Labels(is)).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // it has a task already
+	}
+	if err == nil {
+		_, err = TakeTests(ctx, tx, id, is.Body)
+	}
 	return err
 }

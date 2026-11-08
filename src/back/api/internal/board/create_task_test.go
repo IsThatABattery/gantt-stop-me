@@ -29,6 +29,12 @@ func TestCreateTask(t *testing.T) {
 	}
 }
 
+func TestCreateTaskTakesTests(t *testing.T) {
+	f := setup(t)
+	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Tested", "body": "## Tests\n- [ ] `make`\n"}, f.ada).Expect(http.StatusCreated, "")
+	f.expectCard(1, "", script("make"))
+}
+
 func TestCreateTaskValidatesTitle(t *testing.T) {
 	f := setup(t)
 	for _, title := range []string{"", "   ", strings.Repeat("é", 257)} {

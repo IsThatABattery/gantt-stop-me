@@ -37,8 +37,9 @@ func (p *Projects) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/projects", p.Accounts.Require(p.add))
 }
 
-// Lock serializes, until tx ends, the writes that place a project's tasks: moves, syncs, imports and new tasks,
-// so a version check, a GitHub write and a save cannot interleave with another. Writers queue in Serialize first,
+// Lock serializes, until tx ends, the writes that place a project's tasks or write their issues: moves, syncs,
+// imports, new tasks and task and tests edits, so a version check, a GitHub write and a save cannot interleave with
+// another. Writers queue in Serialize first,
 // so a waiting one does not hold a pooled connection.
 func Lock(ctx context.Context, tx pgx.Tx, projectID int64) error {
 	_, err := tx.Exec(ctx, `select pg_advisory_xact_lock($1)`, projectID)
