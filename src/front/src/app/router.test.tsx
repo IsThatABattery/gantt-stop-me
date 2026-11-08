@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { fake } from '../test/fakeApi'
+import { keys } from '../data/keys'
+import { fake, failNext } from '../test/fakeApi'
 import { renderApp } from '../test/render'
 
 async function signIn(email: string, password: string) {
@@ -91,9 +92,26 @@ describe('project routes', () => {
     expect(screen.getByRole('link', { name: 'Link GitHub' })).toHaveAttribute('href', '/settings#github')
   })
 
-  it('says a project the user cannot see is not found', async () => {
-    renderApp('/projects/2')
+  it('says a project the user cannot see is not found, with no pages for it in the rail', async () => {
+    const { client } = renderApp('/projects/2')
     expect(await screen.findByRole('heading', { name: 'Mission not found' })).toBeInTheDocument()
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Add a mission' })).toHaveAttribute('href', '/projects/new')
+    await waitFor(() => expect(client.getQueryState(keys.projects)?.status).toBe('success'))
+    expect(screen.queryByRole('link', { name: 'Automation' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the page when a refetch of the project fails, and offers Try again when the first load does', async () => {
+    failNext('GET /api/projects/1/board', { status: 500, code: 'internal', message: 'Database is restarting.' })
+    const { client } = renderApp('/projects/1/automation')
+    expect(await screen.findByText('Database is restarting.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { name: 'Automation' })).toBeInTheDocument()
+
+    failNext('GET /api/projects/1/board', { status: 500, code: 'internal', message: 'Database is restarting.' })
+    await client.invalidateQueries({ queryKey: keys.board('1') })
+    await waitFor(() => expect(client.getQueryState(keys.board('1'))?.status).toBe('error'))
+    expect(screen.getByRole('heading', { name: 'Automation' })).toBeInTheDocument()
+    expect(screen.queryByText('Database is restarting.')).not.toBeInTheDocument()
   })
 
   it('does not route the screens still on mock data', async () => {

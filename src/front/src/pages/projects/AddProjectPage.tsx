@@ -16,6 +16,18 @@ const reasons: Record<string, string> = {
   forbidden: 'Adding a repository for the first time needs write access to it on GitHub.',
 }
 
+/** What a page shows instead when the API needs the user's GitHub account first (github_not_linked). */
+export function LinkGitHubFirst() {
+  return (
+    <StatusMessage title="Link GitHub first" body={`The board reads and writes the repository's issues with your GitHub account, so link it in ${labels.settings}.`}>
+      <Link to="/settings#github" className={buttonClass('primary')}>
+        <Icon name="github" />
+        {labels.linkGitHub}
+      </Link>
+    </StatusMessage>
+  )
+}
+
 // Adds a project by its repository URL; one added before opens its board. The
 // Flight deck shows it, centered, until the user has opened a project.
 export function AddProjectPage() {
@@ -44,15 +56,7 @@ export function AddProjectPage() {
 
       {!linked ? (
         <div className="w-full max-w-[640px] rounded-[14px] border border-line bg-surface">
-          <StatusMessage
-            title="Link GitHub first"
-            body={`The board reads and writes the repository's issues with your GitHub account, so link it in ${labels.settings}.`}
-          >
-            <Link to="/settings#github" className={buttonClass('primary')}>
-              <Icon name="github" />
-              {labels.linkGitHub}
-            </Link>
-          </StatusMessage>
+          <LinkGitHubFirst />
         </div>
       ) : (
         <form onSubmit={submit} noValidate className="flex w-full max-w-[640px] flex-col gap-4 rounded-[14px] border border-line bg-surface p-6">

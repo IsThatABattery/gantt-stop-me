@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { fake } from '../../test/fakeApi'
+import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
 async function submit(url: string) {
@@ -20,6 +20,23 @@ describe('flight deck', () => {
   it('shows the URL box when none were opened', async () => {
     renderApp('/')
     expect(await screen.findByLabelText('Repository URL')).toBeInTheDocument()
+  })
+
+  it('says when the missions could not load, instead of offering to add one', async () => {
+    fake.opened = [fake.project]
+    failNext('GET /api/projects', { status: 500, code: 'internal', message: 'Database is restarting.' })
+    renderApp('/')
+    expect(await screen.findByText('Database is restarting.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Repository URL')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('link', { name: /ada\/gantt/ })).toBeInTheDocument()
+  })
+
+  it('asks to link GitHub on All missions too', async () => {
+    fake.github = null
+    renderApp('/projects')
+    expect(await screen.findByRole('heading', { name: 'Link GitHub first' })).toBeInTheDocument()
   })
 })
 

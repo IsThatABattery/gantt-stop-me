@@ -2,10 +2,12 @@ import { Link } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
+import { Button } from '../../components/controls'
 import type { Project } from '../../data/api/types'
+import { errorCode } from '../../data/errors'
 import { useMyProjects } from '../../data/views/addProject'
 import { labels } from '../../labels/labels'
-import { AddProjectPage } from './AddProjectPage'
+import { AddProjectPage, LinkGitHubFirst } from './AddProjectPage'
 
 const RECENT = 5
 
@@ -30,12 +32,22 @@ function ProjectList({ projects }: { projects: Project[] }) {
   )
 }
 
+/** A first load that failed. A failed refetch keeps the list that loaded. */
+function LoadError({ error, retry }: { error: Error | null; retry: () => unknown }) {
+  return (
+    <StatusMessage title="Something went wrong" body={error?.message}>
+      <Button onClick={() => retry()}>Try again</Button>
+    </StatusMessage>
+  )
+}
+
 /** The landing page: the projects opened most recently, centered, or adding one when there are none. */
 export function FlightDeckPage() {
-  const { data: projects, isPending, error } = useMyProjects()
-  if (isPending) return null
+  const { data: projects, isPending, error, refetch } = useMyProjects()
+  if (isPending) return <StatusMessage title={`Loading ${labels.projects.toLowerCase()}…`} />
   // No GitHub link, or none opened yet: adding one explains what to do.
-  if (error || projects.length === 0) return <AddProjectPage />
+  if (errorCode(error) === 'github_not_linked' || projects?.length === 0) return <AddProjectPage />
+  if (!projects) return <LoadError error={error} retry={refetch} />
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 py-10">
       <div className="flex w-full max-w-[640px] flex-col gap-4">
@@ -61,7 +73,7 @@ export function FlightDeckPage() {
 
 /** Every project the user has opened and can still see. */
 export function ProjectsPage() {
-  const { data: projects, isPending, error } = useMyProjects()
+  const { data: projects, isPending, error, refetch } = useMyProjects()
   return (
     <div className="flex flex-col gap-6 px-8 py-10">
       <header className="flex max-w-[640px] flex-wrap items-end justify-between gap-4">
@@ -74,8 +86,10 @@ export function ProjectsPage() {
       <div className="max-w-[640px]">
         {isPending ? (
           <StatusMessage title={`Loading ${labels.projects.toLowerCase()}…`} />
-        ) : error ? (
-          <StatusMessage title="Something went wrong" body={error.message} />
+        ) : errorCode(error) === 'github_not_linked' ? (
+          <LinkGitHubFirst />
+        ) : !projects ? (
+          <LoadError error={error} retry={refetch} />
         ) : projects.length === 0 ? (
           <p className="m-0 text-text-muted">No {labels.projects.toLowerCase()} opened yet.</p>
         ) : (
