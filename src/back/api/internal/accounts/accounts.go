@@ -42,6 +42,7 @@ func (a *Accounts) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/login", a.login)
 	mux.HandleFunc("POST /api/auth/logout", a.logout)
 	mux.HandleFunc("GET /api/me", a.Require(a.me))
+	mux.HandleFunc("PATCH /api/me", a.Require(a.editMe))
 	mux.HandleFunc("PATCH /api/me/password", a.Require(a.changePassword))
 }
 

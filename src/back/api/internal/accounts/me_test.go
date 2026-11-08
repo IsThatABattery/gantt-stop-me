@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"gantt-stop-me/api/internal/apptest"
@@ -76,4 +77,54 @@ func TestSessionTokenIsStoredHashed(t *testing.T) {
 	if raw != 0 || hashed != 1 {
 		t.Fatalf("rows with raw cookie = %d, with its sha256 = %d; want 0 and 1", raw, hashed)
 	}
+}
+
+func TestEditMeName(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	name := func(res *apptest.Response) string {
+		t.Helper()
+		res.Expect(http.StatusOK, "")
+		var me struct {
+			Email string
+			Name  json.RawMessage
+		}
+		res.JSON(&me)
+		if me.Email != "ada@example.com" {
+			t.Fatalf("answer = %+v, want the user as GET /api/me has them", me)
+		}
+		return string(me.Name)
+	}
+
+	if got := name(env.Do("GET", "/api/me", nil, session)); got != "null" {
+		t.Fatalf("name before setting = %s, want null", got)
+	}
+	if got := name(env.Do("PATCH", "/api/me", map[string]any{"name": "  Ada Lovelace \n"}, session)); got != `"Ada Lovelace"` {
+		t.Fatalf("PATCH answered name %s, want it trimmed", got)
+	}
+	if got := name(env.Do("GET", "/api/me", nil, session)); got != `"Ada Lovelace"` {
+		t.Fatalf("name after setting = %s", got)
+	}
+	long := strings.Repeat("é", 100) // characters, not bytes
+	if got := name(env.Do("PATCH", "/api/me", map[string]any{"name": long}, session)); got != `"`+long+`"` {
+		t.Fatalf("100 characters: name = %s", got)
+	}
+	if got := name(env.Do("PATCH", "/api/me", map[string]any{"name": nil}, session)); got != "null" {
+		t.Fatalf("name after clearing = %s, want null", got)
+	}
+}
+
+func TestEditMeRefusesBadNames(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	for _, bad := range []string{"", "   ", strings.Repeat("a", 101), "Ada\tLovelace", "Ada\x00"} {
+		env.Do("PATCH", "/api/me", map[string]any{"name": bad}, session).Expect(http.StatusBadRequest, "invalid_name")
+	}
+	env.Do("PATCH", "/api/me", map[string]any{"name": 7}, session).Expect(http.StatusBadRequest, "bad_request")
+	var name *string
+	env.DB.QueryRow(context.Background(), `select name from users`).Scan(&name)
+	if name != nil {
+		t.Fatalf("name = %q after refused edits, want none", *name)
+	}
+	env.Do("PATCH", "/api/me", map[string]any{"name": "Ada"}).Expect(http.StatusUnauthorized, "unauthorized")
 }

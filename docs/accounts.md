@@ -78,7 +78,7 @@ Ends the current session.
 
 ## Current user
 
-Returns the signed-in user and their linked GitHub account.
+Returns the signed-in user, their display name and their linked GitHub account.
 
 `GET /api/me`
 
@@ -92,15 +92,44 @@ Returns the signed-in user and their linked GitHub account.
 
 | Status | Body |
 | --- | --- |
-| `200` | user, with `github` the linked login and its `kind` (`oauth` or `pat`), or `null` when none is linked |
+| `200` | user, with `name` their display name, `null` until set, and `github` the linked login and its `kind` (`oauth` or `pat`), or `null` when none is linked |
 | `401` | `unauthorized` |
 
 ```json
-{ "id": 1, "email": "ada@example.com", "github": { "login": "ada", "kind": "oauth" } }
+{ "id": 1, "email": "ada@example.com", "name": "Ada Lovelace", "github": { "login": "ada", "kind": "oauth" } }
 ```
 
 ```json
-{ "id": 1, "email": "ada@example.com", "github": null }
+{ "id": 1, "email": "ada@example.com", "name": null, "github": null }
+```
+
+## Edit profile
+
+Sets or clears the signed-in user's display name.
+
+`PATCH /api/me`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `name` | body | string or null | trimmed, 1 to 100 characters, no control characters; `null` or left out clears it |
+
+```json
+{ "name": "Ada Lovelace" }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `200` | user, as [Current user](#current-user) answers it |
+| `400` | `invalid_name`, `bad_request` |
+| `401` | `unauthorized` |
+
+```json
+{ "id": 1, "email": "ada@example.com", "name": "Ada Lovelace", "github": { "login": "ada", "kind": "oauth" } }
 ```
 
 ## Change password
