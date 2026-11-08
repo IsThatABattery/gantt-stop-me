@@ -1,4 +1,5 @@
 import { createBrowserRouter, Outlet, type RouteObject } from 'react-router'
+import { AutomationPage } from '../pages/automation'
 import { BoardPage } from '../pages/board/BoardPage'
 import { NewTaskDialog, TaskEditPage } from '../pages/forms'
 import { LoginPage } from '../pages/LoginPage'
@@ -46,6 +47,7 @@ export const routes: RouteObject[] = [
             ],
           },
           { path: 'tasks/:taskId/edit', element: <TaskEditPage /> },
+          { path: 'automation', element: <AutomationPage /> },
         ],
       },
     ],

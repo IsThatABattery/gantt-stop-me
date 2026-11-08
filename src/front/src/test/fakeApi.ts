@@ -4,7 +4,8 @@
 // `fake` to check what was saved, and `fake.requests` to check what was sent.
 
 import { http, HttpResponse, type JsonBodyType } from 'msw'
-import type { Column, GitHubLink, Project, Provider, TaskDetail } from '../data/api/types'
+import type { AgentSettings, Automation, Column, GitHubLink, PlanningSettings, Project, Provider, TaskDetail } from '../data/api/types'
+import { trimSpace } from '../data/views/agentSettings'
 
 interface Account {
   id: number
@@ -76,8 +77,13 @@ function fresh() {
     ] as Provider[],
     /** What every provider's model listing answers */
     availableModels: ['llama3', 'qwen2', 'mistral'],
-    /** Provider ids that automation or planning use, so deleting them is refused */
-    providersInUse: [] as number[],
+    planning: {
+      review: true,
+      interviewer: { providerId: null, model: null, instructions: '' },
+      taskAgent: { providerId: null, model: null, instructions: '' },
+    } as PlanningSettings,
+    /** The project's automation; null when the API has no runner, so its routes answer 404 */
+    automation: { enabled: false } as Automation | null,
     /** The next request to this "METHOD /path" answers with this error instead */
     failNext: {} as Record<string, ForcedError>,
     requests: [] as SentRequest[],
@@ -168,6 +174,43 @@ function checkProvider(body: Record<string, unknown>, creating: boolean) {
   const models = (body.models as string[] | undefined) ?? []
   const unknown = models.find((m) => !fake.availableModels.includes(m))
   if (unknown) throw new Refused(fail(400, 'unknown_model', `The provider doesn't list ${unknown}.`))
+}
+
+/** A model as the API checks it: on one of the caller's providers and its chosen models, or none when not required. */
+function checkModel(providerId: number | null, model: string | null, required: boolean) {
+  if (providerId === null && model === null && !required) return
+  const provider = fake.providers.find((p) => p.id === providerId)
+  if (!provider) throw new Refused(fail(400, 'invalid_provider', 'Pick one of your providers.'))
+  if (!provider.models.includes(model ?? '')) throw new Refused(fail(400, 'invalid_model', "Pick one of this provider's chosen models."))
+}
+
+function checkInstructions(s: unknown) {
+  const instructions = trimSpace(String(s ?? ''))
+  if ([...instructions].length > 4000 || instructions.includes('\0')) {
+    throw new Refused(fail(400, 'invalid_instructions', 'Use at most 4000 characters and no NUL.'))
+  }
+  return instructions
+}
+
+/** A planning agent as the API checks and stores it. */
+function checkAgent(a: Partial<AgentSettings>): AgentSettings {
+  const providerId = a.providerId ?? null
+  const model = a.model ?? null
+  checkModel(providerId, model, false)
+  return { providerId, model, instructions: checkInstructions(a.instructions) }
+}
+
+/** Whether planning or the project's automation uses the provider, as the database's foreign keys see it. */
+function providerInUse(id: number) {
+  const a = fake.automation
+  const { interviewer, taskAgent } = fake.planning
+  return interviewer.providerId === id || taskAgent.providerId === id || (!!a?.enabled && (a.decisionProviderId === id || a.chatProviderId === id))
+}
+
+function automationAccess(id: string, write: boolean) {
+  projectAccess(id)
+  if (!fake.automation) throw new Refused(fail(404, 'not_found', 'Not found.'))
+  if (write && fake.project.permission === 'read') throw new Refused(fail(403, 'forbidden', 'You need write access.'))
 }
 
 export const handlers = [
@@ -289,6 +332,57 @@ export const handlers = [
     return HttpResponse.json(brief(task))
   }),
 
+  // ---- Planning and automation ----
+  route('get', '/me/planning', () => {
+    signedIn()
+    return HttpResponse.json(fake.planning)
+  }),
+  route('put', '/me/planning', ({ body }) => {
+    signedIn()
+    if (!body.interviewer || !body.taskAgent) return fail(400, 'bad_request', 'Send both agents.')
+    fake.planning = {
+      review: body.review !== false,
+      interviewer: checkAgent(body.interviewer as AgentSettings),
+      taskAgent: checkAgent(body.taskAgent as AgentSettings),
+    }
+    return HttpResponse.json(fake.planning)
+  }),
+  route('get', '/projects/:id/automation', ({ params }) => {
+    automationAccess(params.id, false)
+    return HttpResponse.json(fake.automation)
+  }),
+  route('put', '/projects/:id/automation', ({ params, body }) => {
+    automationAccess(params.id, true)
+    // As enable.go: both models, then both instructions.
+    const decisionProviderId = body.decisionProviderId as number
+    const decisionModel = body.decisionModel as string
+    const chatProviderId = body.chatProviderId as number
+    const chatModel = body.chatModel as string
+    checkModel(decisionProviderId, decisionModel, true)
+    checkModel(chatProviderId, chatModel, true)
+    const decisionInstructions = checkInstructions(body.decisionInstructions)
+    const chatInstructions = checkInstructions(body.chatInstructions)
+    fake.automation = {
+      enabled: true,
+      owner: { id: signedIn().id, login: fake.github?.login ?? null },
+      decisionProviderId,
+      decisionModel,
+      decisionInstructions,
+      chatProviderId,
+      chatModel,
+      chatInstructions,
+      pausedReason: null,
+      payloadUrl: `https://gantt.example.com/api/github/webhook/${fake.project.id}`,
+      webhookSecretSet: fake.automation?.enabled ? fake.automation.webhookSecretSet : false,
+    }
+    return HttpResponse.json(fake.automation)
+  }),
+  route('delete', '/projects/:id/automation', ({ params }) => {
+    automationAccess(params.id, true)
+    fake.automation = { enabled: false }
+    return noContent()
+  }),
+
   // ---- Providers ----
   route('get', '/providers', () => {
     signedIn()
@@ -330,7 +424,7 @@ export const handlers = [
     signedIn()
     const id = Number(params.providerId)
     if (!fake.providers.some((p) => p.id === id)) return fail(404, 'not_found', 'Not found.')
-    if (fake.providersInUse.includes(id)) return fail(409, 'provider_in_use', 'Automation or planning uses this provider.')
+    if (providerInUse(id)) return fail(409, 'provider_in_use', 'Automation or planning uses this provider.')
     fake.providers = fake.providers.filter((p) => p.id !== id)
     return noContent()
   }),

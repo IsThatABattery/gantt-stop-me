@@ -33,6 +33,7 @@ To use the board you need an account (sign up at `/signup`) and a linked GitHub 
 | `src/data/views/tasks.ts` | One task: detail, create, edit |
 | `src/data/views/addProject.ts` | Add a project by repository URL |
 | `src/data/views/settings.ts` | Password, GitHub link, providers |
+| `src/data/views/agentSettings.ts` | Planning agents (`/api/me/planning`) and a project's automation agents |
 | `src/data/keys.ts` | All TanStack Query keys |
 
 Pages call hooks from these modules, never `api()` directly. API errors arrive as `ApiError` with the API's `code`, so a form can put each refusal on its field.
@@ -65,10 +66,11 @@ Tests for the hidden screens are `describe.skip`ped with a pointer to `api-gaps.
 | --- | --- |
 | `/login`, `/signup` | Sign in, create an account |
 | `/` | Add a project by repository URL |
-| `/settings` | Settings: account, GitHub, LLM providers |
+| `/settings` | Settings: account, GitHub, LLM providers, planning agents |
 | `/projects/:projectId` | Board |
 | `/projects/:projectId/tasks/:taskId` | Payload drawer over the board |
 | `/projects/:projectId/new/task` | New payload dialog over the board |
 | `/projects/:projectId/tasks/:taskId/edit` | Edit payload |
+| `/projects/:projectId/automation` | Automation: on or off, and its two agents |
 
 Project and task ids are the API's numeric ids.
