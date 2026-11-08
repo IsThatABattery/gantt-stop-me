@@ -3,6 +3,7 @@ import { labels } from '../labels/labels'
 import { ActivityPage } from '../pages/activity'
 import { AgentsPage } from '../pages/agents'
 import { BoardPage } from '../pages/board/BoardPage'
+import { HangarPage } from '../pages/hangar/HangarPage'
 import { FeatureEditPage, NewFeatureDialog, NewTaskDialog, TaskEditPage } from '../pages/forms'
 import { LoginPage } from '../pages/LoginPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -54,8 +55,16 @@ export const routes: RouteObject[] = [
           { path: 'tasks/:taskId/edit', element: <TaskEditPage /> }, // feature/frontend-forms
           { path: 'agents', element: <AgentsPage /> }, // feature/frontend-agents
           { path: 'activity', element: <ActivityPage /> }, // feature/frontend-activity
+          {
+            // The Hangar tab: a list of the Hangar column; the drawer opens over it
+            path: 'backlog',
+            element: <HangarPage />,
+            children: [
+              { index: true, element: null },
+              { path: 'tasks/:taskId', element: <TaskDrawerPage /> },
+            ],
+          },
           // Not designed yet, no branch
-          { path: 'backlog', element: <PlaceholderPage title={labels.backlog} /> },
           { path: 'sprints', element: <PlaceholderPage title={labels.sprints} /> },
           { path: 'retro', element: <PlaceholderPage title={labels.retro} /> },
         ],

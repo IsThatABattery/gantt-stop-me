@@ -62,7 +62,7 @@ export function getTaskDetail(projectId: ID, taskId: ID): Promise<TaskDetail> {
 export const useTaskDetail = (projectId: ID, taskId: ID) =>
   useQuery({ queryKey: keys.task(projectId, taskId), queryFn: () => getTaskDetail(projectId, taskId) })
 
-/** True when the task is in Docking and waiting on a human decision. */
+/** True when the task is in Mission review and waiting on a human decision. */
 export const needsApproval = (t: Pick<Task, 'column' | 'status'>) =>
   t.column === 'user-check' && (t.status === 'awaiting-approval' || t.status === 'in-review')
 
@@ -123,7 +123,7 @@ interface TaskRef {
   taskId: ID
 }
 
-/** Approve & land: Docking → Closed, status landed. */
+/** Approve & land: Mission review → Closed, status landed. */
 export function approveTask({ projectId, taskId }: TaskRef): Promise<Task> {
   return write(() => {
     const task = findTask(projectId, taskId)

@@ -17,7 +17,7 @@ function isTyping(target: EventTarget | null) {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-/** Pinned bar for a payload in Docking (PayloadDetail.dc.html), with A / R / T shortcuts. */
+/** Pinned bar for a payload in Mission review (PayloadDetail.dc.html), with A / R / T shortcuts. */
 export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
   const { task, assignee } = detail
   const ref = { projectId: task.projectId, taskId: task.id }

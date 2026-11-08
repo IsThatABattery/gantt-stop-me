@@ -286,8 +286,8 @@ export const proposalStatusLabels: Record<ProposalStatus, string> = {
 export const columnLabels: Record<ColumnKey, { name: string; plain: string }> = {
   backlog: { name: 'Hangar', plain: 'Backlog' },
   'in-progress': { name: 'In orbit', plain: 'In Progress' },
-  testing: { name: 'Static fire', plain: 'Testing' },
-  'user-check': { name: 'Docking', plain: 'User Check' },
+  testing: { name: 'Flight check', plain: 'Testing' },
+  'user-check': { name: 'Mission review', plain: 'User Check' },
   closed: { name: 'Landed', plain: 'Closed' },
 }
 

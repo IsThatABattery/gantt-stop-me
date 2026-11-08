@@ -201,9 +201,9 @@ const seeds: TaskSeed[] = [
   { key: 'PAY-44', title: 'Generate API client from OpenAPI spec', epicId: 'e-comms', featureId: 'f-realtime', assignee: a('a-1'), estimate: 5, column: 'in-progress', status: 'working' },
   { key: 'PAY-45', title: 'Fix flaky websocket reconnect test', epicId: 'e-comms', featureId: 'f-realtime', assignee: a('a-3'), estimate: 3, column: 'in-progress', status: 'hail' },
   { key: 'PAY-46', title: 'Sprint capacity gauge', epicId: 'e-telemetry', featureId: 'f-telemetry', assignee: u('u-tv'), estimate: 4, column: 'in-progress', status: 'working' },
-  // Static fire · Testing
+  // Flight check · Testing
   { key: 'PAY-43', title: 'Upgrade build to Node 22', epicId: 'e-core', featureId: 'f-build', assignee: a('a-4'), estimate: 3, column: 'testing', status: 'blocked', prNumber: 207, blockedReason: 'CI runner image missing' },
-  // Docking · User Check
+  // Mission review · User Check
   {
     key: 'PAY-41',
     title: 'Pagination for backlog endpoint',

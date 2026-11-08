@@ -88,7 +88,7 @@ export function ProjectSelectPage() {
               <Icon name="alert" size={16} />
               {labels.needsYou}
             </span>
-            {needs.approval > 0 && <span>{plural(needs.approval, lower(labels.task), lower(labels.tasks))} docking for review</span>}
+            {needs.approval > 0 && <span>{plural(needs.approval, lower(labels.task), lower(labels.tasks))} in mission review</span>}
             {needs.hails > 0 && <span>{plural(needs.hails, lower(labels.hail), lower(labels.hails))} from an {lower(labels.agent)}</span>}
             {needs.blockedProjects > 0 && (
               <span>{plural(needs.blockedProjects, lower(labels.project), lower(labels.projects))} with {lower(labels.blocked)}</span>

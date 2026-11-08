@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
 import { Drawer } from '../../components/Drawer'
 import { Icon } from '../../components/Icon'
@@ -12,11 +12,13 @@ import { DrawerHeader } from './DrawerHeader'
 import { TaskTabs } from './TaskTabs'
 import { Trace } from './Trace'
 
-// Payload drawer over the board (PayloadDetail.dc.html, AGENT_BRIEF §5–6).
+// Payload drawer over the board or the Hangar list (PayloadDetail.dc.html, AGENT_BRIEF §5–6).
 export function TaskDrawerPage() {
   const { projectId = '', taskId = '' } = useParams()
   const navigate = useNavigate()
-  const close = () => navigate(`/projects/${projectId}`)
+  const { pathname } = useLocation()
+  // Close back to the page under the drawer: the board, or the Hangar list.
+  const close = () => navigate(pathname.slice(0, pathname.lastIndexOf('/tasks/')))
   const { data: detail, isPending, error } = useTaskDetail(projectId, taskId)
   // Keyed by task so switching cards clears the last confirmation.
   const [notice, setNotice] = useState<{ taskId: string; text: string } | null>(null)

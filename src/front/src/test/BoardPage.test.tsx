@@ -80,7 +80,7 @@ describe('board filters', () => {
 
     expect(cardsIn(/^Hangar/)).toEqual(['PAY-60', 'PAY-61', 'PAY-62'])
     expect(cardsIn(/^In orbit/)).toEqual(['PAY-44', 'PAY-45'])
-    expect(cardsIn(/^Docking/)).toEqual([])
+    expect(cardsIn(/^Mission review/)).toEqual([])
   })
 
   it('filters by a counter, and clears it on a second click', async () => {

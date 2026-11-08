@@ -19,7 +19,7 @@ describe('payload drawer', () => {
     const { d } = await openTask('t-41')
 
     expect(within(d).getByRole('heading', { name: 'Pagination for backlog endpoint' })).toBeInTheDocument()
-    expect(within(d).getByText('Docking · Awaiting review')).toBeInTheDocument()
+    expect(within(d).getByText('Mission review · Awaiting review')).toBeInTheDocument()
     expect(within(d).getByRole('link', { name: 'Edit payload' })).toHaveAttribute('href', '/projects/orbital-nav/tasks/t-41/edit')
     expect(within(d).getByText(/Astronaut-1 · Guided/)).toBeInTheDocument()
     expect(within(d).getByRole('tab', { name: 'Modules 3/4' })).toBeInTheDocument()
@@ -85,10 +85,10 @@ describe('payload drawer', () => {
 
     expect(await within(d).findByText('You took over PAY-41.')).toBeInTheDocument()
     expect(db.tasks.find((t) => t.id === 't-41')).toMatchObject({ assignee: { kind: 'user', id: 'u-tv' }, status: 'working' })
-    expect(within(d).getByText('Docking · Working')).toBeInTheDocument()
+    expect(within(d).getByText('Mission review · Working')).toBeInTheDocument()
   })
 
-  it('has no approval bar outside Docking, and the shortcuts do nothing', async () => {
+  it('has no approval bar outside Mission review, and the shortcuts do nothing', async () => {
     const { d } = await openTask('t-51')
     expect(within(d).queryByRole('button', { name: 'Approve & land' })).not.toBeInTheDocument()
     await userEvent.keyboard('a')

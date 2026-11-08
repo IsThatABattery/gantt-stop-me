@@ -14,7 +14,7 @@ interface CardLook {
 
 // Card states from AGENT_BRIEF §5. Every color pairs with a word and,
 // where it matters, an icon.
-function look(status: TaskStatus, byAgent: boolean): CardLook {
+export function cardLook(status: TaskStatus, byAgent: boolean): CardLook {
   switch (status) {
     case 'queued':
       return { tone: 'neutral' }
@@ -55,7 +55,7 @@ interface TaskCardProps {
 
 export function TaskCard({ task, epic, feature, owner, to, overlay = false }: TaskCardProps) {
   const byAgent = owner?.kind === 'agent'
-  const l = look(task.status, byAgent)
+  const l = cardLook(task.status, byAgent)
   const landed = task.status === 'landed'
 
   return (
