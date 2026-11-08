@@ -1,5 +1,6 @@
-// Package planning turns a feature someone describes into a plan doc: their planning settings, the project's
-// feature plans, and the interviewer agent the planner worker runs between their answers.
+// Package planning turns a feature someone describes into a plan doc, and the doc into tasks with tests: their
+// planning settings, the project's feature plans and their proposed tasks, and the interviewer and task agents the
+// planner worker runs between people's answers and reviews.
 package planning
 
 import (
@@ -18,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gantt-stop-me/api/internal/accounts"
+	"gantt-stop-me/api/internal/board"
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/secret"
@@ -30,6 +33,7 @@ type Planning struct {
 	Projects *projects.Projects // checks access to the project first
 	Secrets  *secret.Box        // opens the plan creators' provider keys
 	LLM      *http.Client       // calls the plan creators' providers, from llm.HTTPClient
+	Board    *board.Board       // creates the tasks of approved proposals
 
 	mu      sync.Mutex
 	running map[int64]bool // the creators whose plans have a turn running
@@ -49,6 +53,9 @@ func (p *Planning) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/projects/{id}/plans/{planID}/approve", p.Accounts.Require(p.approve))
 	mux.HandleFunc("POST /api/projects/{id}/plans/{planID}/deny", p.Accounts.Require(p.deny))
 	mux.HandleFunc("POST /api/projects/{id}/plans/{planID}/retry", p.Accounts.Require(p.retry))
+	mux.HandleFunc("PATCH /api/projects/{id}/plans/{planID}/proposals/{proposalID}", p.Accounts.Require(p.editProposal))
+	mux.HandleFunc("POST /api/projects/{id}/plans/{planID}/proposals/{proposalID}/approve", p.Accounts.Require(p.approveProposal))
+	mux.HandleFunc("POST /api/projects/{id}/plans/{planID}/proposals/{proposalID}/deny", p.Accounts.Require(p.denyProposal))
 }
 
 // maxText is the most characters a description, answer, feedback, question or section body can have.
@@ -218,17 +225,22 @@ func (p *Planning) show(w http.ResponseWriter, r *http.Request, status int, proj
 // withMessages is a plan as the plan endpoints answer it.
 type withMessages struct {
 	plan
-	Messages []message `json:"messages"`
+	Messages  []message  `json:"messages"`
+	Proposals []proposal `json:"proposals"`
 }
 
-// load returns the project's plan id with its messages, or pgx.ErrNoRows.
+// load returns the project's plan id with its messages and proposals, or pgx.ErrNoRows.
 func (p *Planning) load(ctx context.Context, projectID, id int64) (withMessages, error) {
 	pl, err := scanPlan(p.DB.QueryRow(ctx, `select `+planColumns+` from feature_plans fp where fp.id = $1 and fp.project_id = $2`, id, projectID))
 	if err != nil {
 		return withMessages{}, err
 	}
 	msgs, err := messages(ctx, p.DB, id)
-	return withMessages{pl, msgs}, err
+	if err != nil {
+		return withMessages{}, err
+	}
+	props, err := proposals(ctx, p.DB, id)
+	return withMessages{pl, msgs, props}, err
 }
 
 // refusal is a change the plan's state refuses, answered with its status and error.
@@ -258,8 +270,8 @@ func waiting(pl plan, statuses ...string) error {
 
 // change runs edit on the project's plan in the {planID} path value, in a transaction holding the plan's row, then
 // bumps its version. The agent's turn holds that row, so a plan it is working on answers 409 agent_busy at once
-// instead of waiting for the turn. It answers a *refusal from edit, a conflict with the plan as it is, or any other
-// error, and returns false; on true the caller answers.
+// instead of waiting for the turn. It answers a *refusal from edit, a conflict with the plan as it is, a
+// board.GitHubError as GitHub's, or any other error, and returns false; on true the caller answers.
 func (p *Planning) change(w http.ResponseWriter, r *http.Request, projectID int64, edit func(context.Context, pgx.Tx, plan) error) bool {
 	ctx, id := r.Context(), planID(r)
 	err := pgx.BeginFunc(ctx, p.DB, func(tx pgx.Tx) error {
@@ -295,6 +307,8 @@ func (p *Planning) change(w http.ResponseWriter, r *http.Request, projectID int6
 		httpx.JSON(w, http.StatusConflict, map[string]any{"error": httpx.ErrorBody{Code: errConflict.code, Message: errConflict.message}, "plan": out})
 	case errors.As(err, &ref):
 		httpx.Error(w, ref.status, ref.code, ref.message)
+	case errors.As(err, new(board.GitHubError)):
+		github.Fail(w, r, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
 	}
