@@ -10,6 +10,7 @@ import (
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/github/githubtest"
+	"gantt-stop-me/api/internal/llm/llmtest"
 	"gantt-stop-me/api/internal/projects"
 )
 
@@ -22,8 +23,9 @@ type fixture struct {
 	token    string // ada's GitHub token
 	repo     *githubtest.Repo
 	project  int64
-	provider int64  // ada's, with the models "luna" and "chat" chosen
-	secret   string // the project's webhook secret, once automated generated it
+	provider int64         // ada's, with the models "luna" and "chat" chosen
+	secret   string        // the project's webhook secret, once automated generated it
+	llm      *llmtest.Fake // ada's decision and chat models, once withLLM made them the automation's
 }
 
 func setup(t *testing.T, configure ...func(*app.Config)) *fixture {

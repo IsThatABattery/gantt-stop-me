@@ -246,14 +246,16 @@ func startRun(ctx context.Context, tx pgx.Tx, projectID, taskID int64, number in
 }
 
 // cancelRuns cancels the project's queued and running test runs of task taskID, or when taskID is 0, those testing
-// pull request number, with reason, and their queued and running workflow executions.
+// pull request number, with reason, and their queued and running workflow executions, which the queue worker then
+// stops, and skips their unfinished tests.
 func cancelRuns(ctx context.Context, tx pgx.Tx, projectID, taskID int64, number int, reason string) error {
 	_, err := tx.Exec(ctx, `
 		with runs as (
 			update test_runs set status = 'cancelled', reason = $4, finished_at = now()
 			where status in ('queued', 'running') and task_id in (select id from tasks where project_id = $1)
 				and (task_id = $2 or $2 = 0 and pr_number = $3)
-			returning id)
+			returning id),
+		results as (update test_results set status = 'skipped' where status = 'pending' and run_id in (select id from runs))
 		update workflow_executions set status = 'cancelled', finished_at = now()
 		where status in ('queued', 'running') and run_id in (select id from runs)`, projectID, taskID, number, reason)
 	return err

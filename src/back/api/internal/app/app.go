@@ -13,7 +13,9 @@ import (
 	"gantt-stop-me/api/internal/board"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
+	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/projects"
+	"gantt-stop-me/api/internal/runner"
 	"gantt-stop-me/api/internal/secret"
 	"gantt-stop-me/api/internal/settings"
 )
@@ -27,10 +29,12 @@ type Config struct {
 	GitHubClientSecret string
 	// AllowPrivateProviderURLs lets provider base URLs reach loopback and private networks, such as a local Ollama.
 	AllowPrivateProviderURLs bool
-	RunnerURL                string // the runner's base URL; automation is off, its routes 404, while it is empty
+	RunnerURL                string         // the runner's base URL; automation is off, its routes 404, while it is empty
+	Runner                   *runner.Client // the runner at RunnerURL, with RUNNER_TOKEN
+	MaxConcurrentWorkflows   int            // workflow executions running at once across the install
 }
 
-// App is the API's handler, and the automation whose poller main runs beside it.
+// App is the API's handler, and the automation whose poller and queue worker main runs beside it.
 type App struct {
 	http.Handler
 	Automation *automation.Automation
@@ -66,6 +70,10 @@ func New(db *pgxpool.Pool, cfg Config) *App {
 		Board:     brd,
 		PublicURL: cfg.PublicURL,
 		RunnerURL: cfg.RunnerURL,
+		Runner:    cfg.Runner,
+		LLM:       llm.HTTPClient(cfg.AllowPrivateProviderURLs, llm.CallTimeout),
+
+		MaxConcurrentWorkflows: cfg.MaxConcurrentWorkflows,
 	}
 	auto.Register(mux)
 	routes := jsonErrors(mux)

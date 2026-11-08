@@ -15,20 +15,25 @@ import (
 	"gantt-stop-me/api/internal/board"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/projects"
+	"gantt-stop-me/api/internal/runner"
 	"gantt-stop-me/api/internal/secret"
 )
 
 // Automation serves the automation routes under /api/projects/{id} and the webhook, polls automated projects'
-// pull requests, and checks the automation owner before work starts.
+// pull requests, checks the automation owner before work starts, and runs the queue of test runs.
 type Automation struct {
 	DB        *pgxpool.Pool
 	Accounts  *accounts.Accounts // guards every route
 	Projects  *projects.Projects // checks access to the project first
 	Secrets   *secret.Box        // opens owners' GitHub credentials and seals webhook secrets
 	GitHub    *github.Client
-	Board     *board.Board // moves tasks the way the move endpoint does
-	PublicURL string       // base URL users open, without a trailing slash
-	RunnerURL string       // the runner's base URL; automation is off while it is empty
+	Board     *board.Board   // moves tasks the way the move endpoint does
+	PublicURL string         // base URL users open, without a trailing slash
+	RunnerURL string         // the runner's base URL; automation is off while it is empty
+	Runner    *runner.Client // the runner at RunnerURL, which builds and runs workflow executions
+	// MaxConcurrentWorkflows is how many workflow executions run at once across the install.
+	MaxConcurrentWorkflows int
+	LLM                    *http.Client // calls the owners' providers, from llm.HTTPClient
 
 	deliveries sync.WaitGroup // webhook deliveries answered and still being applied
 }
