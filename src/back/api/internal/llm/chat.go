@@ -47,7 +47,8 @@ type Step struct {
 type Handler func(ctx context.Context, name, arguments string) (answer string, done bool, err error)
 
 // nudge is sent once when the model answers without calling a tool, since only a call that is done ends the loop.
-const nudge = "Call report to finish."
+// It names no tool, since each caller's tools differ.
+const nudge = "Answer by calling one of the tools."
 
 // assistant is a model's message as it came, sent back as it came: content stays null when it was, which
 // some providers require beside tool calls.
@@ -62,7 +63,7 @@ type assistant struct {
 // call is done. It returns every call carried out, in order, also with an error.
 //
 // It fails when the provider does, once maxCalls calls are carried out with none done, counting each call in a
-// message, and when the model answers without calling a tool a second time; the first time, it is nudged to report.
+// message, and when the model answers without calling a tool a second time; the first time, it is nudged to call one.
 func (c *Client) Chat(ctx context.Context, model string, messages []Message, tools []Tool, maxCalls int, handle Handler) ([]Step, error) {
 	type function struct {
 		Type     string `json:"type"`

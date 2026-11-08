@@ -10,14 +10,14 @@ import (
 	"gantt-stop-me/api/internal/httpx"
 )
 
-// delete removes one of the user's providers, unless a project's automation uses it: that would turn automation off
-// without turning it off properly, so the user switches providers or turns it off first.
+// delete removes one of the user's providers, unless a project's automation or the user's planning settings use it:
+// that would turn them off without turning them off properly, so the user switches providers or turns them off first.
 func (s *Settings) delete(w http.ResponseWriter, r *http.Request) {
 	tag, err := s.db.Exec(r.Context(), `delete from providers where id = $1 and user_id = $2`,
 		providerID(r), accounts.UserID(r.Context()))
 	if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && pgErr.Code == "23503" {
 		httpx.Error(w, http.StatusConflict, "provider_in_use",
-			"A project's automation uses this provider. Pick another provider there, or turn automation off, first.")
+			"A project's automation or your planning settings use this provider. Pick another provider there, or turn it off, first.")
 		return
 	}
 	if err != nil {
