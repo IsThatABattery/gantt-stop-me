@@ -29,6 +29,9 @@ import (
 // PublicURL is the app's URL in tests. Do sends it as the Origin header.
 const PublicURL = "http://app.test"
 
+// RunnerURL is the runner's URL in tests, so automation is on unless a test clears Config.RunnerURL.
+const RunnerURL = "http://runner.test"
+
 // Env is a running API, its database and the fake GitHub it talks to.
 type Env struct {
 	t      testing.TB
@@ -57,6 +60,7 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 		GitHubClientID:           gh.ClientID,
 		GitHubClientSecret:       gh.ClientSecret,
 		AllowPrivateProviderURLs: true, // fake provider endpoints listen on 127.0.0.1
+		RunnerURL:                RunnerURL,
 	}
 	for _, c := range configure {
 		c(&cfg)
