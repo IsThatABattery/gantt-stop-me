@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GanttStopMe settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#070B16}
+a{color:#3FD5E8}a:hover{color:#8BE9F4}
+</style>
+</helmet>
+<div style="min-height: 1040px; background: #070B16; color: #E6ECF7; font-family: Inter, system-ui, sans-serif; font-size: 14px; display: flex; flex-wrap: wrap">
+
+<nav aria-label="Primary" style="flex: 1 1 200px; box-sizing: border-box; padding: 24px 16px; border-right: 1px solid #1C2640; background: rgba(10,15,28,.85); display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 24px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3FD5E8" stroke-width="1.6" aria-hidden="true"><g transform="rotate(-25 12 12)"><path d="M1.5 12A10.5 3.4 0 0 1 22.5 12"></path><circle cx="12" cy="12" r="6" fill="#0D1830"></circle><path d="M1.5 12A10.5 3.4 0 0 0 22.5 12"></path></g></svg>
+<span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">GanttStopMe</span>
+</div>
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"></rect><rect x="10" y="4" width="5" height="11" rx="1.5"></rect><rect x="17" y="4" width="4" height="7" rx="1.5"></rect></svg>Mission control</a>
+<a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M3 10l9-6 9 6v10H3z"></path><path d="M9 20v-6h6v6"></path></svg>Hangar</a>
+<a href="ProbeConsole.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="11" r="7"></circle><rect x="7.5" y="8.5" width="9" height="5.5" rx="2.75"></rect><path d="M9 20h6"></path></svg>Astronauts</a>
+<a href="Settings.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 8px; background: #13203A; color: #E6ECF7; text-decoration: none; font-weight: 500">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3FD5E8" stroke-width="1.75" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg>Settings</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; height: 1607px">
+<header>
+<div style="font-family: Inter, system-ui, sans-serif; font-size: 12px; font-weight: 500; letter-spacing: .04em; color: #9AA7BF">MISSION · ORBITAL-NAV</div>
+<h1 style="margin: 6px 0 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 26px">Settings</h1>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+<nav aria-label="Settings sections" style="flex: 1 1 180px; display: flex; flex-direction: column; gap: 2px">
+<a href="#" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">Profile</a>
+<a href="#" aria-current="true" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; background: #0F1626; border: 1px solid #24304A; color: #E6ECF7; text-decoration: none; font-weight: 500">Astronauts and autonomy</a>
+<a href="#" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">Operators and roles</a>
+
+<a href="#" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">Notifications</a>
+<a href="#integrations" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #AAB6CC; text-decoration: none">Integrations</a>
+</nav>
+
+<div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px; max-width: 820px">
+
+<section style="padding: 24px; border-radius: 14px; background: #0F1626; border: 1px solid #24304A; display: flex; flex-direction: column; gap: 18px">
+<div>
+<h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600">Default autonomy</h2>
+<p style="margin: 6px 0 0; color: #AAB6CC; line-height: 1.5">Applies to new astronauts. You can override it per astronaut or per payload.</p>
+</div>
+<fieldset style="margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<legend style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Default autonomy level</legend>
+<label style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 10px; border: 1px solid #24304A; cursor: pointer">
+<span style="display: flex; align-items: center; gap: 8px; font-weight: 600"><input type="radio" name="autonomy" style="accent-color: #A78BFA">Tethered</span>
+<span style="font-size: 13px; color: #AAB6CC; line-height: 1.45">Approve the plan and the output.</span></label>
+<label style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 10px; border: 1px solid #A78BFA; background: rgba(167,139,250,.1); cursor: pointer">
+<span style="display: flex; align-items: center; gap: 8px; font-weight: 600"><input type="radio" name="autonomy" checked="" style="accent-color: #A78BFA">Guided</span>
+<span style="font-size: 13px; color: #AAB6CC; line-height: 1.45">Acts freely, output waits for approval.</span></label>
+<label style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 10px; border: 1px solid #24304A; cursor: pointer">
+<span style="display: flex; align-items: center; gap: 8px; font-weight: 600"><input type="radio" name="autonomy" style="accent-color: #A78BFA">Free flight</span>
+<span style="font-size: 13px; color: #AAB6CC; line-height: 1.45">Lands low-risk payloads on its own.</span></label>
+</fieldset>
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px">
+<label for="raise" style="font-size: 13px; color: #C2CCDD">Who can grant Free flight</label>
+<select id="raise" style="min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit"><option>Flight director only</option><option>Any operator member</option></select>
+</div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px">
+<label for="cap" style="font-size: 13px; color: #C2CCDD">Concurrent astronaut payloads</label>
+<input id="cap" type="number" value="4" min="1" style="min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit">
+</div>
+</div>
+</section>
+
+<section style="padding: 24px; border-radius: 14px; background: #0F1626; border: 1px solid #24304A; display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0 0 10px; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600">Approval rules</h2>
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="4">
+<label style="display: flex; align-items: center; gap: 16px; min-height: 56px; border-top: 1px solid #1C2640; cursor: pointer">
+<span style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 500">{{r.title}}</span>
+<span style="font-size: 13px; color: #AAB6CC">{{r.desc}}</span>
+</span>
+<input type="checkbox" checked="{{r.on}}" style="width: 20px; height: 20px; accent-color: #3FD5E8">
+</label>
+</sc-for>
+</section>
+
+<section id="integrations" style="padding: 24px; border-radius: 14px; background: #0F1626; border: 1px solid #24304A; display: flex; flex-direction: column; gap: 18px">
+<div>
+<h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600">Integrations</h2>
+<p style="margin: 6px 0 0; color: #AAB6CC; line-height: 1.5">The AI company that powers your astronauts. Applies to every payload unless overridden.</p>
+</div>
+<fieldset style="margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px">
+<legend style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">AI provider</legend>
+<label style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 10px; border: 1px solid #3FD5E8; background: rgba(63,213,232,.08); cursor: pointer">
+<span style="display: flex; align-items: center; gap: 8px; font-weight: 600"><input type="radio" name="provider" checked="" style="accent-color: #3FD5E8">OpenAI</span>
+<span style="font-size: 13px; color: #AAB6CC; line-height: 1.45">Default provider.</span></label>
+</fieldset>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="apikey" style="font-size: 13px; color: #C2CCDD">API key</label>
+<input id="apikey" type="password" placeholder="Paste your OpenAI API key" autocomplete="off" style="min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid #24304A; background: #0B1120; color: #E6ECF7; font: inherit">
+</div>
+</section>
+
+<div style="display: flex; justify-content: flex-end; gap: 10px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #24304A; background: transparent; color: #E6ECF7; font: inherit; cursor: pointer">Cancel</button>
+<button type="button" style="min-height: 44px; padding: 0 22px; border-radius: 10px; border: 0; background: #3FD5E8; color: #062029; font: inherit; font-weight: 600; cursor: pointer">Save changes</button>
+</div>
+
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      rules: [
+        { title: 'Astronaut output always docks for review', desc: 'Nothing an astronaut makes merges without a human, unless it has Free flight.', on: true },
+        { title: 'Require two approvals on Core phase', desc: 'Payloads tagged Core need a second reviewer.', on: false },
+        { title: 'Pause astronauts when comms go down', desc: 'A blocked astronaut stops instead of retrying.', on: true },
+        { title: 'Hails notify the flight director', desc: 'Questions from astronauts ping the lead right away.', on: true }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
