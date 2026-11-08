@@ -36,6 +36,8 @@ export function SignupPage() {
   const code = errorCode(mutation.error)
   const field = code ? fieldOf[code] : undefined
   const fieldError = (name: 'email' | 'password') => (field === name ? mutation.error?.message : undefined)
+  // Editing clears the refusal: it was about the old value.
+  const clearError = () => mutation.isError && mutation.reset()
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -65,10 +67,13 @@ export function SignupPage() {
               value={email}
               aria-invalid={!!fieldError('email')}
               aria-describedby={fieldError('email') ? 'signup-email-error' : undefined}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                clearError()
+              }}
             />
             {fieldError('email') && (
-              <span id="signup-email-error" className="text-xs text-critical">
+              <span id="signup-email-error" role="alert" className="text-xs text-critical">
                 {fieldError('email')}
               </span>
             )}
@@ -81,10 +86,13 @@ export function SignupPage() {
               value={password}
               aria-invalid={!!fieldError('password')}
               aria-describedby={fieldError('password') ? 'signup-password-error' : 'signup-password-hint'}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                clearError()
+              }}
             />
             {fieldError('password') ? (
-              <span id="signup-password-error" className="text-xs text-critical">
+              <span id="signup-password-error" role="alert" className="text-xs text-critical">
                 {fieldError('password')}
               </span>
             ) : (

@@ -104,8 +104,12 @@ describe('sign up', () => {
     await userEvent.type(screen.getByLabelText('Password'), 'long enough')
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
-    expect(await screen.findByText('An account with this email already exists.')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('An account with this email already exists.')
     expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true')
+
+    await userEvent.type(screen.getByLabelText('Email'), 'u')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'false')
   })
 })
 

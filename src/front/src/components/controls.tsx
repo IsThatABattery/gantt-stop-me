@@ -11,7 +11,7 @@ export function Button({ variant = 'secondary', className = '', type = 'button',
 }
 
 const fieldControl =
-  'min-h-[46px] box-border rounded-control border border-line bg-surface-sunken text-text font-[inherit] placeholder:text-text-muted focus:border-ion focus:outline-none'
+  'min-h-[46px] box-border rounded-control border border-line bg-surface-sunken text-text font-[inherit] placeholder:text-text-muted focus:border-ion focus:outline-none disabled:cursor-not-allowed disabled:opacity-60'
 
 export function TextInput({ className = '', ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cx(`${fieldControl} w-full px-3.5`, className)} {...rest} />
