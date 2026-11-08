@@ -286,7 +286,7 @@ function BoardView({ board }: { board: Board }) {
             <div
               ref={gridRef}
               onKeyDown={onKeyDown}
-              className="grid min-w-[1120px] grid-cols-[repeat(5,minmax(216px,1fr))] gap-4"
+              className="grid min-w-[1144px] grid-cols-[repeat(5,minmax(216px,1fr))] gap-4"
             >
               {COLUMN_ORDER.map((key) => (
                 <BoardColumn
