@@ -111,6 +111,18 @@ func (c *Client) ClosingIssues(ctx context.Context, token string, repoID int64, 
 	return closes, nil
 }
 
+// convertToDraft is the ConvertToDraft mutation.
+const convertToDraft = `mutation ConvertToDraft($id: ID!) {
+  convertPullRequestToDraft(input: {pullRequestId: $id}) { pullRequest { isDraft } }
+}`
+
+// ConvertToDraft turns the pull request with this GraphQL node id back into a draft, so it needs marking ready
+// for review again.
+func (c *Client) ConvertToDraft(ctx context.Context, token, nodeID string) error {
+	var out json.RawMessage
+	return c.graphql(ctx, token, convertToDraft, map[string]any{"id": nodeID}, &out)
+}
+
 // Permission returns login's permission on the repository: "admin", "maintain", "write", "triage", "read" or "none",
 // which is also the answer for a login GitHub does not know.
 func (c *Client) Permission(ctx context.Context, token string, repoID int64, login string) (string, error) {
