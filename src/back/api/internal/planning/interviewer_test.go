@@ -168,3 +168,28 @@ func TestInterviewStopsAfter20ToolCalls(t *testing.T) {
 		t.Fatalf("plan %+v", pl)
 	}
 }
+
+// The creator's own instructions come after the rules and before the plan; none leave the prompt as it was.
+func TestInterviewerInstructions(t *testing.T) {
+	f := setup(t)
+	f.start("Exports", "Export a CSV.")
+	f.llm.Reply(reply(ask("Export what?")))
+	f.work()
+	f.Do("PUT", "/api/me/planning", map[string]any{
+		"interviewer": map[string]any{"providerId": f.provider, "model": llmtest.ChatModel, "instructions": " Ask in French. "},
+		"taskAgent":   map[string]any{"providerId": f.provider, "model": llmtest.ChatModel, "instructions": "Not this."},
+	}, f.ada).Expect(http.StatusOK, "")
+	f.start("Exports", "Export a CSV.")
+	f.llm.Reply(reply(ask("Exporter quoi ?")))
+	f.work()
+
+	before, after, _ := strings.Cut(f.prompt(0), "\n\nThe plan so far follows as JSON.")
+	want := before + "\n\nExtra instructions from the plan's creator. Follow them where they don't conflict with the " +
+		"rules above:\n\nAsk in French.\n\nThe plan so far follows as JSON." + after
+	if got := f.prompt(1); got != want {
+		t.Fatalf("prompt with instructions:\n%s\nwant:\n%s", got, want)
+	}
+	if strings.Contains(f.prompt(0), "Extra instructions") {
+		t.Fatalf("prompt without instructions:\n%s", f.prompt(0))
+	}
+}

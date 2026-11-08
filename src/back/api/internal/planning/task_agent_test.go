@@ -41,7 +41,7 @@ func (f *fixture) approved() planJSON {
 // noReview turns ada's review off and returns a plan the agent finished at once, so it waits approved for its tasks.
 func (f *fixture) noReview() planJSON {
 	f.t.Helper()
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": f.provider, "model": llmtest.ChatModel, "review": false}, f.ada).
+	f.Do("PUT", "/api/me/planning", agents(f.provider, llmtest.ChatModel, false), f.ada).
 		Expect(http.StatusOK, "")
 	pl := f.start("Exports", "Let admins export the board as CSV.")
 	f.llm.Reply(reply(update(sec("goal", "Export the board.", "covered")), finish))
@@ -401,5 +401,57 @@ func TestGeneratedTestsAreWhatARunExecutes(t *testing.T) {
 	}
 	if !slices.Equal(commands, []string{"go test ./..."}) {
 		t.Fatalf("runner commands %q", commands)
+	}
+}
+
+// The task agent runs with its own model and instructions, which come after the rules and before the plan; none
+// leave the prompt as it was.
+func TestTaskAgentSettings(t *testing.T) {
+	f := setup(t)
+	f.generate(f.approved(), task("Export endpoint", nil, script("go test ./...")))
+	f.Do("PUT", "/api/me/planning", map[string]any{
+		"interviewer": map[string]any{"providerId": f.provider, "model": llmtest.ChatModel},
+		"taskAgent":   map[string]any{"providerId": f.provider, "model": llmtest.DecisionModel, "instructions": "Name tasks in French."},
+	}, f.ada).Expect(http.StatusOK, "")
+	pl := f.generate(f.approved(), task("Export endpoint", nil, script("go test ./...")))
+
+	chats := f.llm.Chats() // each plan's interview, then its tasks
+	if len(chats) != 4 || chats[2].Model != llmtest.ChatModel || chats[3].Model != llmtest.DecisionModel {
+		t.Fatalf("%d chats, models %q", len(chats), []string{chats[2].Model, chats[3].Model})
+	}
+	if f.prompt(2) != f.prompt(0) {
+		t.Fatalf("the interviewer's prompt changed:\n%s", f.prompt(2))
+	}
+	before, after, _ := strings.Cut(f.prompt(1), "\n\nThe plan follows as JSON.")
+	want := before + "\n\nExtra instructions from the plan's creator. Follow them where they don't conflict with the " +
+		"rules above:\n\nName tasks in French.\n\nThe plan follows as JSON." + after
+	if got := f.prompt(3); got != want {
+		t.Fatalf("prompt with instructions:\n%s\nwant:\n%s", got, want)
+	}
+	if strings.Contains(f.prompt(1), "Extra instructions") {
+		t.Fatalf("prompt without instructions:\n%s", f.prompt(1))
+	}
+
+	// A revision runs on the task agent's model too.
+	f.review(f.ada, pl, 1, "deny", map[string]string{"feedback": "Smaller.", "outcome": "revise"}).Expect(http.StatusOK, "")
+	f.llm.Reply(reply(task("Export endpoint", nil, script("go test ./..."))))
+	f.work()
+	if chats = f.llm.Chats(); len(chats) != 5 || chats[4].Model != llmtest.DecisionModel || !strings.Contains(f.prompt(4), "Name tasks in French.") {
+		t.Fatalf("%d chats, the revision's model %q", len(chats), chats[len(chats)-1].Model)
+	}
+}
+
+// A creator without a task agent model can still be interviewed, but the tasks fail without calling a model.
+func TestTaskAgentWithoutAModel(t *testing.T) {
+	f := setup(t)
+	f.Do("PUT", "/api/me/planning", map[string]any{"interviewer": map[string]any{"providerId": f.provider, "model": llmtest.ChatModel}, "taskAgent": map[string]any{}}, f.ada).
+		Expect(http.StatusOK, "")
+	pl := f.approved()
+	f.work()
+	if pl = f.plan(pl.ID); pl.Pending != nil || orNull(pl.Error) != "The plan's creator has no task agent model. They pick one in Settings, then someone retries." {
+		t.Fatalf("plan %+v", pl)
+	}
+	if n := len(f.llm.Chats()); n != 1 {
+		t.Fatalf("%d chat requests, want the interview's alone", n)
 	}
 }

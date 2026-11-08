@@ -29,8 +29,8 @@ func TestCreateNeedsAPlanningModel(t *testing.T) {
 	bob := f.member("bob", "push")
 	body := map[string]string{"title": "Exports", "description": "CSV."}
 	f.Do("POST", f.path("/plans"), body, bob).Expect(http.StatusConflict, "planning_not_set_up")
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": nil, "model": nil, "review": false}, bob).Expect(http.StatusOK, "")
+	f.Do("PUT", "/api/me/planning", agents(nil, nil, false), bob).Expect(http.StatusOK, "")
 	f.Do("POST", f.path("/plans"), body, bob).Expect(http.StatusConflict, "planning_not_set_up")
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": f.addProvider(bob), "model": "test-chat"}, bob).Expect(http.StatusOK, "")
+	f.Do("PUT", "/api/me/planning", agents(f.addProvider(bob), "test-chat", true), bob).Expect(http.StatusOK, "")
 	f.Do("POST", f.path("/plans"), body, bob).Expect(http.StatusCreated, "")
 }

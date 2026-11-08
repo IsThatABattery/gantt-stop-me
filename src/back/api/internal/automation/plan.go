@@ -242,12 +242,12 @@ func (a *Automation) route(ctx context.Context, projectID int64, title string, w
 // decide asks the owner's decision model, in one call, which of ws can run each of tests at the positions ask, and
 // returns its answers by question name.
 func (a *Automation) decide(ctx context.Context, projectID int64, title string, ws []Workflow, tests []tasktests.Test, ask []int) (map[string]llm.Answer, error) {
-	var baseURL, model string
+	var baseURL, model, instructions string
 	var sealed []byte
 	err := a.DB.QueryRow(ctx, `
-		select pv.base_url, pv.key_enc, pa.decision_model
+		select pv.base_url, pv.key_enc, pa.decision_model, pa.decision_instructions
 		from project_automation pa join providers pv on pv.id = pa.decision_provider where pa.project_id = $1`, projectID).
-		Scan(&baseURL, &sealed, &model)
+		Scan(&baseURL, &sealed, &model, &instructions)
 	if err != nil {
 		return nil, err
 	}
@@ -268,6 +268,7 @@ func (a *Automation) decide(ctx context.Context, projectID int64, title string, 
 		fmt.Fprintf(&in, "\n%d. %s", pos, strings.ReplaceAll(testText(tests[pos-1]), "\n", "\n   "))
 		questions[i] = llm.Question{Name: question(pos), Instructions: fmt.Sprintf("Which workflow can run test %d?", pos), Choices: choices}
 	}
+	in.WriteString(llm.Extra("the project's automation owner", instructions)) // once, not per question: up to 64 of them
 	c := &llm.Client{BaseURL: baseURL, Key: string(key), HTTP: a.LLM}
 	return c.Decide(ctx, model, in.String(), questions)
 }

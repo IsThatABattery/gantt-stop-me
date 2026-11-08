@@ -13,7 +13,8 @@ func TestShowSettings(t *testing.T) {
 	session := env.SignUp("ada@example.com", "correct horse")
 	res := env.Do("GET", "/api/me/planning", nil, session)
 	res.Expect(http.StatusOK, "")
-	if got := strings.TrimSpace(string(res.Body)); got != `{"providerId":null,"model":null,"review":true}` {
+	if got := strings.TrimSpace(string(res.Body)); got != `{"review":true,"interviewer":{"providerId":null,"model":null,"instructions":""},`+
+		`"taskAgent":{"providerId":null,"model":null,"instructions":""}}` {
 		t.Fatalf("unset settings %s", got)
 	}
 	env.Do("GET", "/api/me/planning", nil).Expect(http.StatusUnauthorized, "unauthorized")

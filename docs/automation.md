@@ -25,7 +25,7 @@ Returns whether automation is on, who owns it, its models, why it is paused if i
 | `404` | `not_found` |
 | `502` | `github_error` |
 
-`owner` is the automation owner's user `id` and GitHub `login`, `null` once they unlink GitHub. `pausedReason` is `null` while automation runs. `webhookSecretSet` says whether a webhook secret was generated.
+`owner` is the automation owner's user `id` and GitHub `login`, `null` once they unlink GitHub. `decisionInstructions` and `chatInstructions` are the owner's own instructions to the decision model and to LLM checks, `""` for none. `pausedReason` is `null` while automation runs. `webhookSecretSet` says whether a webhook secret was generated.
 
 ```json
 {
@@ -35,6 +35,8 @@ Returns whether automation is on, who owns it, its models, why it is paused if i
   "decisionModel": "gpt-6-luna",
   "chatProviderId": 2,
   "chatModel": "gpt-5",
+  "decisionInstructions": "",
+  "chatInstructions": "Prefer curl over the browser.",
   "pausedReason": null,
   "payloadUrl": "https://gantt.example.com/api/github/webhook/1",
   "webhookSecretSet": false
@@ -47,7 +49,7 @@ Returns whether automation is on, who owns it, its models, why it is paused if i
 
 ## Turn on automation
 
-Turns automation on with the caller as its owner, or takes it over: the caller replaces the owner and models and unpauses it, and the webhook secret stays.
+Turns automation on with the caller as its owner, or takes it over: the caller replaces the owner, models and instructions and unpauses it, and the webhook secret stays.
 
 `PUT /api/projects/{id}/automation`
 
@@ -61,9 +63,17 @@ Turns automation on with the caller as its owner, or takes it over: the caller r
 | `decisionModel` | body | string | one of that provider's chosen `models`; picks workflows, so it should serve the OpenAI Decisions API |
 | `chatProviderId` | body | integer | one of the caller's providers, the same or another |
 | `chatModel` | body | string | one of that provider's chosen `models`; runs LLM checks, so it should support tool calling |
+| `decisionInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added once to the end of the decision model's input |
+| `chatInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added to every LLM check's prompt after its rules, which win where they conflict |
 
 ```json
-{ "decisionProviderId": 1, "decisionModel": "gpt-6-luna", "chatProviderId": 2, "chatModel": "gpt-5" }
+{
+  "decisionProviderId": 1,
+  "decisionModel": "gpt-6-luna",
+  "chatProviderId": 2,
+  "chatModel": "gpt-5",
+  "chatInstructions": "Prefer curl over the browser."
+}
 ```
 
 **Output**
@@ -71,7 +81,7 @@ Turns automation on with the caller as its owner, or takes it over: the caller r
 | Status | Body |
 | --- | --- |
 | `200` | automation settings, as [Show automation](#show-automation) answers them |
-| `400` | `invalid_provider`, `invalid_model`, `bad_request` |
+| `400` | `invalid_provider`, `invalid_model`, `invalid_instructions`, `bad_request` |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |

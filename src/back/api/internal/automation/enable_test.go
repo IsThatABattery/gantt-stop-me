@@ -3,7 +3,9 @@ package automation_test
 import (
 	"bytes"
 	"context"
+	"maps"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +68,34 @@ func TestEnableChecksProvidersAndModels(t *testing.T) {
 		t.Fatalf("a refused PUT turned automation on: %s", s.Body)
 	}
 	f.Do("PUT", f.path("/automation"), "{", f.ada).Expect(http.StatusBadRequest, "bad_request")
+}
+
+func TestEnableInstructions(t *testing.T) {
+	f := setup(t)
+	body := map[string]any{"decisionProviderId": f.provider, "decisionModel": "luna", "chatProviderId": f.provider, "chatModel": "chat",
+		"decisionInstructions": " Prefer backend.\n", "chatInstructions": "Use curl."}
+	res := f.Do("PUT", f.path("/automation"), body, f.ada)
+	res.Expect(http.StatusOK, "")
+	var s settings
+	res.JSON(&s)
+	if s.DecisionInstructions != "Prefer backend." || s.ChatInstructions != "Use curl." {
+		t.Fatalf("settings = %s", res.Body)
+	}
+	if s = f.show(f.ada); s.DecisionInstructions != "Prefer backend." || s.ChatInstructions != "Use curl." {
+		t.Fatalf("shown %+v", s)
+	}
+	for _, bad := range []map[string]any{
+		{"decisionInstructions": strings.Repeat("é", 4001)}, {"chatInstructions": strings.Repeat("é", 4001)},
+		{"decisionInstructions": "a\x00"}, {"chatInstructions": "a\x00"},
+	} {
+		maps.Copy(bad, map[string]any{"decisionProviderId": f.provider, "decisionModel": "luna", "chatProviderId": f.provider, "chatModel": "chat"})
+		f.Do("PUT", f.path("/automation"), bad, f.ada).Expect(http.StatusBadRequest, "invalid_instructions")
+	}
+	// A PUT replaces them: left out is none.
+	f.enable(f.ada, f.provider).Expect(http.StatusOK, "")
+	if s = f.show(f.ada); s.DecisionInstructions != "" || s.ChatInstructions != "" {
+		t.Fatalf("after a PUT without instructions %+v", s)
+	}
 }
 
 func TestEnableTakesOver(t *testing.T) {

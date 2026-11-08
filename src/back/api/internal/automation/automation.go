@@ -92,15 +92,17 @@ func (a *Automation) Wait() { a.deliveries.Wait() }
 
 // settings is how the API shows a project's automation while it is on.
 type settings struct {
-	Enabled            bool    `json:"enabled"` // always true; off answers {"enabled": false} alone
-	Owner              owner   `json:"owner"`
-	DecisionProviderID int64   `json:"decisionProviderId"`
-	DecisionModel      string  `json:"decisionModel"`
-	ChatProviderID     int64   `json:"chatProviderId"`
-	ChatModel          string  `json:"chatModel"`
-	PausedReason       *string `json:"pausedReason"` // nil while running
-	PayloadURL         string  `json:"payloadUrl"`
-	WebhookSecretSet   bool    `json:"webhookSecretSet"`
+	Enabled              bool    `json:"enabled"` // always true; off answers {"enabled": false} alone
+	Owner                owner   `json:"owner"`
+	DecisionProviderID   int64   `json:"decisionProviderId"`
+	DecisionModel        string  `json:"decisionModel"`
+	ChatProviderID       int64   `json:"chatProviderId"`
+	ChatModel            string  `json:"chatModel"`
+	DecisionInstructions string  `json:"decisionInstructions"`
+	ChatInstructions     string  `json:"chatInstructions"`
+	PausedReason         *string `json:"pausedReason"` // nil while running
+	PayloadURL           string  `json:"payloadUrl"`
+	WebhookSecretSet     bool    `json:"webhookSecretSet"`
 }
 
 // owner is the automation owner as every member may see them: by GitHub login, never by email.
@@ -116,11 +118,11 @@ func (a *Automation) settings(ctx context.Context, db interface {
 	s := settings{Enabled: true, PayloadURL: a.payloadURL(projectID)}
 	err := db.QueryRow(ctx, `
 		select pa.owner_id, gl.login, pa.decision_provider, pa.decision_model, pa.chat_provider, pa.chat_model,
-			pa.paused_reason, pa.webhook_secret_enc is not null
+			pa.decision_instructions, pa.chat_instructions, pa.paused_reason, pa.webhook_secret_enc is not null
 		from project_automation pa left join github_links gl on gl.user_id = pa.owner_id
 		where pa.project_id = $1`, projectID).
 		Scan(&s.Owner.ID, &s.Owner.Login, &s.DecisionProviderID, &s.DecisionModel, &s.ChatProviderID, &s.ChatModel,
-			&s.PausedReason, &s.WebhookSecretSet)
+			&s.DecisionInstructions, &s.ChatInstructions, &s.PausedReason, &s.WebhookSecretSet)
 	return s, err
 }
 

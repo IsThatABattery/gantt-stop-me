@@ -43,9 +43,9 @@ func TestRetryAFailedTurn(t *testing.T) {
 func TestTurnWithoutAPlanningModel(t *testing.T) {
 	f := setup(t)
 	pl := f.start("Exports", "Let admins export the board as CSV.")
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": nil, "model": nil}, f.ada).Expect(http.StatusOK, "")
+	f.Do("PUT", "/api/me/planning", agents(nil, nil, true), f.ada).Expect(http.StatusOK, "")
 	f.work()
-	if pl = f.plan(pl.ID); pl.Pending != nil || orNull(pl.Error) != "The plan's creator has no planning model. They pick one in Settings, then someone retries." {
+	if pl = f.plan(pl.ID); pl.Pending != nil || orNull(pl.Error) != "The plan's creator has no interviewer model. They pick one in Settings, then someone retries." {
 		t.Fatalf("plan %+v", pl)
 	}
 	if n := len(f.llm.Chats()); n != 0 {
@@ -54,13 +54,13 @@ func TestTurnWithoutAPlanningModel(t *testing.T) {
 
 	// The creator's settings, not the retrier's: bob's model does not run ada's plan.
 	bob := f.member("bob", "push")
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": f.addProvider(bob), "model": "test-chat"}, bob).Expect(http.StatusOK, "")
+	f.Do("PUT", "/api/me/planning", agents(f.addProvider(bob), "test-chat", true), bob).Expect(http.StatusOK, "")
 	f.Do("POST", f.path("/plans/%d/retry", pl.ID), nil, bob).Expect(http.StatusOK, "")
 	f.work()
 	if n := len(f.llm.Chats()); n != 0 {
 		t.Fatalf("%d chat requests with the retrier's model", n)
 	}
-	f.Do("PUT", "/api/me/planning", map[string]any{"providerId": f.provider, "model": "test-chat"}, f.ada).Expect(http.StatusOK, "")
+	f.Do("PUT", "/api/me/planning", agents(f.provider, "test-chat", true), f.ada).Expect(http.StatusOK, "")
 	f.act(pl.ID, "retry", nil).Expect(http.StatusOK, "")
 	f.llm.Reply(reply(ask("Who exports?")))
 	f.work()

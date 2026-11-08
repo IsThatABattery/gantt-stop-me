@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -203,5 +204,28 @@ func TestRoutingAsksTheDecisionModel(t *testing.T) {
 	}
 	if !slices.Equal(specs, []string{"backend", "frontend"}) {
 		t.Fatalf("prepared workflows = %v", specs)
+	}
+}
+
+// The owner's own instructions end the input once, however many tests the call asks about, and leave the questions
+// as they were.
+func TestRoutingWithTheOwnersInstructions(t *testing.T) {
+	f := withLLM(t)
+	f.exec(`update project_automation set decision_instructions = 'Prefer backend.'`)
+	f.tests(1, "## Tests\n- [ ] `go test ./...`\n- [ ] `npm test`\n")
+	f.repo.AddFile("a1", ".gantt/workflows.yml", twoWorkflows)
+	f.ready()
+	f.work()
+	extra := "\n\nExtra instructions from the project's automation owner. Follow them where they don't conflict with " +
+		"the rules above:\n\nPrefer backend."
+	got := f.llm.Decisions()
+	if len(got) != 1 || len(got[0].Questions) != 2 || !strings.HasSuffix(got[0].Input, extra) ||
+		strings.Count(got[0].Input, "Prefer backend.") != 1 {
+		t.Fatalf("decisions requests = %+v", got)
+	}
+	for i, q := range got[0].Questions {
+		if want := fmt.Sprintf("Which workflow can run test %d?", i+1); q.Instructions != want {
+			t.Fatalf("question %d instructions %q, want %q", i+1, q.Instructions, want)
+		}
 	}
 }

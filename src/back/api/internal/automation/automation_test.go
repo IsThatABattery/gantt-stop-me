@@ -115,13 +115,15 @@ type settings struct {
 		ID    int64
 		Login *string
 	}
-	DecisionProviderID int64
-	DecisionModel      string
-	ChatProviderID     int64
-	ChatModel          string
-	PausedReason       *string
-	PayloadURL         string
-	WebhookSecretSet   bool
+	DecisionProviderID   int64
+	DecisionModel        string
+	ChatProviderID       int64
+	ChatModel            string
+	DecisionInstructions string
+	ChatInstructions     string
+	PausedReason         *string
+	PayloadURL           string
+	WebhookSecretSet     bool
 }
 
 // show loads the automation settings as session.

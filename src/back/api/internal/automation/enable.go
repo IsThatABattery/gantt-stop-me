@@ -1,6 +1,7 @@
 package automation
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
+	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/projects"
 )
 
@@ -21,10 +23,12 @@ func (a *Automation) enable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		DecisionProviderID int64  `json:"decisionProviderId"`
-		DecisionModel      string `json:"decisionModel"`
-		ChatProviderID     int64  `json:"chatProviderId"`
-		ChatModel          string `json:"chatModel"`
+		DecisionProviderID   int64  `json:"decisionProviderId"`
+		DecisionModel        string `json:"decisionModel"`
+		ChatProviderID       int64  `json:"chatProviderId"`
+		ChatModel            string `json:"chatModel"`
+		DecisionInstructions string `json:"decisionInstructions"`
+		ChatInstructions     string `json:"chatInstructions"`
 	}
 	if !httpx.Decode(w, r, &in) {
 		return
@@ -34,16 +38,27 @@ func (a *Automation) enable(w http.ResponseWriter, r *http.Request) {
 	if !a.chosenModel(w, r, userID, in.DecisionProviderID, in.DecisionModel) || !a.chosenModel(w, r, userID, in.ChatProviderID, in.ChatModel) {
 		return
 	}
+	var whyDecision, whyChat string
+	in.DecisionInstructions, whyDecision = llm.Instructions(in.DecisionInstructions)
+	in.ChatInstructions, whyChat = llm.Instructions(in.ChatInstructions)
+	if why := cmp.Or(whyDecision, whyChat); why != "" {
+		httpx.Error(w, http.StatusBadRequest, "invalid_instructions", why)
+		return
+	}
 	var s settings
 	// One transaction, so the answer is this write's row: a concurrent PUT or DELETE waits on its row lock.
 	err := pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `
-			insert into project_automation (project_id, owner_id, decision_provider, decision_model, chat_provider, chat_model)
-			values ($1, $2, $3, $4, $5, $6)
+			insert into project_automation (project_id, owner_id, decision_provider, decision_model, chat_provider, chat_model,
+				decision_instructions, chat_instructions)
+			values ($1, $2, $3, $4, $5, $6, $7, $8)
 			on conflict (project_id) do update set owner_id = excluded.owner_id,
 				decision_provider = excluded.decision_provider, decision_model = excluded.decision_model,
-				chat_provider = excluded.chat_provider, chat_model = excluded.chat_model, paused_reason = null`,
-			p.ID, userID, in.DecisionProviderID, in.DecisionModel, in.ChatProviderID, in.ChatModel); err != nil {
+				chat_provider = excluded.chat_provider, chat_model = excluded.chat_model,
+				decision_instructions = excluded.decision_instructions, chat_instructions = excluded.chat_instructions,
+				paused_reason = null`,
+			p.ID, userID, in.DecisionProviderID, in.DecisionModel, in.ChatProviderID, in.ChatModel,
+			in.DecisionInstructions, in.ChatInstructions); err != nil {
 			return err
 		}
 		var err error
