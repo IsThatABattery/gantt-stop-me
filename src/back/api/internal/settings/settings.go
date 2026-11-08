@@ -6,11 +6,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gantt-stop-me/api/internal/accounts"
+	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/secret"
 )
 
@@ -25,7 +27,7 @@ type Settings struct {
 // New returns Settings that seal keys with secrets and guard every route with accounts.Require.
 // Model listings reach loopback and private addresses only when allowPrivateURLs is set.
 func New(db *pgxpool.Pool, secrets *secret.Box, accounts *accounts.Accounts, allowPrivateURLs bool) *Settings {
-	return &Settings{db: db, secrets: secrets, accounts: accounts, models: modelsClient(allowPrivateURLs)}
+	return &Settings{db: db, secrets: secrets, accounts: accounts, models: llm.HTTPClient(allowPrivateURLs, 10*time.Second)}
 }
 
 // Register adds the provider routes to mux.
