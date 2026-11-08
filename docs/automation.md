@@ -130,3 +130,37 @@ Replaces the secret GitHub signs the project's webhook deliveries with, and retu
   "payloadUrl": "https://gantt.example.com/api/github/webhook/1"
 }
 ```
+
+## Receive webhook
+
+Takes a GitHub delivery from the project's repository webhook. It needs no session or `Origin`: the signature proves the delivery came from GitHub. For a `pull_request` event it re-reads that pull request and its closing references from GitHub, with the automation owner's credential, and acts on them in the background, as the poller would on its next read. Any other event, such as `ping`, is accepted and changes nothing.
+
+`POST /api/github/webhook/{projectID}`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `projectID` | path | integer | a project's `id` with automation on and a webhook secret generated |
+| `X-Hub-Signature-256` | header | string | `sha256=` and the hex HMAC-SHA256 of the raw body, keyed with the project's webhook secret |
+| `X-GitHub-Event` | header | string | only `pull_request` is acted on |
+| `number` | body | integer | for a `pull_request` event, the pull request's number; the body is at most 5 MiB |
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `202` | empty |
+| `400` | `bad_request` |
+| `401` | `invalid_signature`, also for a project without a webhook secret or with automation off |
+
+What a pull request's change does, whether the webhook or the poller sees it first, and only once if both do:
+
+| Change | Effect |
+| --- | --- |
+| First seen ready, or draft to ready | Each task it closes moves to the end of Testing, unless it is there already, and gets a new test run, which cancels the task's earlier queued or running one. A task in Closed is never moved and gets no run. |
+| Ready to draft | Its queued or running test runs are cancelled. |
+| New head commit while ready | Nothing. |
+| Closed, merged, or gone from the open list | Its record is deleted. |
+
+Only a pull request from a branch of the repository, by an author with write access or above, runs. Any other that would start a run gets one comment saying why it was not tested, and nothing else happens. A run started while more than one open, ready pull request closes the issue ends at once as a runner error, and the task needs attention.

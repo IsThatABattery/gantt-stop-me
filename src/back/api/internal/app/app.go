@@ -4,6 +4,7 @@ package app
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -29,8 +30,14 @@ type Config struct {
 	RunnerURL                string // the runner's base URL; automation is off, its routes 404, while it is empty
 }
 
-// New returns the API handler.
-func New(db *pgxpool.Pool, cfg Config) http.Handler {
+// App is the API's handler, and the automation whose poller main runs beside it.
+type App struct {
+	http.Handler
+	Automation *automation.Automation
+}
+
+// New returns the API.
+func New(db *pgxpool.Pool, cfg Config) *App {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", health)
 	acc := accounts.New(db, cfg.PublicURL)
@@ -47,17 +54,33 @@ func New(db *pgxpool.Pool, cfg Config) http.Handler {
 	links.Register(mux)
 	prj := &projects.Projects{DB: db, Accounts: acc, Secrets: cfg.Secrets, GitHub: cfg.GitHub}
 	prj.Register(mux)
-	(&board.Board{DB: db, Accounts: acc, Projects: prj, GitHub: cfg.GitHub}).Register(mux)
+	brd := &board.Board{DB: db, Accounts: acc, Projects: prj, GitHub: cfg.GitHub}
+	brd.Register(mux)
 	settings.New(db, cfg.Secrets, acc, cfg.AllowPrivateProviderURLs).Register(mux)
-	(&automation.Automation{
+	auto := &automation.Automation{
 		DB:        db,
 		Accounts:  acc,
 		Projects:  prj,
 		Secrets:   cfg.Secrets,
+		GitHub:    cfg.GitHub,
+		Board:     brd,
 		PublicURL: cfg.PublicURL,
 		RunnerURL: cfg.RunnerURL,
-	}).Register(mux)
-	return httpx.CheckOrigin(cfg.PublicURL, jsonErrors(mux))
+	}
+	auto.Register(mux)
+	routes := jsonErrors(mux)
+	checked := httpx.CheckOrigin(cfg.PublicURL, routes)
+	return &App{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// GitHub's webhook deliveries carry no Origin; their signature check stands in for it.
+			if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/github/webhook/") {
+				routes.ServeHTTP(w, r)
+				return
+			}
+			checked.ServeHTTP(w, r)
+		}),
+		Automation: auto,
+	}
 }
 
 // jsonErrors answers the mux's own 404 and 405 in the API's one error shape.
