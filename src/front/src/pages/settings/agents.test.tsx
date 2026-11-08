@@ -27,8 +27,11 @@ async function openAgents(set: { providers?: Provider[]; planning?: PlanningSett
   return { form: within(form), agent }
 }
 
-// The model box suggests from its datalist.
-const options = (input: HTMLElement) => Array.from(document.getElementById(input.getAttribute('list')!)!.querySelectorAll('option'), (o) => o.value)
+// Opens the model box's list and reads it.
+const options = async (input: HTMLElement) => {
+  await userEvent.click(input)
+  return within(document.getElementById(input.getAttribute('aria-controls')!)!).getAllByRole('option').map((o) => o.textContent)
+}
 
 describe('agent settings', () => {
   it('loads the planning settings and saves them as one PUT', async () => {
@@ -60,10 +63,10 @@ describe('agent settings', () => {
   it("offers only the chosen provider's models, and resets the model with the provider", async () => {
     const { agent } = await openAgents()
     const model = () => agent('Interviewer').getByLabelText('Model')
-    expect(options(model())).toEqual(['gpt-5', 'o3'])
+    expect(await options(model())).toEqual(['gpt-5', 'o3'])
 
     await userEvent.selectOptions(agent('Interviewer').getByLabelText('Provider'), 'Local')
-    expect(options(model())).toEqual(['llama'])
+    expect(await options(model())).toEqual(['llama'])
     expect(model()).toHaveDisplayValue('llama')
 
     await userEvent.selectOptions(agent('Interviewer').getByLabelText('Provider'), 'None')

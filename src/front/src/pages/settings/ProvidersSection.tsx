@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Button, Checkbox, Field, SearchInput, TextInput } from '../../components/controls'
+import { Button, Field, TextInput } from '../../components/controls'
+import { ModelCombobox } from '../../components/ModelCombobox'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import type { Provider } from '../../data/api/types'
@@ -262,11 +263,6 @@ function EditProvider({ provider, onDone }: { provider: Provider; onDone: () => 
   )
 }
 
-// A dated snapshot (gpt-4o-2024-08-06, gpt-4-0613) repeats a model that is listed undated too.
-const snapshot = /-\d{4}(-\d{2}-\d{2})?$/
-// The API lists models newest first when the endpoint dates them, so "recent" keeps the head of the list.
-const RECENT = 30
-
 function ModelPicker({
   available,
   chosen,
@@ -280,56 +276,15 @@ function ModelPicker({
   error?: string
   idPrefix: string
 }) {
-  const [text, setText] = useState('')
-  const [recent, setRecent] = useState(true)
-  const unpicked = available.filter((m) => !chosen.includes(m))
-  const options = recent ? unpicked.filter((m) => !snapshot.test(m)).slice(0, RECENT) : unpicked
-  const add = (m: string) => {
-    onChange([...chosen, m])
-    setText('')
-  }
+  // Keep models chosen before even if the endpoint stopped listing them, so they can be unticked.
+  const all = [...available, ...chosen.filter((m) => !available.includes(m))]
   return (
-    <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" aria-describedby={error ? `${idPrefix}-models-error` : undefined}>
+    <fieldset className="m-0 flex flex-col gap-1 border-0 p-0" aria-describedby={error ? `${idPrefix}-models-error` : undefined}>
       <legend className="mb-1 p-0 text-[13px] text-text-soft">Models</legend>
-      {chosen.length > 0 && (
-        <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-          {chosen.map((m) => (
-            <li key={m} className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-0.5 font-mono text-xs">
-              {m}
-              <button
-                type="button"
-                aria-label={`Remove ${m}`}
-                className="cursor-pointer border-0 bg-transparent px-1 text-text-muted hover:text-text"
-                onClick={() => onChange(chosen.filter((x) => x !== m))}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {available.length === 0 ? (
+      {all.length === 0 ? (
         <p className="m-0 text-[13px] text-text-muted">The endpoint lists no models.</p>
       ) : (
-        <div className="flex flex-wrap items-center gap-x-4">
-          <div className="min-w-[240px] flex-1">
-            <SearchInput
-              id={`${idPrefix}-model-search`}
-              aria-label="Add a model"
-              placeholder="Search models to add"
-              options={options}
-              value={text}
-              onChange={(e) => (unpicked.includes(e.target.value) ? add(e.target.value) : setText(e.target.value))}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return
-                e.preventDefault()
-                const match = unpicked.find((m) => m === text.trim()) ?? options.find((m) => m.includes(text.trim()))
-                if (text.trim() && match) add(match)
-              }}
-            />
-          </div>
-          <Checkbox label="Recent only" checked={recent} onChange={(e) => setRecent(e.target.checked)} />
-        </div>
+        <ModelCombobox id={`${idPrefix}-models`} aria-label="Models" multiple options={all} selected={chosen} onChange={onChange} placeholder="Search models" />
       )}
       <FieldError id={`${idPrefix}-models-error`}>{error}</FieldError>
     </fieldset>

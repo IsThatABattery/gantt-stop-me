@@ -55,7 +55,7 @@ describe('project automation', () => {
     expect(screen.queryByText(/Saving makes you the owner/)).not.toBeInTheDocument()
 
     await userEvent.clear(agent('Decision agent').getByLabelText('Model'))
-    await userEvent.type(agent('Decision agent').getByLabelText('Model'), 'gpt-5')
+    await userEvent.type(agent('Decision agent').getByLabelText('Model'), 'gpt-5{Enter}')
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('Automation saved')).toBeInTheDocument()
     expect(sent('PUT').map((r) => r.body)).toEqual([

@@ -1,8 +1,8 @@
-import { useState } from 'react'
 import { Link } from 'react-router'
 import type { AgentSettings, Provider } from '../data/api/types'
 import { INSTRUCTIONS_MAX, instructionsLength, type AgentErrors, type AgentField } from '../data/views/agentSettings'
-import { Field, SearchInput, Select, Textarea } from './controls'
+import { Field, Select, Textarea } from './controls'
+import { ModelCombobox } from './ModelCombobox'
 
 interface AgentEditorProps {
   /** Prefix of the field ids, `${id}-provider` and so on, so the form can focus them */
@@ -30,13 +30,6 @@ const defaultModel = (models: string[], deep?: boolean) => (deep && models.find(
 export function AgentEditor({ id, name, description, providers, value, onChange, errors = {}, required, deep }: AgentEditorProps) {
   const provider = providers.find((p) => p.id === value.providerId)
   const models = provider?.models ?? []
-  // What's typed in the model box; the model changes only once it names one of the provider's models.
-  const [text, setText] = useState(value.model ?? '')
-  const [shown, setShown] = useState(value.model)
-  if (shown !== value.model) {
-    setShown(value.model)
-    setText(value.model ?? '')
-  }
   const length = instructionsLength(value.instructions)
   const fieldId = (f: AgentField) => `${id}-${f}`
   const describedBy = (f: AgentField, ...extra: string[]) =>
@@ -81,21 +74,16 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
           {error('provider')}
         </Field>
         <Field id={fieldId('model')} label="Model">
-          <SearchInput
+          <ModelCombobox
             id={fieldId('model')}
             options={models}
-            value={text}
+            selected={value.model ? [value.model] : []}
+            onChange={(s) => onChange({ ...value, model: s[0] ?? null })}
             disabled={!provider}
             placeholder={provider ? 'Search models' : 'No provider'}
-            // Secondary to the provider, so it reads quieter.
-            className="border-line-soft bg-transparent text-text-muted-strong"
+            quiet
             aria-invalid={!!errors.model}
             aria-describedby={describedBy('model')}
-            onChange={(e) => {
-              setText(e.target.value)
-              if (models.includes(e.target.value)) onChange({ ...value, model: e.target.value })
-            }}
-            onBlur={() => setText(value.model ?? '')}
           />
           {value.model && provider && !models.includes(value.model) && <span className="text-xs text-warning">{value.model} is no longer available.</span>}
           {error('model')}
