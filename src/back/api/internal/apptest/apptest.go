@@ -71,8 +71,9 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	}
 	api := app.New(db, cfg)
 	srv := httptest.NewServer(api)
+	// Cleanups run last first: the server stops taking deliveries, then the ones it answered finish, then the database goes.
+	t.Cleanup(api.Automation.Wait)
 	t.Cleanup(srv.Close)
-	t.Cleanup(api.Automation.Wait) // runs first: no delivery outlives the database
 	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh, Automation: api.Automation}
 }
 

@@ -94,8 +94,8 @@ func (a *Automation) signed(ctx context.Context, projectID int64, body []byte, s
 // hint, since deliveries can arrive late or out of order, so hint reads the pull request and its closing references
 // from GitHub first. It pauses the project when GitHub refuses the owner's credential.
 func (a *Automation) hint(ctx context.Context, projectID int64, number int) error {
-	p, token, _, err := a.target(ctx, projectID)
-	if errors.Is(err, ErrOff) || errors.Is(err, github.ErrNotLinked) {
+	p, token, _, _, err := a.target(ctx, projectID)
+	if errors.Is(err, ErrOff) || errors.Is(err, github.ErrNotLinked) || errors.Is(err, ErrPaused) {
 		return nil
 	}
 	if err != nil {

@@ -69,29 +69,40 @@ func headRepo(pr github.PullRequest) int64 {
 	return pr.Head.Repo.ID
 }
 
-// apply brings the project's pull request records in line with views, oldest pull request first, each in its own
-// transaction under the project's lock with the moves and test runs its change causes. So a change the poller and
-// a webhook delivery both see triggers once. before holds the records as they were before GitHub was read for views:
-// a record changed since was saved from another read of GitHub, maybe a newer one, so apply leaves its pull request
-// for the next poll and reports skipped. It stops at the first error, keeping the pull requests applied before it.
+// apply brings the project's pull request records in line with views, each in its own transaction under the
+// project's lock with the moves and test runs its change causes. So a change the poller and a webhook delivery both
+// see triggers once. Views that can start a run go last, oldest pull request first, so a run's count of ready pull
+// requests already sees the others closed, back in draft or closing other issues. before holds the records as they
+// were before GitHub was read for views: a record changed since was saved from another read of GitHub, maybe a newer
+// one, so apply leaves its pull request for the next poll and reports skipped. It stops at the first error, keeping
+// the pull requests applied before it.
 func (a *Automation) apply(ctx context.Context, p projects.Project, token string, before map[int]*record, views []view) (skipped bool, err error) {
-	unlock, err := projects.Serialize(ctx, p.ID)
-	if err != nil {
-		return false, err
+	starts := func(v view) int {
+		if r := before[v.pr.Number]; !v.gone && !v.pr.Draft && (r == nil || r.draft) {
+			return 1
+		}
+		return 0
 	}
-	defer unlock()
+	slices.SortFunc(views, func(a, b view) int {
+		return cmp.Or(cmp.Compare(starts(a), starts(b)), cmp.Compare(a.pr.Number, b.pr.Number))
+	})
 	// Once GitHub has a move or comment, finish saving it even if ctx ends.
 	saveCtx := context.WithoutCancel(ctx)
-	slices.SortFunc(views, func(a, b view) int { return cmp.Compare(a.pr.Number, b.pr.Number) })
 	for _, v := range views {
 		if err := ctx.Err(); err != nil {
 			return skipped, err
 		}
-		err := pgx.BeginFunc(saveCtx, a.DB, func(tx pgx.Tx) error {
+		// Per pull request, so a long poll never holds up the project's moves and syncs throughout.
+		unlock, err := projects.Serialize(ctx, p.ID)
+		if err != nil {
+			return skipped, err
+		}
+		err = pgx.BeginFunc(saveCtx, a.DB, func(tx pgx.Tx) error {
 			applied, err := a.trigger(saveCtx, tx, p, token, before[v.pr.Number], v)
 			skipped = skipped || !applied
 			return err
 		})
+		unlock()
 		if err != nil {
 			return skipped, err
 		}
@@ -151,14 +162,16 @@ func (a *Automation) ready(ctx context.Context, tx pgx.Tx, p projects.Project, t
 	type linked struct {
 		id     int64
 		column string // key
-		ready  int    // open, ready pull requests closing its issue, pr included
+		ready  int    // open, ready pull requests closing its issue, pr included, but no fork or refused one
 	}
+	// A fork or refused pull request never counts: it would let anyone who opens one turn a trusted run into an error.
 	rows, _ := tx.Query(ctx, `
 		select t.id, c.key, (select count(*) from pull_requests r
-			where r.project_id = t.project_id and not r.draft and t.issue_number = any(r.linked_issues))
+			where r.project_id = t.project_id and not r.draft and t.issue_number = any(r.linked_issues)
+				and r.head_repo_id = $3 and not r.refused)
 		from tasks t join columns c on c.id = t.column_id
 		where t.project_id = $1 and t.issue_number = any($2) and not c.closes_issue
-		order by t.issue_number`, p.ID, links)
+		order by t.issue_number`, p.ID, links, p.RepoID)
 	tasks, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (linked, error) {
 		var l linked
 		return l, row.Scan(&l.id, &l.column, &l.ready)

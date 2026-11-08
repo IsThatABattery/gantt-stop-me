@@ -349,6 +349,8 @@ func (r *Repo) pullJSON(is *Issue) map[string]any {
 	return map[string]any{
 		"number": is.Number, "node_id": nodeID(is), "title": is.Title, "state": is.State, "draft": is.Pull.Draft,
 		"head": map[string]any{"sha": is.Pull.HeadSHA, "repo": headRepo}, "user": author,
+		// Finer than GitHub's seconds, so every edit changes the list's ETag, as it does on GitHub a second later.
+		"updated_at": is.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 

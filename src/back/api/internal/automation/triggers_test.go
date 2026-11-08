@@ -472,8 +472,143 @@ func TestRejectedCredentialPauses(t *testing.T) {
 				t.Fatalf("paused_reason = %v", got)
 			}
 			f.expectRuns()
+
+			// GitHub would refuse the credential again, so neither path sends it until a takeover unpauses.
+			before := len(f.GitHub.Requests())
+			f.poll()
+			f.hint(n)
+			if got := f.GitHub.Requests()[before:]; len(got) != 0 {
+				t.Fatalf("a project paused for its credential called GitHub: %v", got)
+			}
+			f.GitHub.Fail(route, 0)
+			f.enable(f.ada, f.provider).Expect(http.StatusOK, "")
+			f.poll()
+			f.expectRuns(testRun{Issue: 1, PR: n, Head: "a1", Status: "queued"})
 		})
 	}
+}
+
+func TestReadyAfterAnotherLeftInOnePoll(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		leave  func(f *fixture, n int)
+		reason string // the left pull request's run's
+	}{
+		{"closed", func(f *fixture, n int) { f.repo.EditIssue(n, func(is *githubtest.Issue) { is.State = "closed" }) }, "A new test run started."},
+		{"back to draft", func(f *fixture, n int) { f.repo.EditPull(n, func(p *githubtest.Pull) { p.Draft = true }) }, "The pull request went back to draft."},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := automated(t)
+			// The draft has the lower number, so a poll going by number alone would still count the other as ready.
+			draft := f.pull("ada", true, 1)
+			ready := f.pull("ada", false, 1)
+			f.poll()
+			c.leave(f, ready)
+			f.repo.EditPull(draft, func(p *githubtest.Pull) { p.Draft = false })
+			f.poll()
+			f.expectRuns(
+				testRun{Issue: 1, PR: ready, Head: "a1", Status: "cancelled", Reason: c.reason, Finished: true},
+				testRun{Issue: 1, PR: draft, Head: "a1", Status: "queued"},
+			)
+			if got := f.task(1); got.NeedsAttention != "" {
+				t.Fatalf("task = %+v, want no runner error: one pull request was ready at a time", got)
+			}
+		})
+	}
+}
+
+func TestUntrustedPullRequestIsNotCountedAsReady(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		open func(f *fixture) int
+	}{
+		{"fork", func(f *fixture) int {
+			fork := f.GitHub.AddRepo("eve", "hello")
+			return f.repo.AddPull("Fork", githubtest.Pull{Author: "ada", HeadSHA: "f1", HeadRepo: fork.ID, Closes: f.closing(1)})
+		}},
+		{"read-only author", func(f *fixture) int {
+			f.member("bob", "pull")
+			return f.pull("bob", false, 1)
+		}},
+	} {
+		for _, order := range []string{"untrusted first", "same poll", "trusted first"} {
+			t.Run(c.name+", "+order, func(t *testing.T) {
+				f := automated(t)
+				var untrusted, trusted int
+				switch order {
+				case "untrusted first":
+					untrusted = c.open(f)
+					f.poll()
+					trusted = f.pull("ada", false, 1)
+				case "same poll": // the untrusted one has the lower number, so it is applied first
+					untrusted = c.open(f)
+					trusted = f.pull("ada", false, 1)
+				case "trusted first":
+					trusted = f.pull("ada", false, 1)
+					f.poll()
+					untrusted = c.open(f)
+				}
+				f.poll()
+				// Ready again, with the untrusted one still open and ready.
+				f.repo.EditPull(trusted, func(p *githubtest.Pull) { p.Draft = true })
+				f.poll()
+				f.repo.EditPull(trusted, func(p *githubtest.Pull) { p.Draft = false })
+				f.hint(trusted)
+				f.expectRuns(
+					testRun{Issue: 1, PR: trusted, Head: "a1", Status: "cancelled", Reason: "The pull request went back to draft.", Finished: true},
+					testRun{Issue: 1, PR: trusted, Head: "a1", Status: "queued"},
+				)
+				if got := f.task(1); got.NeedsAttention != "" {
+					t.Fatalf("task = %+v, want no runner error", got)
+				}
+				if got := f.repo.Issue(untrusted).Comments; len(got) != 1 {
+					t.Fatalf("untrusted pull request's comments = %+v, want one", got)
+				}
+			})
+		}
+	}
+}
+
+func TestPollRereadsWhatAReadyPullRequestCloses(t *testing.T) {
+	f := automated(t)
+	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Two"}, f.ada).Expect(http.StatusCreated, "")
+	other := f.pull("ada", false, 1)
+	f.poll()
+	// Its description now closes issue 2 instead, with no push.
+	f.repo.EditPull(other, func(p *githubtest.Pull) { p.Closes = f.closing(2) })
+	f.poll()
+	if r := f.record(other); r == nil || !slices.Equal(r.Linked, []int{2}) {
+		t.Fatalf("record = %+v, want it to close issue 2", r)
+	}
+	n := f.pull("ada", false, 1)
+	f.poll()
+	f.expectRuns(
+		testRun{Issue: 1, PR: other, Head: "a1", Status: "cancelled", Reason: "A new test run started.", Finished: true},
+		testRun{Issue: 1, PR: n, Head: "a1", Status: "queued"},
+	)
+}
+
+func TestPollSavesNoETagAfterAutomationIsTurnedOffAndOn(t *testing.T) {
+	f := automated(t)
+	n := f.pull("ada", false, 1)
+	f.poll()
+	f.exec(`update project_automation set pulls_etag = null`) // so the next poll reads the list in full
+	// While that poll lists, automation is turned off, which forgets the records, and on again.
+	next, toggled := f.Config.GitHub.HTTP.Transport, false
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/pulls") && !toggled {
+			toggled = true
+			f.Do("DELETE", f.path("/automation"), nil, f.ada).Expect(http.StatusNoContent, "")
+			f.enable(f.ada, f.provider).Expect(http.StatusOK, "")
+		}
+		return next.RoundTrip(r)
+	})}
+	f.poll()
+	f.poll() // lists again, and sees the pull request for the first time since automation came back on
+	f.expectRuns(
+		testRun{Issue: 1, PR: n, Head: "a1", Status: "cancelled", Reason: "Automation was turned off.", Finished: true},
+		testRun{Issue: 1, PR: n, Head: "a1", Status: "queued"},
+	)
 }
 
 // roundTrip is an http.RoundTripper made of a function.
