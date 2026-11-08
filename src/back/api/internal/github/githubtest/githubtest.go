@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ type Fake struct {
 	repos    []*Repo
 	failures map[string]int // route pattern -> the status it answers instead
 	requests []string
-	lastID   int64 // of repositories, issues and labels
+	lastID   int64 // of repositories, issues, labels and comments
 }
 
 type user struct {
@@ -58,8 +59,30 @@ type Issue struct {
 	Title, Body string
 	State       string // "open" or "closed"
 	Labels      []string
-	PullRequest bool
+	Pull        *Pull // set on pull requests only
+	Comments    []Comment
 	UpdatedAt   time.Time
+}
+
+// Pull is what a pull request has beyond the issue GitHub's issue list shows for it.
+type Pull struct {
+	Author   string // login of a user AddUser made
+	HeadSHA  string
+	HeadRepo int64 // id of the repository its branch is in, 0 once that fork is deleted
+	Draft    bool
+	Closes   []Ref // the issues it closes, such as with "Closes #42"
+}
+
+// Ref names an issue in a repository.
+type Ref struct {
+	RepoID int64
+	Number int
+}
+
+// Comment is a comment on an issue or pull request.
+type Comment struct {
+	Author string // login
+	Body   string
 }
 
 // Label is a repository's label.
@@ -95,6 +118,11 @@ func New(t testing.TB) *Fake {
 	f.mux.HandleFunc("PATCH /repositories/{id}/issues/{number}", f.editIssue)
 	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/labels", f.addLabels)
 	f.mux.HandleFunc("DELETE /repositories/{id}/issues/{number}/labels/{label}", f.removeLabel)
+	f.mux.HandleFunc("POST /repositories/{id}/issues/{number}/comments", f.createComment)
+	f.mux.HandleFunc("GET /repositories/{id}/pulls", f.listPulls)
+	f.mux.HandleFunc("GET /repositories/{id}/pulls/{number}", f.getPull)
+	f.mux.HandleFunc("GET /repositories/{id}/collaborators/{login}/permission", f.permission)
+	f.mux.HandleFunc("POST /graphql", f.graphql)
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Server.Close)
 	return f
@@ -167,9 +195,25 @@ func (r *Repo) AddIssue(title string, labels ...string) int {
 
 // AddPullRequest opens a pull request, which GitHub's issue list mixes in with the issues, and returns its number.
 func (r *Repo) AddPullRequest(title string) int {
+	return r.AddPull(title, Pull{})
+}
+
+// AddPull opens a pull request with pull's fields and returns its number.
+func (r *Repo) AddPull(title string, pull Pull) int {
 	r.f.mu.Lock()
 	defer r.f.mu.Unlock()
-	return r.add(title, "", nil, true).Number
+	is := r.add(title, "", nil, true)
+	is.Pull = &pull
+	return is.Number
+}
+
+// EditPull changes pull request number the way its author or GitHub would. Close it with EditIssue.
+func (r *Repo) EditPull(number int, edit func(*Pull)) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	is := r.issue(number)
+	is.UpdatedAt = time.Now()
+	edit(is.Pull)
 }
 
 // EditIssue changes issue number the way someone on GitHub would. UpdatedAt is set to now before edit runs,
@@ -191,6 +235,12 @@ func (r *Repo) Issue(number int) Issue {
 	defer r.f.mu.Unlock()
 	is := *r.issue(number)
 	is.Labels = slices.Clone(is.Labels)
+	is.Comments = slices.Clone(is.Comments)
+	if is.Pull != nil {
+		pull := *is.Pull
+		pull.Closes = slices.Clone(pull.Closes)
+		is.Pull = &pull
+	}
 	return is
 }
 
@@ -236,7 +286,10 @@ func (r *Repo) DeleteLabel(name string) {
 
 func (r *Repo) add(title, body string, labels []string, pr bool) *Issue {
 	r.f.lastID++
-	is := &Issue{ID: r.f.lastID, Number: len(r.issues) + 1, Title: title, Body: body, State: "open", PullRequest: pr, UpdatedAt: time.Now()}
+	is := &Issue{ID: r.f.lastID, Number: len(r.issues) + 1, Title: title, Body: body, State: "open", UpdatedAt: time.Now()}
+	if pr {
+		is.Pull = &Pull{}
+	}
 	for _, name := range labels {
 		is.Labels = append(is.Labels, r.label(name).Name)
 	}
@@ -280,10 +333,43 @@ func (r *Repo) json(is *Issue) map[string]any {
 		"id": is.ID, "number": is.Number, "title": is.Title, "body": body, "state": is.State,
 		"labels": labels, "updated_at": is.UpdatedAt.UTC().Format(time.RFC3339),
 	}
-	if is.PullRequest {
+	if is.Pull != nil {
 		out["pull_request"] = map[string]any{}
 	}
 	return out
+}
+
+// pullJSON renders a pull request the way GitHub's REST API does.
+func (r *Repo) pullJSON(is *Issue) map[string]any {
+	var headRepo any // null once the fork is deleted
+	if is.Pull.HeadRepo != 0 {
+		headRepo = map[string]int64{"id": is.Pull.HeadRepo}
+	}
+	author, _ := r.f.byLogin(is.Pull.Author)
+	return map[string]any{
+		"number": is.Number, "node_id": nodeID(is), "title": is.Title, "state": is.State, "draft": is.Pull.Draft,
+		"head": map[string]any{"sha": is.Pull.HeadSHA, "repo": headRepo}, "user": author,
+		// Finer than GitHub's seconds, so every edit changes the list's ETag, as it does on GitHub a second later.
+		"updated_at": is.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+// nodeID is the GraphQL id of an issue or pull request.
+func nodeID(is *Issue) string {
+	if is.Pull != nil {
+		return fmt.Sprintf("PR_%d", is.ID)
+	}
+	return fmt.Sprintf("I_%d", is.ID)
+}
+
+// byLogin returns the user AddUser made with login and their token, or a zero user for a login nobody has.
+func (f *Fake) byLogin(login string) (user, string) {
+	for token, u := range f.users {
+		if strings.EqualFold(u.Login, login) {
+			return u, token
+		}
+	}
+	return user{}, ""
 }
 
 // serve logs the request and, unless its route is made to fail, serves it with mu held.
@@ -531,6 +617,133 @@ func (f *Fake) removeLabel(w http.ResponseWriter, r *http.Request) {
 	is.Labels = slices.Delete(is.Labels, i, i+1)
 	is.UpdatedAt = time.Now()
 	writeJSON(w, http.StatusOK, rp.json(is)["labels"])
+}
+
+func (f *Fake) createComment(w http.ResponseWriter, r *http.Request) {
+	_, is, ok := f.issue(w, r, false)
+	if !ok {
+		return
+	}
+	var in struct {
+		Body string `json:"body"`
+	}
+	json.NewDecoder(r.Body).Decode(&in)
+	author := f.users[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
+	is.Comments = append(is.Comments, Comment{Author: author.Login, Body: in.Body})
+	is.UpdatedAt = time.Now()
+	f.lastID++
+	writeJSON(w, http.StatusCreated, map[string]any{"id": f.lastID, "body": in.Body, "user": author})
+}
+
+// listPulls serves GET /repositories/{id}/pulls with its state, per_page and page parameters, newest first like
+// GitHub's default order, an ETag per page, and a Link header to the next and last pages.
+func (f *Fake) listPulls(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, false)
+	if !ok {
+		return
+	}
+	state := cmp.Or(r.URL.Query().Get("state"), "open")
+	var items []map[string]any
+	for _, is := range slices.Backward(rp.issues) {
+		if is.Pull != nil && (state == "all" || state == is.State) {
+			items = append(items, rp.pullJSON(is))
+		}
+	}
+	writePage(w, r, items, f.PageSize)
+}
+
+func (f *Fake) getPull(w http.ResponseWriter, r *http.Request) {
+	rp, is, ok := f.issue(w, r, false)
+	if !ok {
+		return
+	}
+	if is.Pull == nil {
+		notFound(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, rp.pullJSON(is))
+}
+
+// permission serves GET /repositories/{id}/collaborators/{login}/permission with GitHub's permission field for the
+// role granted to login's token, or 404 for a login with no role.
+func (f *Fake) permission(w http.ResponseWriter, r *http.Request) {
+	rp, _, ok := f.repo(w, r, false)
+	if !ok {
+		return
+	}
+	u, token := f.byLogin(r.PathValue("login"))
+	role, granted := rp.roles[token]
+	if token == "" || !granted {
+		notFound(w)
+		return
+	}
+	// Like GitHub's permission field, which predates the maintain and triage roles.
+	perm := map[string]string{"none": "none", "pull": "read", "triage": "read", "push": "write", "maintain": "write", "admin": "admin"}[role]
+	writeJSON(w, http.StatusOK, map[string]any{"permission": perm, "user": u})
+}
+
+// operation is a GraphQL document's operation name, by which graphql tells the API's operations apart.
+var operation = regexp.MustCompile(`^\s*(?:query|mutation)\s+(\w+)`)
+
+// graphql serves POST /graphql for the operations the API sends, recognized by name. Like GitHub, it answers a
+// query it cannot serve with 200 and an "errors" list.
+func (f *Fake) graphql(w http.ResponseWriter, r *http.Request) {
+	if _, ok := f.auth(w, r); !ok {
+		return
+	}
+	var in struct {
+		Query     string                     `json:"query"`
+		Variables map[string]json.RawMessage `json:"variables"`
+	}
+	json.NewDecoder(r.Body).Decode(&in)
+	name := ""
+	if m := operation.FindStringSubmatch(in.Query); m != nil {
+		name = m[1]
+	}
+	switch name {
+	case "ClosingIssues":
+		var ids []string
+		json.Unmarshal(in.Variables["ids"], &ids)
+		f.closingIssues(w, r, ids)
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "Unknown operation " + name}}})
+	}
+}
+
+// closingIssues answers ClosingIssues with each node id's pull request and the issues it closes, or null and a
+// NOT_FOUND error for one the token cannot see.
+func (f *Fake) closingIssues(w http.ResponseWriter, r *http.Request, ids []string) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	nodes := []any{}
+	var errs []map[string]any
+	for i, id := range ids {
+		var node any
+		for _, rp := range f.repos {
+			if _, granted := rp.roles[token]; !granted {
+				continue
+			}
+			for _, is := range rp.issues {
+				if is.Pull == nil || nodeID(is) != id {
+					continue
+				}
+				refs := []map[string]any{}
+				for _, ref := range is.Pull.Closes {
+					refs = append(refs, map[string]any{"number": ref.Number, "repository": map[string]int64{"databaseId": ref.RepoID}})
+				}
+				node = map[string]any{"number": is.Number, "closingIssuesReferences": map[string]any{"nodes": refs}}
+			}
+		}
+		if node == nil {
+			errs = append(errs, map[string]any{"type": "NOT_FOUND", "path": []any{"nodes", i},
+				"message": "Could not resolve to a node with the global id of '" + id + "'"})
+		}
+		nodes = append(nodes, node)
+	}
+	out := map[string]any{"data": map[string]any{"nodes": nodes}}
+	if errs != nil {
+		out["errors"] = errs
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (f *Fake) accessToken(w http.ResponseWriter, r *http.Request) {

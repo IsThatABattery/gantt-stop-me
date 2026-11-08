@@ -75,43 +75,76 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
+	t, err = b.place(ctx, tx, token, p, t, to, in.BeforeTaskID)
+	if err == nil {
+		err = tx.Commit(ctx)
+	}
+	switch {
+	case errors.Is(err, errInvalidBefore):
+		httpx.Error(w, http.StatusBadRequest, "invalid_before_task", "beforeTaskId must be another task in the target column.")
+	case errors.As(err, new(gitHubError)):
+		github.Fail(w, r, err)
+	case err != nil:
+		httpx.Internal(w, r, err)
+	default:
+		httpx.JSON(w, http.StatusOK, t)
+	}
+}
+
+// MoveToEnd moves the project's task to the end of the column with key, as the move endpoint would: a column change
+// goes to GitHub with token first, and a failed GitHub write is undone as far as GitHub lets it and comes back as
+// GitHub's error. Call it in tx holding projects.Lock, and commit tx only when it succeeds.
+func (b *Board) MoveToEnd(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64, key string) error {
+	t, err := b.scanTask(tx.QueryRow(ctx, taskByID, taskID, p.ID), p)
+	if err != nil {
+		return err
+	}
+	var to column
+	err = tx.QueryRow(ctx, `select id, key, name, position, closes_issue from columns where project_id = $1 and key = $2`, p.ID, key).
+		Scan(&to.ID, &to.Key, &to.Name, &to.Position, &to.ClosesIssue)
+	if err != nil {
+		return err
+	}
+	_, err = b.place(ctx, tx, token, p, t, to, nil)
+	return err
+}
+
+// errInvalidBefore means the task to place a task before is not another task in the target column.
+var errInvalidBefore = errors.New("board: before is not another task in the column")
+
+// gitHubError marks place's failed GitHub write apart from a database error, so the move endpoint answers it with github.Fail.
+type gitHubError struct{ error }
+
+func (e gitHubError) Unwrap() error { return e.error }
+
+// place puts task t in column to before the task before, or at the end when before is nil, writing a column change
+// through to GitHub with token first, and returns the task as saved. Call it in tx holding projects.Lock.
+func (b *Board) place(ctx context.Context, tx pgx.Tx, token string, p projects.Project, t task, to column, before *int64) (task, error) {
 	from, err := columnByID(ctx, tx, p.ID, t.ColumnID)
 	if err != nil {
-		httpx.Internal(w, r, err)
-		return
+		return task{}, err
 	}
-	pos, ok, err := position(ctx, tx, t.ID, to.ID, in.BeforeTaskID)
+	pos, ok, err := position(ctx, tx, t.ID, to.ID, before)
 	if err != nil {
-		httpx.Internal(w, r, err)
-		return
+		return task{}, err
 	}
 	if !ok {
-		httpx.Error(w, http.StatusBadRequest, "invalid_before_task", "beforeTaskId must be another task in the target column.")
-		return
+		return task{}, errInvalidBefore
 	}
 
 	// nil keeps the stored labels: a reorder writes nothing to GitHub.
 	state, boardLabels, labels := t.State, []string(nil), []github.Label(nil)
 	if to.ID != from.ID {
 		if state, labels, err = b.relabel(ctx, token, p, t, from, to); err != nil {
-			github.Fail(w, r, err)
-			return
+			return task{}, gitHubError{err}
 		}
 		boardLabels = []string{to.label()}
 	}
 	// clock_timestamp, not now(): a sync that began fetching before GitHub had this move must see it as newer.
-	t, err = b.scanTask(tx.QueryRow(ctx, `
+	return b.scanTask(tx.QueryRow(ctx, `
 		update tasks t set column_id = $2, position = $3, version = version + 1, state = $4, updated_at = clock_timestamp(),
 			board_labels = coalesce($5, t.board_labels), labels = coalesce($6, t.labels)
 		where t.id = $1 returning `+taskColumns, t.ID, to.ID, pos, state, boardLabels, labels), p)
-	if err == nil {
-		err = tx.Commit(ctx)
-	}
-	if err != nil {
-		httpx.Internal(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, t)
 }
 
 // columnByID returns the project's column id.

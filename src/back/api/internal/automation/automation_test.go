@@ -22,7 +22,8 @@ type fixture struct {
 	token    string // ada's GitHub token
 	repo     *githubtest.Repo
 	project  int64
-	provider int64 // ada's, with the models "luna" and "chat" chosen
+	provider int64  // ada's, with the models "luna" and "chat" chosen
+	secret   string // the project's webhook secret, once automated generated it
 }
 
 func setup(t *testing.T, configure ...func(*app.Config)) *fixture {
@@ -136,4 +137,6 @@ func TestAutomationNeedsRunnerURL(t *testing.T) {
 		f.Do(method, f.path("/automation"), map[string]any{}, f.ada).Expect(http.StatusNotFound, "not_found")
 	}
 	f.Do("POST", f.path("/automation/webhook"), nil, f.ada).Expect(http.StatusNotFound, "not_found")
+	f.Do("POST", fmt.Sprintf("/api/github/webhook/%d", f.project), "{}").Expect(http.StatusNotFound, "not_found")
+	f.Automation.Run(context.Background()) // returns at once instead of polling
 }

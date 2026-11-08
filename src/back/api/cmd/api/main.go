@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"gantt-stop-me/api/internal/app"
@@ -17,7 +20,8 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	key, err := base64.StdEncoding.DecodeString(os.Getenv("ENCRYPTION_KEY"))
 	if err != nil {
@@ -45,11 +49,32 @@ func main() {
 		AllowPrivateProviderURLs: os.Getenv("ALLOW_PRIVATE_PROVIDER_URLS") == "true",
 		RunnerURL:                strings.TrimSuffix(os.Getenv("RUNNER_URL"), "/"),
 	}
+	api := app.New(db, cfg)
+	polled := make(chan struct{})
+	go func() {
+		api.Automation.Run(ctx)
+		close(polled)
+	}()
 	srv := &http.Server{
 		Addr:              ":8080",
-		Handler:           app.New(db, cfg),
+		Handler:           api,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Println("api listening on :8080")
-	log.Fatal(srv.ListenAndServe())
+	go func() {
+		log.Println("api listening on :8080")
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+	stop() // a second signal ends the process at once
+	log.Println("api shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Print("shutdown: ", err)
+	}
+	<-polled
+	api.Automation.Wait() // webhook deliveries the server answered before it stopped
 }

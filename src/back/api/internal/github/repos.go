@@ -107,21 +107,33 @@ func (c *Client) Labels(ctx context.Context, token string, repoID int64, etag st
 	if err != nil {
 		return nil, "", err
 	}
-	// A label created or deleted mid-walk shifts every label after it across the page boundaries, so one can land on
-	// two pages or none; that also changes an earlier page, which a free 304 on each of them rules out.
-	for _, p := range read[:len(read)-1] {
-		_, err := c.do(ctx, http.MethodGet, p.url, token, http.Header{"If-None-Match": {p.etag}}, nil, nil)
-		if err == nil {
-			return nil, "", ErrLabelsChanged
-		}
-		if ghErr := (*Error)(nil); !errors.As(err, &ghErr) || ghErr.Status != http.StatusNotModified {
-			return nil, "", err
-		}
+	ok, err := unchanged(ctx, c, token, read)
+	if err != nil {
+		return nil, "", err
+	}
+	if !ok {
+		return nil, "", ErrLabelsChanged
 	}
 	if len(labels) >= 100 {
 		return labels, "", nil
 	}
 	return labels, read[0].etag, nil
+}
+
+// unchanged re-reads every page of read but the last with its ETag and reports whether all are as they were. An item
+// created or deleted mid-walk shifts every item after it across the page boundaries, so one can land on two pages or
+// none; that also changes an earlier page, which a free 304 on each of them rules out.
+func unchanged(ctx context.Context, c *Client, token string, read []pageRead) (bool, error) {
+	for _, p := range read[:len(read)-1] {
+		_, err := c.do(ctx, http.MethodGet, p.url, token, http.Header{"If-None-Match": {p.etag}}, nil, nil)
+		if err == nil {
+			return false, nil
+		}
+		if ghErr := (*Error)(nil); !errors.As(err, &ghErr) || ghErr.Status != http.StatusNotModified {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // pageRead is a page pages read: its URL and ETag.

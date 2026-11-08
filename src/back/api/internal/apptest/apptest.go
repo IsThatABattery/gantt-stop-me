@@ -19,6 +19,7 @@ import (
 
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/app"
+	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/github/githubtest"
 	"gantt-stop-me/api/internal/secret"
@@ -39,6 +40,9 @@ type Env struct {
 	Server *httptest.Server
 	Config app.Config
 	GitHub *githubtest.Fake
+	// Automation is the API's automation. Its poller never ticks in tests: Automation.Poll runs one poll of a project,
+	// and Automation.Wait waits for the webhook deliveries already answered.
+	Automation *automation.Automation
 }
 
 // New starts the API on a new, migrated schema, with OAuth linking enabled against a fake GitHub.
@@ -65,9 +69,12 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	for _, c := range configure {
 		c(&cfg)
 	}
-	srv := httptest.NewServer(app.New(db, cfg))
+	api := app.New(db, cfg)
+	srv := httptest.NewServer(api)
+	// Cleanups run last first: the server stops taking deliveries, then the ones it answered finish, then the database goes.
+	t.Cleanup(api.Automation.Wait)
 	t.Cleanup(srv.Close)
-	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh}
+	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh, Automation: api.Automation}
 }
 
 // DB returns a pool on a new schema with every migration applied, dropped when the test ends.

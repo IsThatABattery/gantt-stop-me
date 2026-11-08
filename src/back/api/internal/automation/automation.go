@@ -6,23 +6,31 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gantt-stop-me/api/internal/accounts"
+	"gantt-stop-me/api/internal/board"
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/secret"
 )
 
-// Automation serves the automation routes under /api/projects/{id} and checks the automation owner before work starts.
+// Automation serves the automation routes under /api/projects/{id} and the webhook, polls automated projects'
+// pull requests, and checks the automation owner before work starts.
 type Automation struct {
 	DB        *pgxpool.Pool
 	Accounts  *accounts.Accounts // guards every route
 	Projects  *projects.Projects // checks access to the project first
 	Secrets   *secret.Box        // opens owners' GitHub credentials and seals webhook secrets
-	PublicURL string             // base URL users open, without a trailing slash
-	RunnerURL string             // the runner's base URL; automation is off while it is empty
+	GitHub    *github.Client
+	Board     *board.Board // moves tasks the way the move endpoint does
+	PublicURL string       // base URL users open, without a trailing slash
+	RunnerURL string       // the runner's base URL; automation is off while it is empty
+
+	deliveries sync.WaitGroup // webhook deliveries answered and still being applied
 }
 
 // Register adds the automation routes to mux, or none while RunnerURL is empty, so they answer 404 like any unknown route.
@@ -34,7 +42,11 @@ func (a *Automation) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/projects/{id}/automation", a.Accounts.Require(a.enable))
 	mux.HandleFunc("DELETE /api/projects/{id}/automation", a.Accounts.Require(a.disable))
 	mux.HandleFunc("POST /api/projects/{id}/automation/webhook", a.Accounts.Require(a.webhookSecret))
+	mux.HandleFunc("POST /api/github/webhook/{projectID}", a.webhook)
 }
+
+// Wait waits until the webhook deliveries already answered are applied.
+func (a *Automation) Wait() { a.deliveries.Wait() }
 
 // settings is how the API shows a project's automation while it is on.
 type settings struct {
