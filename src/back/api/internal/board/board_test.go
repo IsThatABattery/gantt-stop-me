@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 
 	"gantt-stop-me/api/internal/apptest"
@@ -120,6 +121,31 @@ func (f *fixture) task(number int) (int64, storedTask) {
 	return id, s
 }
 
+type label struct{ Name, Color string }
+
+// details returns the body and labels of issue number's task as GET task answers them to ada, failing the test
+// unless the row stores the same.
+func (f *fixture) details(number int) (string, []label) {
+	f.t.Helper()
+	id, _ := f.task(number)
+	res := f.Do("GET", f.path("/tasks/%d", id), nil, f.ada)
+	res.Expect(http.StatusOK, "")
+	var got struct {
+		Body   string
+		Labels []label
+	}
+	res.JSON(&got)
+	var body string
+	var labels []label
+	if err := f.DB.QueryRow(context.Background(), `select body, labels from tasks where id = $1`, id).Scan(&body, &labels); err != nil {
+		f.t.Fatal(err)
+	}
+	if got.Labels == nil || got.Body != body || !slices.Equal(got.Labels, labels) {
+		f.t.Fatalf("GET task answers %q %v, the row stores %q %v", got.Body, got.Labels, body, labels)
+	}
+	return body, labels
+}
+
 // order returns the issue numbers of the column's tasks, top to bottom.
 func (f *fixture) order(key string) []int {
 	f.t.Helper()
@@ -148,3 +174,13 @@ func (f *fixture) dueSync() {
 
 // since returns the GitHub requests made after the first n.
 func (f *fixture) since(n int) []string { return f.GitHub.Requests()[n:] }
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (rt roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return rt(r) }
+
+// intercept sends the API's later requests to GitHub through fn, which may pass them on to next.
+func (f *fixture) intercept(fn func(r *http.Request, next http.RoundTripper) (*http.Response, error)) {
+	next := f.Config.GitHub.HTTP.Transport
+	f.Config.GitHub.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) { return fn(r, next) })}
+}

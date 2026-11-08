@@ -27,8 +27,9 @@ type Repo struct {
 	} `json:"permissions"`
 }
 
-// Label is an issue label.
+// Label is a repository's label, as its issues carry it.
 type Label struct {
+	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
 }
@@ -83,31 +84,76 @@ func (c *Client) CreateLabel(ctx context.Context, token string, repoID int64, la
 // it calls page with each page until page returns false or no pages are left, and returns the first page's ETag.
 // With etag set, an unchanged first page fails with *Error{Status: 304}.
 func (c *Client) Issues(ctx context.Context, token string, repoID int64, query url.Values, etag string, page func([]Issue) bool) (string, error) {
-	next := c.repo(repoID) + "/issues?" + query.Encode()
+	read, err := pages(ctx, c, token, c.repo(repoID)+"/issues?"+query.Encode(), etag, page)
+	if err != nil {
+		return "", err
+	}
+	return read[0].etag, nil
+}
+
+// ErrLabelsChanged reports a label list that changed while Labels read its pages, so they may hold a label twice or
+// miss one.
+var ErrLabelsChanged = errors.New("github: label list changed while it was read")
+
+// Labels lists the repository's labels and returns their ETag, or "" when they fill a page or more: an ETag covers
+// only the first page, so a change on a later one would leave it as it was. With etag set, an unchanged first page
+// fails with *Error{Status: 304}. A list that changed between its pages fails with ErrLabelsChanged.
+func (c *Client) Labels(ctx context.Context, token string, repoID int64, etag string) ([]Label, string, error) {
+	labels := []Label{} // not nil, which would send null for a repository with none
+	read, err := pages(ctx, c, token, c.repo(repoID)+"/labels?per_page=100", etag, func(page []Label) bool {
+		labels = append(labels, page...)
+		return true
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	// A label created or deleted mid-walk shifts every label after it across the page boundaries, so one can land on
+	// two pages or none; that also changes an earlier page, which a free 304 on each of them rules out.
+	for _, p := range read[:len(read)-1] {
+		_, err := c.do(ctx, http.MethodGet, p.url, token, http.Header{"If-None-Match": {p.etag}}, nil, nil)
+		if err == nil {
+			return nil, "", ErrLabelsChanged
+		}
+		if ghErr := (*Error)(nil); !errors.As(err, &ghErr) || ghErr.Status != http.StatusNotModified {
+			return nil, "", err
+		}
+	}
+	if len(labels) >= 100 {
+		return labels, "", nil
+	}
+	return labels, read[0].etag, nil
+}
+
+// pageRead is a page pages read: its URL and ETag.
+type pageRead struct{ url, etag string }
+
+// pages GETs next and each page its Link header names after it, calling page with each until page returns false
+// or no pages are left, and returns the pages it read, in order. With etag set, an unchanged first page fails with
+// *Error{Status: 304}.
+func pages[T any](ctx context.Context, c *Client, token, next, etag string, page func([]T) bool) ([]pageRead, error) {
 	var header http.Header
 	if etag != "" {
 		header = http.Header{"If-None-Match": {etag}}
 	}
-	var first string
-	for i := 0; next != ""; i++ {
-		var issues []Issue
-		h, err := c.do(ctx, http.MethodGet, next, token, header, nil, &issues)
+	var read []pageRead
+	for next != "" {
+		var items []T
+		h, err := c.do(ctx, http.MethodGet, next, token, header, nil, &items)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		if i == 0 {
-			first, header = h.Get("ETag"), nil
-		}
-		if !page(issues) {
+		header = nil
+		read = append(read, pageRead{next, h.Get("ETag")})
+		if !page(items) {
 			break
 		}
 		next = nextPage(h.Get("Link"))
 		// The token goes to this URL, so it must stay on GitHub's API.
 		if next != "" && !strings.HasPrefix(next, c.API+"/") {
-			return "", fmt.Errorf("github: next page %q is not under %s", next, c.API)
+			return nil, fmt.Errorf("github: next page %q is not under %s", next, c.API)
 		}
 	}
-	return first, nil
+	return read, nil
 }
 
 // nextPage returns the rel="next" URL of a Link header, or "" on the last page.
@@ -119,13 +165,6 @@ func nextPage(link string) string {
 		}
 	}
 	return ""
-}
-
-// Issue loads one issue.
-func (c *Client) Issue(ctx context.Context, token string, repoID int64, number int) (Issue, error) {
-	var is Issue
-	_, err := c.do(ctx, http.MethodGet, c.issue(repoID, number), token, nil, nil, &is)
-	return is, err
 }
 
 // CreateIssue opens an issue with these labels.

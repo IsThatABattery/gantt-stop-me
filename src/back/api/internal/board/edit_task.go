@@ -11,7 +11,7 @@ import (
 	"gantt-stop-me/api/internal/projects"
 )
 
-// editTask changes the title or body of a task's issue on GitHub, then the cached title.
+// editTask changes the title or body of a task's issue on GitHub, then the cached title, body and labels.
 func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 	p, token, ok := b.Projects.Check(w, r, projects.Write)
 	if !ok {
@@ -57,7 +57,10 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 		github.Fail(w, r, err)
 		return
 	}
-	t, err = b.scanTask(b.DB.QueryRow(ctx, `update tasks t set title = $2 where t.id = $1 returning `+taskColumns, t.ID, is.Title), p)
+	// updated_at, as a move sets it: a sync that fetched the issue before this edit then skips the task instead of undoing it.
+	t, err = b.scanTask(b.DB.QueryRow(ctx, `
+		update tasks t set title = $2, body = $3, labels = $4, updated_at = clock_timestamp()
+		where t.id = $1 returning `+taskColumns, t.ID, is.Title, is.Body, projects.Labels(is)), p)
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return

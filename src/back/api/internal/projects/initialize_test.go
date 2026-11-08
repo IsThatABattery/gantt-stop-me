@@ -154,6 +154,45 @@ func TestInitializeRecordsTheSyncFromBeforeTheFetch(t *testing.T) {
 	}
 }
 
+func TestInitializeImportsBodyAndLabels(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	repo := env.GitHub.AddRepo("octo", "hello")
+	repo.Grant(env.LinkGitHub(ada, "ada-gh"), "push")
+	repo.AddIssue("Detailed", "bug", "board:testing")
+	repo.EditIssue(1, func(is *githubtest.Issue) { is.Body = "The details." })
+	repo.AddIssue("Bare") // GitHub sends its body as null and no labels
+
+	project := env.AddProject(ada, "octo", "hello")
+	type label struct{ Name, Color string }
+	for _, c := range []struct {
+		number int
+		body   string
+		labels []label
+	}{
+		{1, "The details.", []label{{"bug", "ededed"}, {"board:testing", "ededed"}}},
+		{2, "", []label{}},
+	} {
+		var id int64
+		var body string
+		var labels []label
+		err := env.DB.QueryRow(context.Background(), `select id, body, labels from tasks where issue_number = $1`, c.number).Scan(&id, &body, &labels)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := env.Do("GET", fmt.Sprintf("/api/projects/%d/tasks/%d", project, id), nil, ada)
+		res.Expect(http.StatusOK, "")
+		var got struct {
+			Body   string
+			Labels []label
+		}
+		res.JSON(&got)
+		if body != c.body || !slices.Equal(labels, c.labels) || got.Body != c.body || got.Labels == nil || !slices.Equal(got.Labels, c.labels) {
+			t.Errorf("issue %d: stored %q %v, GET task %q %v; want %q %v", c.number, body, labels, got.Body, got.Labels, c.body, c.labels)
+		}
+	}
+}
+
 func TestInitializeFinishesHalfInitializedProject(t *testing.T) {
 	env := apptest.New(t)
 	ada := env.SignUp("ada@example.com", "correct horse")

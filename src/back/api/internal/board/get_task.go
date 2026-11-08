@@ -6,19 +6,28 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
 
-// getTask returns a task with its issue's body and labels, which only GitHub has.
+// getTask returns a task with its issue's cached body and labels, after a sync with GitHub if one is due.
 func (b *Board) getTask(w http.ResponseWriter, r *http.Request) {
 	p, token, ok := b.Projects.Check(w, r, projects.Read)
-	if !ok {
+	if !ok || !b.syncIfDue(w, r, p, token) {
 		return
 	}
-	ctx := r.Context()
-	t, err := b.scanTask(b.DB.QueryRow(ctx, taskByID, taskID(r), p.ID), p)
+	var out struct {
+		task
+		Body   string `json:"body"`
+		Labels []struct {
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		} `json:"labels"` // not github.Label, whose id only the sync needs
+	}
+	var err error
+	out.task, err = b.scanTask(b.DB.QueryRow(r.Context(), `
+		select `+taskColumns+`, t.body, t.labels from tasks t where t.id = $1 and t.project_id = $2`, taskID(r), p.ID),
+		p, &out.Body, &out.Labels)
 	if errors.Is(err, pgx.ErrNoRows) {
 		taskNotFound(w)
 		return
@@ -27,15 +36,5 @@ func (b *Board) getTask(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	is, err := b.GitHub.Issue(ctx, token, p.RepoID, t.IssueNumber)
-	if err != nil {
-		github.Fail(w, r, err)
-		return
-	}
-	t.Title, t.State = is.Title, is.State // GitHub owns these; the row is a cache only a sync refreshes
-	httpx.JSON(w, http.StatusOK, struct {
-		task
-		Body   string         `json:"body"`
-		Labels []github.Label `json:"labels"`
-	}{t, is.Body, is.Labels})
+	httpx.JSON(w, http.StatusOK, out)
 }

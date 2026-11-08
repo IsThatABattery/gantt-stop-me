@@ -69,6 +69,16 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 // DB returns a pool on a new schema with every migration applied, dropped when the test ends.
 func DB(t testing.TB) *pgxpool.Pool {
 	t.Helper()
+	db := EmptyDB(t)
+	if err := store.Migrate(context.Background(), db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+// EmptyDB returns a pool on a new schema with no migration applied, dropped when the test ends.
+func EmptyDB(t testing.TB) *pgxpool.Pool {
+	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Fatal("TEST_DATABASE_URL is not set. Run tests with: docker compose run --rm api-test")
@@ -97,9 +107,6 @@ func DB(t testing.TB) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(db.Close)
-	if err := store.Migrate(ctx, db, migrations.FS); err != nil {
-		t.Fatal(err)
-	}
 	return db
 }
 
