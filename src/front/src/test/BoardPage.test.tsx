@@ -1,8 +1,10 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { fake, failNext } from './fakeApi'
 import { renderApp } from './render'
+import { server } from './server'
 
 const column = (name: RegExp) => screen.getByRole('region', { name })
 const cardsIn = (name: RegExp) =>
@@ -102,10 +104,42 @@ describe('board moves', () => {
 
     await userEvent.keyboard(']')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent("#12 couldn't move: someone else changed it first. It's back in Hangar.")
+    expect(await screen.findByRole('alert')).toHaveTextContent("#12 couldn't move: someone else changed it first. It's in Hangar.")
     expect(cardsIn(/^Hangar/)).toContain('#12')
     expect(cardsIn(/^In orbit/)).not.toContain('#12')
     expect(task(7).columnId).toBe(1)
+  })
+
+  it('says where a conflicting card really is', async () => {
+    await openBoard()
+    Object.assign(task(7), { columnId: 3, position: 5, version: 2 }) // someone moved #12 to Flight check
+    card(12).focus()
+    await userEvent.keyboard(']')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("#12 couldn't move: someone else changed it first. It's in Flight check.")
+    expect(cardsIn(/^Flight check/)).toContain('#12')
+  })
+
+  it('keeps focus on a card whose keyboard move is refused', async () => {
+    let refuse!: () => void
+    const refused = new Promise<void>((resolve) => (refuse = resolve))
+    server.use(
+      http.post('/api/projects/1/tasks/7/move', async () => {
+        await refused
+        return HttpResponse.json({ error: { code: 'bad_request', message: 'No.' } }, { status: 400 })
+      }),
+    )
+    await openBoard()
+    card(12).focus()
+    await userEvent.keyboard(']')
+    // Refused only once the card has moved, so the rollback remounts it.
+    await waitFor(() => expect(cardsIn(/^In orbit/)).toContain('#12'))
+    await waitFor(() => expect(card(12)).toHaveFocus())
+    refuse()
+
+    await screen.findByRole('alert')
+    expect(cardsIn(/^Hangar/)).toContain('#12')
+    await waitFor(() => expect(card(12)).toHaveFocus())
   })
 
   it("shows automation's reason for refusing a move", async () => {
