@@ -1,7 +1,7 @@
 // Who is signed in. The API keeps the session in an HttpOnly cookie that
 // scripts can't read, so GET /api/me is the only way to know (docs/accounts.md).
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api } from './api/client'
 import type { Me, SignedInUser } from './api/types'
 import { ApiError } from './errors'
@@ -29,14 +29,19 @@ export const signIn = (c: Credentials) => api<SignedInUser>('POST', '/auth/login
 export const signUp = (c: Credentials) => api<SignedInUser>('POST', '/auth/signup', c)
 
 /**
- * End the session, then forget everything cached for this user. The user is
- * set to null first, so RequireSession redirects instead of refetching.
+ * Forget everything cached for the signed-in user, so the next one starts
+ * clean. The user is set to null first, so RequireSession doesn't refetch.
  */
+export function forgetSession(client: QueryClient) {
+  client.setQueryData(keys.me, null)
+  client.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.me[0] })
+}
+
+/** End the session, then forget everything cached for this user. */
 export function useSignOut() {
   const client = useQueryClient()
   return async () => {
     await api<void>('POST', '/auth/logout').catch(() => undefined)
-    client.setQueryData(keys.me, null)
-    client.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.me[0] })
+    forgetSession(client)
   }
 }

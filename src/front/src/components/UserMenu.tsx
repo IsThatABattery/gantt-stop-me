@@ -69,7 +69,8 @@ export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above
             role="menuitem"
             onClick={async () => {
               await signOut()
-              navigate('/login', { replace: true })
+              // In sync: in a transition, RequireSession would first render the cleared session as one that ended.
+              navigate('/login', { replace: true, flushSync: true })
             }}
             className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-left font-[inherit] text-text hover:bg-nav-active"
           >

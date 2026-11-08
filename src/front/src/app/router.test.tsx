@@ -1,9 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { keys } from '../data/keys'
 import { fake, failNext } from '../test/fakeApi'
 import { renderApp } from '../test/render'
+import { server } from '../test/server'
 
 async function signIn(email: string, password: string) {
   await userEvent.type(await screen.findByLabelText('Email'), email)
@@ -29,13 +31,44 @@ describe('sign in', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Wrong email or password.')
   })
 
-  it('goes back to login when the session ends mid-use', async () => {
-    const { router } = renderApp('/projects/1')
-    await screen.findByRole('link', { name: /^#12:/ })
-    fake.signedInId = null // expired, or signed out in another tab
+})
 
-    await userEvent.click(screen.getByRole('link', { name: /^#12:/ }))
+describe('session ends mid-use', () => {
+  it('asks to sign in again over the page, which keeps what was typed', async () => {
+    const { router } = renderApp('/projects/1/tasks/7/edit')
+    await userEvent.type(await screen.findByLabelText('Title'), ' v2')
+    fake.signedInId = null // expired, or signed out in another tab
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Session ended' })
+    await userEvent.type(within(dialog).getByLabelText('Password'), 'correct horse')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Session ended' })).not.toBeInTheDocument())
+    expect(router.state.location.pathname).toBe('/projects/1/tasks/7/edit')
+    expect(screen.getByLabelText('Title')).toHaveValue(`${fake.tasks[0].title} v2`)
+  })
+
+  it('forgets the old session when another account signs in instead', async () => {
+    const { router, client } = renderApp('/projects/1')
+    await screen.findByRole('link', { name: /^#12:/ })
+    fake.signedInId = null
+    await client.invalidateQueries({ queryKey: keys.board('1') })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Use another account' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(client.getQueryData(keys.board('1'))).toBeUndefined()
+  })
+
+  it('keeps the page when a background /api/me refetch fails', async () => {
+    const { client } = renderApp('/projects')
+    await screen.findByRole('heading', { name: 'All missions' })
+    server.use(http.get('/api/me', () => HttpResponse.json({ error: { code: 'bad_gateway', message: 'Bad gateway' } }, { status: 502 }), { once: true }))
+    await client.refetchQueries({ queryKey: keys.me })
+    await new Promise((r) => setTimeout(r, 50))
+
+    expect(screen.getByRole('heading', { name: 'All missions' })).toBeInTheDocument()
+    expect(screen.queryByText('Bad gateway')).not.toBeInTheDocument()
   })
 })
 
