@@ -1,3 +1,4 @@
+import type { RunStatus } from '../data/api/types'
 import type {
   ActivityVerb,
   AgentState,
@@ -42,7 +43,10 @@ export const labels = {
   settings: 'Settings',
 
   allProjects: 'All missions',
+  addProject: 'Add a mission',
   newProject: 'New mission',
+  testsRunning: 'Static fires running',
+  linkGitHub: 'Link GitHub',
   newProjectHint: 'Start from scratch or import a backlog',
   selectProject: 'Select a mission',
   searchProjects: 'Search missions',
@@ -198,6 +202,10 @@ export const plannerLabels = {
 
 /** Settings section names (Settings.dc.html). */
 export const settingsLabels = {
+  account: 'Account',
+  github: 'GitHub',
+  providers: 'LLM providers',
+  providersHelp: 'OpenAI-compatible endpoints your astronauts and test runs can use. Keys are stored encrypted and never shown again.',
   profile: 'Profile',
   autonomy: 'Astronauts and autonomy',
   roles: 'Operators and roles',
@@ -320,4 +328,14 @@ export const agentStateLabels: Record<AgentState, string> = {
 export const roleLabels: Record<UserRole, string> = {
   lead: 'Flight director',
   member: 'Operator',
+}
+
+/** A task's latest test run, as the board card and drawer show it. */
+export const runStatusLabels: Record<RunStatus, string> = {
+  queued: 'Test queued',
+  running: 'Testing',
+  passed: 'Tests passed',
+  failed: 'Tests failed',
+  error: 'Test error',
+  cancelled: 'Test cancelled',
 }

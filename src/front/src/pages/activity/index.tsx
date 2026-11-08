@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useProjectContext } from '../../app/projectContext'
+import { useMockProjectContext } from '../../app/projectContext'
 import { Eyebrow } from '../../components/Eyebrow'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useActivity, useActivityContext } from '../../data/views/activity'
@@ -16,7 +16,7 @@ const emptyText: Record<ActivityFilter, string> = {
 
 // Mission log: every move, hail, PR and approval on the mission (AGENT_BRIEF §5).
 export function ActivityPage() {
-  const project = useProjectContext()
+  const project = useMockProjectContext()
   const events = useActivity(project.id)
   const context = useActivityContext(project.id)
   const [filter, setFilter] = useState<ActivityFilter>('all')

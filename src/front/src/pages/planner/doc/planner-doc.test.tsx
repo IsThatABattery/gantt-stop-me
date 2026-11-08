@@ -13,7 +13,9 @@ const topic = (title: string) => {
   return within(aside).getByText(title).closest('li')!
 }
 
-describe('briefing', () => {
+// Skipped: this screen runs on mock data and isn't routed until its API exists
+// (docs/implementation/api-gaps.md). Unskip it when the screen is wired.
+describe.skip('briefing', () => {
   it('shows question 3 with its suggested answers', async () => {
     renderApp(BRIEFING)
     expect(await screen.findByText('Question 3 of about 8')).toBeInTheDocument()
@@ -62,7 +64,9 @@ describe('briefing', () => {
   })
 })
 
-describe('doc review', () => {
+// Skipped: this screen runs on mock data and isn't routed until its API exists
+// (docs/implementation/api-gaps.md). Unskip it when the screen is wired.
+describe.skip('doc review', () => {
   it('shows the doc, highlights [TARGET], and links the comment to its section', async () => {
     renderApp(REVIEW)
     const doc = await screen.findByRole('article', { name: 'Objective doc' })

@@ -4,8 +4,7 @@ import { Chip, type Tone } from '../../../components/Chip'
 import { Icon } from '../../../components/Icon'
 import { StatusMessage } from '../../../components/StatusMessage'
 import { Button, Textarea } from '../../../components/controls'
-import { useUser } from '../../../data/core'
-import { useSession } from '../../../data/session'
+import { useMockSession, useUser } from '../../../data/core'
 import { useAnswerQuestion, useDraft, useDraftDoc, useSkipQuestion } from '../../../data/views/plannerDoc'
 import type { BriefingMessage, DocSection, DocTopicState, FeatureDraft } from '../../../data/types'
 import { labels, plannerLabels, topicStateLabels } from '../../../labels/labels'
@@ -107,7 +106,7 @@ function StatusNote({ draft, base }: { draft: FeatureDraft; base: string }) {
 }
 
 function Message({ message: m }: { message: BriefingMessage }) {
-  const session = useSession()
+  const session = useMockSession()
   const { data: user } = useUser(session?.userId)
   if (m.from === 'agent') {
     return (

@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react'
 import { Button, Field, TextInput } from '../../components/controls'
 import { Icon } from '../../components/Icon'
+import { errorCode } from '../../data/errors'
 import { passwordProblems, useChangePassword, type PasswordInput } from '../../data/views/settings'
 import { settingsLabels } from '../../labels/labels'
 
@@ -12,16 +13,21 @@ const fields: { key: keyof PasswordInput; label: string; autoComplete: string; h
   { key: 'confirm', label: 'Confirm new password', autoComplete: 'new-password' },
 ]
 
-/** Mock password change: checks the fields, never a real password. Separate from Save changes. */
+/** Checks the fields here first, then the API checks the current password. Other sessions are signed out. */
 export function PasswordForm() {
   const [value, setValue] = useState(empty)
   const [errors, setErrors] = useState<Partial<Record<keyof PasswordInput, string>>>({})
   const [done, setDone] = useState(false)
   const change = useChangePassword()
   const base = useId()
+  // The API's refusals that belong to one field (docs/accounts.md).
+  const code = errorCode(change.error)
+  const apiField: keyof PasswordInput | null = code === 'wrong_password' ? 'current' : code === 'weak_password' ? 'next' : null
+  const shown = apiField && change.error ? { ...errors, [apiField]: change.error.message } : errors
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    change.reset()
     const problems = passwordProblems(value)
     setErrors(problems)
     setDone(false)
@@ -46,7 +52,7 @@ export function PasswordForm() {
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
         {fields.map((f) => {
           const id = `${base}-${f.key}`
-          const error = errors[f.key]
+          const error = shown[f.key]
           const describedBy = [error && `${id}-error`, f.hint && `${id}-hint`].filter(Boolean).join(' ') || undefined
           return (
             <Field key={f.key} id={id} label={f.label}>
@@ -87,7 +93,7 @@ export function PasswordForm() {
               Password changed
             </span>
           )}
-          {change.error && <span className="text-critical">{change.error.message}</span>}
+          {change.error && !apiField && <span className="text-critical">{change.error.message}</span>}
         </div>
       </div>
     </form>

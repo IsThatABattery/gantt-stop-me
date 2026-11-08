@@ -1,83 +1,12 @@
-// Settings (feature/frontend-settings).
+// Settings: the user's password, their GitHub link and their LLM providers
+// (docs/accounts.md, github.md, providers.md).
 
 import { useQuery } from '@tanstack/react-query'
+import { api, useApiMutation } from '../api/client'
+import type { GitHubLink, Provider, ProviderWithModels } from '../api/types'
 import { keys } from '../keys'
-import { db, delay, mustFind } from '../mock/store'
-import { useApiMutation } from '../api/client'
-import type { Autonomy, ID, User, WorkspaceSettings } from '../types'
 
-export function getSettings(): Promise<WorkspaceSettings> {
-  return delay(db.settings)
-}
-
-export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: getSettings })
-
-export class SettingsError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'SettingsError'
-  }
-}
-
-/** Run a write inside a promise, so a thrown error becomes a rejection. */
-function write<T>(fn: () => T): Promise<T> {
-  try {
-    return delay(fn())
-  } catch (e) {
-    return Promise.reject(e)
-  }
-}
-
-export interface SettingsInput {
-  defaultAutonomy: Autonomy
-  freeFlightGrantedBy: WorkspaceSettings['freeFlightGrantedBy']
-  agentTaskCap: number
-  /** Rule id → on/off */
-  rules: Record<ID, boolean>
-  providerName: string
-  /** A new key to store. Empty keeps the current one. Only its last 4 characters are kept. */
-  apiKey: string
-}
-
-export function saveSettings(input: SettingsInput): Promise<WorkspaceSettings> {
-  return write(() => {
-    if (!Number.isInteger(input.agentTaskCap) || input.agentTaskCap < 1) {
-      throw new SettingsError('Concurrent astronaut payloads must be a whole number, 1 or more.')
-    }
-    const s = db.settings
-    s.defaultAutonomy = input.defaultAutonomy
-    s.freeFlightGrantedBy = input.freeFlightGrantedBy
-    s.agentTaskCap = input.agentTaskCap
-    s.approvalRules = s.approvalRules.map((r) => ({ ...r, enabled: input.rules[r.id] ?? r.enabled }))
-    const key = input.apiKey.trim()
-    // ARCHITECTURE.md "Provider settings": the full key is never kept or shown.
-    s.provider = { name: input.providerName, keyLast4: key ? key.slice(-4) : s.provider.keyLast4 }
-    return s
-  })
-}
-
-export const useSaveSettings = () => useApiMutation(saveSettings, [keys.settings])
-
-export interface ProfileInput {
-  userId: ID
-  name: string
-  email: string
-}
-
-export function saveProfile({ userId, name, email }: ProfileInput): Promise<User> {
-  return write(() => {
-    const n = name.trim()
-    const e = email.trim()
-    if (!n) throw new SettingsError('Enter your name.')
-    if (!/^\S+@\S+\.\S+$/.test(e)) throw new SettingsError('Enter a valid email address.')
-    const user = mustFind(db.users, (u) => u.id === userId, 'User')
-    user.name = n
-    user.email = e
-    return user
-  })
-}
-
-export const useSaveProfile = (userId: ID) => useApiMutation(saveProfile, [keys.user(userId)])
+// ---- Password ----
 
 export interface PasswordInput {
   current: string
@@ -94,12 +23,53 @@ export function passwordProblems({ current, next, confirm }: PasswordInput): Par
   return out
 }
 
-/** Mock only: checks the shape, never a real password. */
-export function changePassword(input: PasswordInput): Promise<void> {
-  return write(() => {
-    const problems = Object.values(passwordProblems(input))
-    if (problems.length) throw new SettingsError(problems[0])
-  })
-}
+/** Changing it signs out every other session of the user. */
+export const changePassword = ({ current, next }: PasswordInput) =>
+  api<void>('PATCH', '/me/password', { currentPassword: current, newPassword: next })
 
 export const useChangePassword = () => useApiMutation(changePassword, [])
+
+// ---- GitHub ----
+
+/** OAuth is a full-page navigation to GitHub and back, not a fetch. */
+export const GITHUB_OAUTH_URL = '/api/github/link'
+
+export const linkToken = (token: string) => api<GitHubLink>('POST', '/github/token', { token })
+
+export const unlinkGitHub = () => api<void>('DELETE', '/github')
+
+// Linking changes what every project route answers, so everything refetches.
+export const useLinkToken = () => useApiMutation(linkToken, [[]])
+export const useUnlinkGitHub = () => useApiMutation(unlinkGitHub, [[]])
+
+// ---- LLM providers ----
+
+export const listProviders = () => api<{ providers: Provider[] }>('GET', '/providers').then((r) => r.providers)
+
+export const useProviders = () => useQuery({ queryKey: keys.providers, queryFn: listProviders })
+
+export interface NewProvider {
+  name: string
+  baseUrl: string
+  apiKey: string
+  models?: string[]
+}
+
+/** Changing `baseUrl` needs `apiKey` again. `{}` only refreshes `availableModels`. */
+export interface ProviderEdit {
+  baseUrl?: string
+  apiKey?: string
+  models?: string[]
+}
+
+export const createProvider = (input: NewProvider) => api<ProviderWithModels>('POST', '/providers', input)
+
+export const updateProvider = (id: number, edit: ProviderEdit) => api<ProviderWithModels>('PATCH', `/providers/${id}`, edit)
+
+export const deleteProvider = (id: number) => api<void>('DELETE', `/providers/${id}`)
+
+export const useCreateProvider = () => useApiMutation(createProvider, [keys.providers])
+
+export const useUpdateProvider = (id: number) => useApiMutation((edit: ProviderEdit) => updateProvider(id, edit), [keys.providers])
+
+export const useDeleteProvider = () => useApiMutation(deleteProvider, [keys.providers])

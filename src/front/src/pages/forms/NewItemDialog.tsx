@@ -6,8 +6,7 @@ import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { Button } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
-import { useProject } from '../../data/core'
-import { useSession } from '../../data/session'
+import { useMockProject, useMockSession } from '../../data/core'
 import { useCreateFeature, useCreateTask, useFormOptions, type FormOptions } from '../../data/views/forms'
 import type { Project } from '../../data/types'
 import { actionLabels, formLabels } from '../../labels/labels'
@@ -22,7 +21,7 @@ export function NewItemDialog({ kind }: { kind: Kind }) {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
   const t = formLabels[kind]
-  const project = useProject(projectId)
+  const project = useMockProject(projectId)
   const options = useFormOptions(projectId)
   const close = () => navigate(`/projects/${projectId}`)
 
@@ -48,7 +47,7 @@ interface NewItemFormProps {
 
 function NewItemForm({ kind, project, options, onCancel }: NewItemFormProps) {
   const navigate = useNavigate()
-  const session = useSession()
+  const session = useMockSession()
   const t = formLabels[kind]
   const [value, setValue] = useState(() =>
     emptyBasics(kind, options, { userId: session?.userId ?? '', sprintId: project.activeSprintId }),

@@ -7,8 +7,7 @@ import { StatusMessage } from '../../components/StatusMessage'
 import { UserMenu } from '../../components/UserMenu'
 import { buttonClass } from '../../components/buttonClass'
 import { Select, TextInput } from '../../components/controls'
-import { useWorkspace } from '../../data/core'
-import { useSession } from '../../data/session'
+import { useMockSession, useWorkspace } from '../../data/core'
 import { useFavorites, useProjects } from '../../data/views/projects'
 import { labels } from '../../labels/labels'
 import { FILTERS, needsYou, plural, SORTS, visibleProjects, type Filter, type Sort } from './filters'
@@ -30,7 +29,7 @@ const emptyText: Record<Filter, string> = {
 export function ProjectSelectPage() {
   const { data: projects, isPending, error } = useProjects()
   const { data: workspace } = useWorkspace()
-  const session = useSession()
+  const session = useMockSession()
   const { favorites, toggle } = useFavorites(session?.userId)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')

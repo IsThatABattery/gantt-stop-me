@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { useProjectContext } from '../../app/projectContext'
+import { useMockProjectContext } from '../../app/projectContext'
 import { buttonClass } from '../../components/buttonClass'
 import { Eyebrow } from '../../components/Eyebrow'
 import { StatusMessage } from '../../components/StatusMessage'
-import { useUser } from '../../data/core'
-import { useSession } from '../../data/session'
+import { useMockSession, useUser } from '../../data/core'
 import { useAgents, useAutonomyPolicy } from '../../data/views/agents'
 import { actionLabels, labels } from '../../labels/labels'
 import { AgentPanel } from './AgentPanel'
@@ -14,10 +13,10 @@ import { RosterTile } from './RosterTile'
 
 // Astronaut console, from ProbeConsole.dc.html (AGENT_BRIEF §6).
 export function AgentsPage() {
-  const project = useProjectContext()
+  const project = useMockProjectContext()
   const { data: rows, isPending, error } = useAgents(project.id)
   const { data: policy } = useAutonomyPolicy(project.id)
-  const session = useSession()
+  const session = useMockSession()
   const { data: me } = useUser(session?.userId)
   const [picked, setPicked] = useState<string | null>(null)
 
