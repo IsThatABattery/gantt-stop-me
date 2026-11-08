@@ -7,6 +7,7 @@ import { useBoard } from '../../data/views/board'
 import { useTask } from '../../data/views/tasks'
 import { actionLabels, formLabels, labels } from '../../labels/labels'
 import { DrawerHeader } from './DrawerHeader'
+import { TestRuns } from './TestRuns'
 
 // Payload drawer over the board (PayloadDetail.dc.html), showing the GitHub
 // issue as the API last read it. The mockup's modules, flight log, cargo,
@@ -71,6 +72,7 @@ export function TaskDrawerPage() {
             <p className="m-0 text-[13px] leading-normal text-text-muted">No description yet.</p>
           )}
         </section>
+        <TestRuns projectId={projectId} task={task} inUserCheck={column?.key === 'user-check'} />
       </div>
     </Drawer>
   )

@@ -104,9 +104,9 @@ describe('project routes', () => {
     }
   })
 
-  it('offers only the board and automation in the rail', async () => {
+  it('offers the board, planning and automation in the rail', async () => {
     renderApp('/projects/1')
     const rail = await screen.findByRole('navigation', { name: 'Primary' })
-    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Add a mission', 'Mission control', 'Automation', 'Settings'])
+    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Add a mission', 'Mission control', 'Plan a feature', 'Automation', 'Settings'])
   })
 })

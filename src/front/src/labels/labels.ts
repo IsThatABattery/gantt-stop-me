@@ -42,6 +42,7 @@ export const labels = {
   retro: 'Debrief',
   settings: 'Settings',
   automation: 'Automation',
+  plans: 'Plan a feature',
 
   allProjects: 'All missions',
   addProject: 'Add a mission',

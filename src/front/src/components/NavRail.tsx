@@ -36,7 +36,7 @@ function RailLink({ item, className = '' }: { item: Item; className?: string }) 
 
 /**
  * Left rail. Without a project it shows only the way back and Settings.
- * In a project it adds the board and automation.
+ * In a project it adds the board, planning and automation.
  * Backlog, sprints, agents, activity and retro come back once the API has
  * them (docs/implementation/api-gaps.md).
  */
@@ -44,6 +44,7 @@ export function NavRail({ projectId }: { projectId?: string }) {
   const items: Item[] = projectId
     ? [
         { label: labels.board, to: `/projects/${projectId}`, icon: 'board', end: true },
+        { label: labels.plans, to: `/projects/${projectId}/plans`, icon: 'target' },
         { label: labels.automation, to: `/projects/${projectId}/automation`, icon: 'orbit' },
       ]
     : []
