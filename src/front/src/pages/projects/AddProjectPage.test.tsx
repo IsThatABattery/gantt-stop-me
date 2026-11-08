@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { fake, failNext } from '../../test/fakeApi'
@@ -29,7 +29,7 @@ describe('flight deck', () => {
     expect(await screen.findByText('Database is restarting.')).toBeInTheDocument()
     expect(screen.queryByLabelText('Repository URL')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await userEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('link', { name: /ada\/gantt/ })).toBeInTheDocument()
   })
 
@@ -50,10 +50,13 @@ describe('add a project', () => {
     expect(fake.requests.find((r) => r.method === 'POST' && r.path === '/api/projects')?.body).toEqual({ url: 'https://github.com/ada/gantt.git' })
   })
 
-  it('explains a URL that is not a repository', async () => {
+  it('explains a URL that is not a repository, until the URL is edited', async () => {
     renderApp('/')
     await submit('github.com/ada')
     expect(await screen.findByRole('alert')).toHaveTextContent('Use a repository URL like https://github.com/owner/name.')
+    await userEvent.type(screen.getByLabelText('Repository URL'), '/gantt')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Repository URL')).toHaveAttribute('aria-invalid', 'false')
   })
 
   it('explains a repository it cannot find', async () => {
