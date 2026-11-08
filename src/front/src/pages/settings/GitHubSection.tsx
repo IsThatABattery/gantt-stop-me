@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { Button, Field, TextInput } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
@@ -24,7 +25,8 @@ const returnNotes = {
 export function GitHubSection({ me }: { me: Me }) {
   const [params] = useSearchParams()
   const returned = params.get('github')
-  const note = returned === 'linked' || returned === 'error' ? returnNotes[returned] : null
+  // Only while it still holds: linking with a token or unlinking afterwards outdates it.
+  const note = returned === 'linked' && me.github ? returnNotes.linked : returned === 'error' && !me.github ? returnNotes.error : null
 
   return (
     <Section
@@ -44,7 +46,12 @@ export function GitHubSection({ me }: { me: Me }) {
 
 function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }) {
   const unlink = useUnlinkGitHub()
+  const id = useId()
   const [confirming, setConfirming] = useState(false)
+  const confirm = (open: boolean) => {
+    flushSync(() => setConfirming(open))
+    document.getElementById(`${id}-${open ? 'keep' : 'unlink'}`)?.focus()
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -58,7 +65,9 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
           <p className="m-0 flex-1 text-[13px]">
             Unlinking removes your access to every {labels.project.toLowerCase()} until you link again.
           </p>
-          <Button onClick={() => setConfirming(false)}>Keep it linked</Button>
+          <Button id={`${id}-keep`} onClick={() => confirm(false)}>
+            Keep it linked
+          </Button>
           <Button
             onClick={() => unlink.mutate()}
             disabled={unlink.isPending}
@@ -69,11 +78,13 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
         </div>
       ) : (
         <div>
-          <Button onClick={() => setConfirming(true)}>Unlink</Button>
+          <Button id={`${id}-unlink`} onClick={() => confirm(true)}>
+            Unlink
+          </Button>
         </div>
       )}
       {unlink.error && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
           {unlink.error.message}
         </p>
       )}
@@ -122,7 +133,7 @@ function NotLinked() {
           </span>
         </Field>
         {link.error && (
-          <p role="alert" className="m-0 text-[13px] text-critical">
+          <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
             {link.error.message}
           </p>
         )}

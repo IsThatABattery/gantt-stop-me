@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { Button, Field, TextInput } from '../../components/controls'
 import { ModelCombobox } from '../../components/ModelCombobox'
 import { Icon } from '../../components/Icon'
-import { StatusMessage } from '../../components/StatusMessage'
 import type { Provider } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
 import { updateProvider, useCreateProvider, useDeleteProvider, useProviders, useUpdateProvider } from '../../data/views/settings'
@@ -38,7 +38,7 @@ function splitError(error: Error | null) {
 }
 
 export function ProvidersSection() {
-  const { data: providers, error } = useProviders()
+  const { data: providers, error, refetch } = useProviders()
   const [adding, setAdding] = useState(false)
   /** A provider just added, waiting for its models to be picked */
   const [picking, setPicking] = useState<{ id: number; available: string[] } | null>(null)
@@ -46,10 +46,15 @@ export function ProvidersSection() {
 
   return (
     <Section id={sectionIds.providers} title={settingsLabels.providers} intro={settingsLabels.providersHelp}>
-      {error ? (
-        <StatusMessage title="Couldn't load providers" body={error.message} />
-      ) : !providers ? (
-        <p className="m-0 text-[13px] text-text-muted">Loading…</p>
+      {/* A failed refetch keeps the list, which may then miss a provider just added. */}
+      {error && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 text-[13px] text-critical">
+          <span className="min-w-0 wrap-anywhere">Couldn't load providers: {error.message}</span>
+          <Button onClick={() => refetch()}>Try again</Button>
+        </div>
+      )}
+      {!providers ? (
+        !error && <p className="m-0 text-[13px] text-text-muted">Loading…</p>
       ) : (
         <>
           {providers.length === 0 && !adding && <p className="m-0 text-[13px] text-text-muted-strong">No providers yet.</p>}
@@ -90,32 +95,58 @@ export function ProvidersSection() {
 
 function ProviderRow({ provider, onEdit }: { provider: Provider; onEdit: () => void }) {
   const remove = useDeleteProvider()
+  const id = useId()
+  const [confirming, setConfirming] = useState(false)
+  const confirm = (open: boolean) => {
+    flushSync(() => setConfirming(open))
+    document.getElementById(`${id}-${open ? 'keep' : 'remove'}`)?.focus()
+  }
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="font-medium">{provider.name}</span>
-        <span className="font-mono text-xs text-text-muted">{provider.baseUrl}</span>
+        <span className="min-w-0 font-medium wrap-anywhere">{provider.name}</span>
+        <span className="min-w-0 font-mono text-xs wrap-anywhere text-text-muted">{provider.baseUrl}</span>
         <span className="ml-auto flex gap-2">
           <Button onClick={onEdit} aria-label={`Edit ${provider.name}`}>
             Edit
           </Button>
-          <Button onClick={() => remove.mutate(provider.id)} disabled={remove.isPending} aria-label={`Remove ${provider.name}`}>
-            Remove
-          </Button>
+          {!confirming && (
+            <Button id={`${id}-remove`} onClick={() => confirm(true)} aria-label={`Remove ${provider.name}`}>
+              Remove
+            </Button>
+          )}
         </span>
       </div>
+      {confirming && (
+        <div role="alertdialog" aria-labelledby={id} className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
+          <p id={id} className="m-0 min-w-48 flex-1 text-[13px] wrap-anywhere">
+            Remove {provider.name}? Its saved key is deleted too.
+          </p>
+          <Button id={`${id}-keep`} onClick={() => confirm(false)}>
+            Keep it
+          </Button>
+          <Button
+            // On failure, back to the row's Remove button, with the error right under it.
+            onClick={() => remove.mutate(provider.id, { onError: () => confirm(false) })}
+            disabled={remove.isPending}
+            className="border-warning text-warning hover:border-warning hover:text-warning"
+          >
+            Remove
+          </Button>
+        </div>
+      )}
+      {remove.error && (
+        <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
+          {remove.error.message}
+        </p>
+      )}
       <span className="inline-flex items-center gap-2 text-[13px] text-text-muted-strong">
         <Icon name="lock" size={14} />
         Key: <span className="font-mono text-text">{provider.keyLast4 ? `•••• ${provider.keyLast4}` : 'saved'}</span>
       </span>
-      <p className="m-0 text-[13px] text-text-muted-strong">
+      <p className="m-0 text-[13px] wrap-anywhere text-text-muted-strong">
         Models: {provider.models.length ? <span className="text-text">{provider.models.join(', ')}</span> : 'none picked yet'}
       </p>
-      {remove.error && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
-          {remove.error.message}
-        </p>
-      )}
     </div>
   )
 }
@@ -148,7 +179,7 @@ function AddProvider({ onCancel, onAdded }: { onCancel: () => void; onAdded: (id
       </div>
       <TextField id="provider-key" label={settingsLabels.apiKey} type="password" value={form.apiKey} error={errors.on('apiKey')} onChange={(apiKey) => setForm({ ...form, apiKey })} />
       {errors.general && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
           {errors.general}
         </p>
       )}
@@ -175,12 +206,12 @@ function PickModels({ provider, available, onDone }: { provider: Provider; avail
 
   return (
     <form onSubmit={submit} noValidate aria-label={`Pick models for ${provider.name}`} className="flex flex-col gap-3">
-      <p className="m-0">
+      <p className="m-0 wrap-anywhere">
         <span className="font-medium">{provider.name}</span> is added. Pick the models to use from it.
       </p>
       <ModelPicker available={available} chosen={models} onChange={setModels} error={errors.on('models')} idPrefix={`pick-${provider.id}`} />
       {errors.general && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
           {errors.general}
         </p>
       )}
@@ -228,7 +259,7 @@ function EditProvider({ provider, onDone }: { provider: Provider; onDone: () => 
 
   return (
     <form onSubmit={submit} noValidate aria-label={`Edit ${provider.name}`} className="flex flex-col gap-4">
-      <p className="m-0 font-medium">{provider.name}</p>
+      <p className="m-0 font-medium wrap-anywhere">{provider.name}</p>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
         <TextField id={`edit-${provider.id}-url`} label="Base URL" value={form.baseUrl} error={errors.on('baseUrl')} onChange={(baseUrl) => setForm({ ...form, baseUrl })} />
         <TextField
@@ -244,12 +275,12 @@ function EditProvider({ provider, onDone }: { provider: Provider; onDone: () => 
       {available ? (
         <ModelPicker available={available} chosen={form.models} onChange={(models) => setForm({ ...form, models })} error={errors.on('models')} idPrefix={`edit-${provider.id}`} />
       ) : listError ? (
-        <p className="m-0 text-[13px] text-critical">Couldn't list the models: {listError.message}</p>
+        <p className="m-0 text-[13px] wrap-anywhere text-critical">Couldn't list the models: {listError.message}</p>
       ) : (
         <p className="m-0 text-[13px] text-text-muted">Listing models…</p>
       )}
       {errors.general && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
           {errors.general}
         </p>
       )}
@@ -284,7 +315,7 @@ function ModelPicker({
       {all.length === 0 ? (
         <p className="m-0 text-[13px] text-text-muted">The endpoint lists no models.</p>
       ) : (
-        <ModelCombobox id={`${idPrefix}-models`} aria-label="Models" multiple options={all} selected={chosen} onChange={onChange} placeholder="Search models" />
+        <ModelCombobox id={`${idPrefix}-models`} aria-label="Models" multiple max={100} options={all} selected={chosen} onChange={onChange} placeholder="Search models" />
       )}
       <FieldError id={`${idPrefix}-models-error`}>{error}</FieldError>
     </fieldset>
