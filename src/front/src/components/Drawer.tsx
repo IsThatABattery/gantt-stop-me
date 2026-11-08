@@ -33,7 +33,7 @@ export function Drawer({ label, onClose, footer, children }: DrawerProps) {
         >
           <Icon name="close" />
         </button>
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto wrap-anywhere">{children}</div>
         {footer && <div className="border-t border-line bg-surface-sunken">{footer}</div>}
       </div>
     </div>

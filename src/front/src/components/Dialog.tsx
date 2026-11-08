@@ -25,6 +25,8 @@ export function Dialog({ label, onClose, children, wide }: DialogProps) {
         tabIndex={-1}
         className={`relative w-full sm:my-auto ${wide ? 'max-w-[860px]' : 'max-w-[560px]'} rounded-dialog border border-line bg-surface text-text shadow-2xl outline-none`}
       >
+        {children}
+        {/* After the children, so focus opens on the first field rather than Close. */}
         <button
           type="button"
           onClick={onClose}
@@ -33,7 +35,6 @@ export function Dialog({ label, onClose, children, wide }: DialogProps) {
         >
           <Icon name="close" />
         </button>
-        {children}
       </div>
     </div>
   )
