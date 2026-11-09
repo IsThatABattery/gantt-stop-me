@@ -88,3 +88,13 @@ export function Field({ id, label, aside, children }: FieldProps) {
     </div>
   )
 }
+
+/** A field's problem under it, in the signal ink. Renders nothing when there is none. */
+export function FieldError({ id, children }: { id: string; children?: ReactNode }) {
+  if (!children) return null
+  return (
+    <span id={id} className="text-[13px] text-signal-ink">
+      {children}
+    </span>
+  )
+}

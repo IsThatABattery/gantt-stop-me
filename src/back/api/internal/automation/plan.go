@@ -184,10 +184,10 @@ type route struct {
 	refusal       string             // why the test does not run: its runner error
 }
 
-// route gives each test a workflow of ws, as Routing says: a pinned test goes to its pin, every test goes to the only
-// workflow when there is one, and otherwise the owner's decision model picks for every unpinned test in one call. A
-// pin naming no workflow, a top probability under 0.5, a refusal and a missing answer are each a runner error for
-// that test. The error is the decisions call failing.
+// route gives each test a workflow of ws, as Routing in docs/api/automation.md says: a pinned test goes to its pin,
+// every test goes to the only workflow when there is one, and otherwise the owner's decision model picks for every
+// unpinned test in one call. A pin naming no workflow, a top probability under 0.5, a refusal and a missing answer
+// are each a runner error for that test. The error is the decisions call failing.
 func (a *Automation) route(ctx context.Context, projectID int64, title string, ws []Workflow, tests []tasktests.Test) ([]route, error) {
 	names := map[string]bool{}
 	for _, w := range ws {

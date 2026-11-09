@@ -10,11 +10,11 @@ import { useMyProjects } from '../../data/views/addProject'
 import { labels } from '../../labels/labels'
 import { AddProjectPage } from './AddProjectPage'
 import { Notice } from './Notice'
-import { plural } from './filters'
 
 const RECENT = 6
 
 const lower = (s: string) => s.toLowerCase()
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** What the user may do in the repository, in words. */
 const access: Record<Permission, { label: string; icon: 'person' | 'edit' | 'lock' }> = {

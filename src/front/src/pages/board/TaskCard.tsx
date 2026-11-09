@@ -3,7 +3,7 @@ import { Chip } from '../../components/Chip'
 import { Icon, type IconName } from '../../components/Icon'
 import { runLook } from '../../components/runLook'
 import type { Task } from '../../data/api/types'
-import { labels, noTestRunLabel, runStatusLabels, taskStatusLabels } from '../../labels/labels'
+import { closedTaskLabel, labels, noTestRunLabel, runStatusLabels } from '../../labels/labels'
 import { needsPerson } from './filters'
 
 /** A task whose tests have never run */
@@ -39,7 +39,7 @@ export function TaskCard({ task, to, awaitingApproval = false, overlay = false }
   const tone: Tone = closed ? 'closed' : needsPerson(task) ? 'signal' : awaitingApproval ? 'approve' : 'plain'
   const status = [
     task.needsAttention && labels.needsAttention,
-    closed && taskStatusLabels.landed,
+    closed && closedTaskLabel,
     task.runStatus ? runStatusLabels[task.runStatus] : !closed && NO_TEST_RUN,
   ]
     .filter(Boolean)
@@ -98,7 +98,7 @@ export function TaskCard({ task, to, awaitingApproval = false, overlay = false }
  * closed card (the drawer keeps the last run). No run yet, and Closed, are quiet words with no fill.
  */
 function StateChip({ task, closed }: { task: Task; closed: boolean }) {
-  if (closed) return <QuietState icon="closed">{taskStatusLabels.landed}</QuietState>
+  if (closed) return <QuietState icon="closed">{closedTaskLabel}</QuietState>
   if (task.needsAttention)
     return (
       <Chip tone="signal" icon="alert">

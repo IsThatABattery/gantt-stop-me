@@ -1,5 +1,5 @@
 // Settings: the user's password, their GitHub link and their LLM providers
-// (docs/accounts.md, github.md, providers.md).
+// (docs/api/accounts.md, github.md, providers.md).
 
 import { useQuery } from '@tanstack/react-query'
 import { api, useApiMutation } from '../api/client'
@@ -24,7 +24,7 @@ export function passwordProblems({ current, next, confirm }: PasswordInput): Par
 }
 
 /** Changing it signs out every other session of the user. */
-export const changePassword = ({ current, next }: PasswordInput) =>
+const changePassword = ({ current, next }: PasswordInput) =>
   api<void>('PATCH', '/me/password', { currentPassword: current, newPassword: next })
 
 export const useChangePassword = () => useApiMutation(changePassword, [])
@@ -34,9 +34,9 @@ export const useChangePassword = () => useApiMutation(changePassword, [])
 /** OAuth is a full-page navigation to GitHub and back, not a fetch. */
 export const GITHUB_OAUTH_URL = '/api/github/link'
 
-export const linkToken = (token: string) => api<GitHubLink>('POST', '/github/token', { token })
+const linkToken = (token: string) => api<GitHubLink>('POST', '/github/token', { token })
 
-export const unlinkGitHub = () => api<void>('DELETE', '/github')
+const unlinkGitHub = () => api<void>('DELETE', '/github')
 
 // Linking changes what every project route answers, so everything refetches.
 export const useLinkToken = () => useApiMutation(linkToken, [[]])
@@ -62,11 +62,11 @@ export interface ProviderEdit {
   models?: string[]
 }
 
-export const createProvider = (input: NewProvider) => api<ProviderWithModels>('POST', '/providers', input)
+const createProvider = (input: NewProvider) => api<ProviderWithModels>('POST', '/providers', input)
 
 export const updateProvider = (id: number, edit: ProviderEdit) => api<ProviderWithModels>('PATCH', `/providers/${id}`, edit)
 
-export const deleteProvider = (id: number) => api<void>('DELETE', `/providers/${id}`)
+const deleteProvider = (id: number) => api<void>('DELETE', `/providers/${id}`)
 
 export const useCreateProvider = () => useApiMutation(createProvider, [keys.providers])
 

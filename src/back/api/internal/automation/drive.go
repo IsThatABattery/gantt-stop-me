@@ -36,7 +36,6 @@ type execution struct {
 // result is one test of an execution and, once it ends, how it went.
 type result struct {
 	id         int64
-	position   int
 	text       string // the test's line and block
 	kind       string // "script" or "llm"
 	command    string // a script's
@@ -60,9 +59,9 @@ const interruptedTwice = "The runner was interrupted twice."
 // maxLog is the most of an execution's log the API keeps: its tail.
 const maxLog = 64 << 10
 
-// drive carries out a claimed workflow execution, as Running tests says, within its workflow's timeout, and stops
-// within a couple of seconds of it or its run being cancelled. Whatever happened, it then removes the execution from
-// the runner and records how it ended.
+// drive carries out a claimed workflow execution, as Running tests in docs/api/automation.md says, within its
+// workflow's timeout, and stops within a couple of seconds of it or its run being cancelled. Whatever happened, it
+// then removes the execution from the runner and records how it ended.
 func (a *Automation) drive(ctx context.Context, e *execution) {
 	xctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
@@ -143,11 +142,11 @@ func (a *Automation) watch(ctx context.Context, id int64, cancel context.CancelC
 // interrupted or unreachable.
 func (a *Automation) carryOut(ctx context.Context, e *execution) error {
 	rows, _ := a.DB.Query(ctx, `
-		select id, position, text, kind, coalesce(command, ''), status from test_results
+		select id, text, kind, coalesce(command, ''), status from test_results
 		where execution_id = $1 and status = 'pending' order by position`, e.id)
 	results, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (result, error) {
 		var r result
-		return r, row.Scan(&r.id, &r.position, &r.text, &r.kind, &r.command, &r.status)
+		return r, row.Scan(&r.id, &r.text, &r.kind, &r.command, &r.status)
 	})
 	if err != nil {
 		return err

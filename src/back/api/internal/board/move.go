@@ -123,8 +123,8 @@ func (b *Board) MoveToEnd(ctx context.Context, tx pgx.Tx, token string, p projec
 // errInvalidBefore means the task to place a task before is not another task in the target column.
 var errInvalidBefore = errors.New("board: before is not another task in the column")
 
-// GitHubError marks a failed GitHub write, of place or CreateTask, apart from a database error, so endpoints answer it
-// with github.Fail.
+// GitHubError marks a failed GitHub call, of place, CreateTask or LinkedPulls, apart from a database error, so callers
+// can answer it as GitHub's, such as with github.Fail.
 type GitHubError struct{ error }
 
 func (e GitHubError) Unwrap() error { return e.error }

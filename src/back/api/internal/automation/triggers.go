@@ -110,10 +110,10 @@ func (a *Automation) apply(ctx context.Context, p projects.Project, token string
 	return skipped, nil
 }
 
-// trigger applies view v of one pull request in tx, as the trigger table says: it deletes the record of a pull
-// request gone, else saves the new record, cancels the pull request's test runs when it went back to draft, and calls
-// ready when it became ready. It reports false, changing nothing, when the record is no longer was or automation
-// was turned off.
+// trigger applies view v of one pull request in tx, as the table under Receive webhook in docs/api/automation.md
+// says: it deletes the record of a pull request gone, else saves the new record, cancels the pull request's test runs
+// when it went back to draft, and calls ready when it became ready. It reports false, changing nothing, when the
+// record is no longer was or automation was turned off.
 func (a *Automation) trigger(ctx context.Context, tx pgx.Tx, p projects.Project, token string, was *record, v view) (bool, error) {
 	if err := projects.Lock(ctx, tx, p.ID); err != nil {
 		return false, err

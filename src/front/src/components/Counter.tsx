@@ -7,10 +7,7 @@ const fills = {
   live: 'bg-accent text-on-accent',
 }
 
-/** Older names, kept so call sites compile */
-const aliases = { warning: 'approve', critical: 'signal', astronaut: 'live', ion: 'live' } as const
-
-export type CounterTone = keyof typeof fills | keyof typeof aliases
+export type CounterTone = keyof typeof fills
 
 interface CounterProps {
   tone: CounterTone
@@ -26,7 +23,7 @@ interface CounterProps {
  * hollow so the filled ones stand out. Pressed, the whole counter fills ink.
  */
 export function Counter({ tone, count, label, onClick, pressed }: CounterProps) {
-  const fill = fills[tone in aliases ? aliases[tone as keyof typeof aliases] : (tone as keyof typeof fills)]
+  const fill = fills[tone]
   const empty = count === 0
   return (
     <button

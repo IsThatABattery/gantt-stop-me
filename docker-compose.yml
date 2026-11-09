@@ -39,7 +39,7 @@ services:
       runner:
         condition: service_started
 
-  # Builds and runs test containers. The only service with the Docker socket; the api reaches it over HTTP.
+  # Builds and runs test containers. The only app service with the Docker socket; the api reaches it over HTTP.
   runner:
     build:
       context: src/back/api

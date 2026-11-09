@@ -4,7 +4,7 @@ import { useProjectContext } from '../../app/projectContext'
 import { Dialog } from '../../components/Dialog'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
-import { Button, Field, Textarea, TextInput } from '../../components/controls'
+import { Button, Field, FieldError, Textarea, TextInput } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
 import { PageTitle } from '../../components/PageTitle'
 import { InkTab, Tile } from '../../components/Tile'
@@ -13,11 +13,9 @@ import type { TaskDetail } from '../../data/api/types'
 import { errorCode, NotFoundError } from '../../data/errors'
 import { titleProblem, useCreateTask, useEditTask, useTask, type TaskInput } from '../../data/views/tasks'
 import { actionLabels, formLabels, labels } from '../../labels/labels'
-import { FieldError } from './ItemForm'
 
-// Create and edit a task. A task is a GitHub issue, so the API keeps only its
-// title and body; the mockups' other fields wait on the API
-// (docs/implementation/api-gaps.md).
+// Create and edit a task. A task is a GitHub issue; these forms edit its title
+// and body.
 
 type Problems = Partial<Record<keyof TaskInput, string>>
 

@@ -189,7 +189,7 @@ describe('project routes', () => {
     expect(screen.queryByText('Database is restarting.')).not.toBeInTheDocument()
   })
 
-  it('does not route the screens still on mock data', async () => {
+  it('shows not found for a project path with no page', async () => {
     for (const path of ['agents', 'activity', 'new/feature']) {
       const { unmount } = renderApp(`/projects/1/${path}`)
       expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()

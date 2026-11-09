@@ -18,7 +18,7 @@ ENV GOPATH=/go PATH=/usr/local/go/bin:/go/bin:$PATH
 WORKDIR /src
 ENTRYPOINT []
 
-# runner builds and runs test containers through the docker CLI. It is the only image with Docker access.
+# runner builds and runs test containers through the docker CLI. It is the only app image with Docker access.
 FROM docker:29.9.3-cli AS runner
 COPY --from=runner-build /runner /runner
 EXPOSE 8081

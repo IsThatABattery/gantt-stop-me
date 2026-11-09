@@ -1,6 +1,6 @@
 // The one place the app talks to the Go API. Every route is under /api, on
 // the same origin: nginx proxies it in production and Vite does in dev.
-// Shapes and error codes are in docs/*.md.
+// Shapes and error codes are in docs/api/*.md.
 
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { ApiError, ConflictError, NotFoundError } from '../errors'

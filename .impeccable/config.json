@@ -1,4 +1,7 @@
 {
+  "projectRoots": [
+    "src/front"
+  ],
   "hook": {
     "enabled": true,
     "limits": {

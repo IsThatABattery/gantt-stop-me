@@ -1,5 +1,5 @@
 // Feature planning: the interviewer, the doc, and the task agent's proposals
-// (docs/planning.md). The agent works in the background, so a plan is polled
+// (docs/api/planning.md). The agent works in the background, so a plan is polled
 // while `pending` is set.
 
 import { useQuery } from '@tanstack/react-query'
@@ -7,7 +7,7 @@ import { api, useApiMutation } from '../api/client'
 import type { TaskTest } from '../api/types'
 import { keys } from '../keys'
 
-export interface PlanMessage {
+interface PlanMessage {
   id: number
   role: 'agent' | 'user'
   text: string
@@ -15,7 +15,7 @@ export interface PlanMessage {
   skipped: boolean
 }
 
-export interface PlanSection {
+interface PlanSection {
   key: string
   title: string
   body: string | string[]

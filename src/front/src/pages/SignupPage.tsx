@@ -8,7 +8,7 @@ import { keys } from '../data/keys'
 import { signUp, useMe } from '../data/session'
 import { AuthError, AuthFrame, AuthSubmit } from './LoginPage'
 
-/** Which field each signup error belongs to (docs/accounts.md). */
+/** Which field each signup error belongs to (docs/api/accounts.md). */
 const fieldOf: Record<string, 'email' | 'password'> = {
   invalid_email: 'email',
   email_taken: 'email',

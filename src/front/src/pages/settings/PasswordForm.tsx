@@ -20,7 +20,7 @@ export function PasswordForm() {
   const [done, setDone] = useState(false)
   const change = useChangePassword()
   const base = useId()
-  // The API's refusals that belong to one field (docs/accounts.md).
+  // The API's refusals that belong to one field (docs/api/accounts.md).
   const code = errorCode(change.error)
   const apiField: keyof PasswordInput | null = code === 'wrong_password' ? 'current' : code === 'weak_password' ? 'next' : null
   const shown = apiField && change.error ? { ...errors, [apiField]: change.error.message } : errors

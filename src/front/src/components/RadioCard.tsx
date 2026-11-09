@@ -5,15 +5,13 @@ interface RadioCardProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'ty
   description?: ReactNode
   /** Shown above the label, e.g. a theme's preview */
   preview?: ReactNode
-  /** Kept for older call sites; every radio card looks the same */
-  tone?: 'ion' | 'astronaut'
 }
 
 /**
  * A radio button laid out as a paper card. Chosen, its edge turns a 2px accent (ink in Light and Dark), beside the
  * filled radio dot, so the choice never rests on colour alone.
  */
-export function RadioCard({ label, description, preview, tone: _tone, checked, className = '', ...rest }: RadioCardProps) {
+export function RadioCard({ label, description, preview, checked, className = '', ...rest }: RadioCardProps) {
   return (
     <label
       className={`flex cursor-pointer flex-col gap-1.5 rounded-card bg-paper transition-colors duration-150 has-disabled:cursor-not-allowed has-disabled:opacity-60 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
