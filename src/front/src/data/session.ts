@@ -1,7 +1,8 @@
 // Who is signed in. The API keeps the session in an HttpOnly cookie that
 // scripts can't read, so GET /api/me is the only way to know (docs/accounts.md).
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { api } from './api/client'
 import type { Me, SignedInUser } from './api/types'
 import { ApiError } from './errors'
@@ -19,6 +20,17 @@ export async function getMe(): Promise<Me | null> {
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: getMe, staleTime: 60_000 })
 
+/**
+ * useMe for pages built on the user: while the session-ended dialog is up (the user is null), it keeps the last
+ * signed-in user, so the page under it keeps its forms and what was typed in them.
+ */
+export function useSignedInUser() {
+  const me = useMe()
+  const [last, setLast] = useState(me.data)
+  if (me.data && me.data !== last) setLast(me.data)
+  return { ...me, data: me.data ?? last }
+}
+
 export interface Credentials {
   email: string
   password: string
@@ -29,14 +41,19 @@ export const signIn = (c: Credentials) => api<SignedInUser>('POST', '/auth/login
 export const signUp = (c: Credentials) => api<SignedInUser>('POST', '/auth/signup', c)
 
 /**
- * End the session, then forget everything cached for this user. The user is
- * set to null first, so RequireSession redirects instead of refetching.
+ * Forget everything cached for the signed-in user, so the next one starts
+ * clean. The user is set to null first, so RequireSession doesn't refetch.
  */
+export function forgetSession(client: QueryClient) {
+  client.setQueryData(keys.me, null)
+  client.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.me[0] })
+}
+
+/** End the session, then forget everything cached for this user. */
 export function useSignOut() {
   const client = useQueryClient()
   return async () => {
     await api<void>('POST', '/auth/logout').catch(() => undefined)
-    client.setQueryData(keys.me, null)
-    client.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.me[0] })
+    forgetSession(client)
   }
 }

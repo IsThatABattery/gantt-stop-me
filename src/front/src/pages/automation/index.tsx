@@ -12,7 +12,7 @@ import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { AgentSettings, Automation, Me, Permission, Provider } from '../../data/api/types'
 import { errorCode, NotFoundError } from '../../data/errors'
 import { keys } from '../../data/keys'
-import { useMe } from '../../data/session'
+import { useSignedInUser } from '../../data/session'
 import {
   agentProblems,
   firstError,
@@ -36,9 +36,9 @@ export function AutomationPage() {
   const { projectId = '' } = useParams()
   const automation = useAutomation(projectId)
   const providers = useProviders()
-  const me = useMe()
+  const me = useSignedInUser()
   // A failed refetch keeps the data, and the form with its edits.
-  const error = [automation, providers, me].find((q) => !q.data && q.error)?.error
+  const failed = [automation, providers, me].find((q) => !q.data && q.error)
 
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
@@ -50,8 +50,10 @@ export function AutomationPage() {
           title="Automation isn't available for this project"
           body="The server may have no test runner, or the project wasn't found."
         />
-      ) : error ? (
-        <StatusMessage title="Something went wrong" body={error.message} />
+      ) : failed ? (
+        <StatusMessage title="Something went wrong" body={failed.error?.message}>
+          <Button onClick={() => failed.refetch()}>Try again</Button>
+        </StatusMessage>
       ) : !automation.data || !providers.data || !me.data ? (
         <StatusMessage title={`Loading ${labels.automation.toLowerCase()}…`} />
       ) : (
@@ -132,7 +134,7 @@ function AutomationForm({
       })
       document.getElementById(`${id}-readonly`)?.focus()
       client.invalidateQueries({ queryKey: keys.board(projectId) })
-    } else setFormError(err.message)
+    } else if (errorCode(err) !== 'unauthorized') setFormError(err.message) // a 401 has the session dialog; the edits stay
   }
 
   const openOff = (open: boolean) => {

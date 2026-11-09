@@ -114,7 +114,8 @@ export function LoginPage() {
 /** The starfield page with the logo, one card and a line under it. Shared by sign in and sign up. */
 export function AuthFrame({ children, footer }: { children: ReactNode; footer: ReactNode }) {
   return (
-    <div className="stars box-border flex min-h-screen flex-col items-center justify-center gap-7 bg-background p-6 text-[15px] text-text">
+    // Anchored to the top, not centred, so an error appearing in the card doesn't move it.
+    <div className="stars box-border flex min-h-screen flex-col items-center gap-7 bg-background p-6 pt-[12vh] text-[15px] text-text">
       <Link to="/login" className="flex min-h-11 items-center no-underline">
         <Logo size={32} textSize="text-[22px]" />
       </Link>

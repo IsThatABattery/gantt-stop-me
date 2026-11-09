@@ -5,7 +5,7 @@ import { keys } from './keys'
 /**
  * The app's query client. Any 401 means the session is gone (expired, or
  * signed out in another tab), so the signed-in user is cleared and
- * RequireSession sends the user to the login page.
+ * RequireSession asks them to sign in again over the page.
  */
 export function createQueryClient() {
   const onError = (error: Error) => {

@@ -4,21 +4,27 @@ import { useMe, useSignOut } from '../data/session'
 import { UserAvatar } from './Avatar'
 import { Icon } from './Icon'
 
-/** Signed-in avatar with a menu holding Sign out. The menu opens below the avatar, or above it at the foot of the rail. */
+/** Signed-in avatar with a menu holding Sign out. The menu opens below the avatar, or above the rail's footer. */
 export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above' }) {
   const { data: me } = useMe()
   const signOut = useSignOut()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const navigate = useNavigate()
 
   useEffect(() => {
     if (!open) return
+    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus()
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      button.current?.focus()
+    }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
     return () => {
@@ -32,8 +38,10 @@ export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above
   const initials = me.email.slice(0, 2).toUpperCase()
 
   return (
-    <div ref={ref} className="relative">
+    // Above, the menu is placed against the rail's footer (positioned in NavRail), so it spans the rail.
+    <div ref={ref} className={placement === 'above' ? undefined : 'relative'}>
       <button
+        ref={button}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -48,18 +56,21 @@ export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above
         <div
           id={menuId}
           role="menu"
-          className={`absolute z-20 flex ${placement === 'above' ? 'bottom-full left-0 mb-2' : 'top-full right-0 mt-2'} w-60 flex-col gap-1 rounded-card border border-line bg-surface p-2 shadow-xl`}
+          className={`absolute z-20 flex ${placement === 'above' ? 'right-0 bottom-full left-0 mb-2' : 'top-full right-0 mt-2 w-60'} flex-col gap-1 rounded-card border border-line bg-surface p-2 shadow-xl`}
         >
           <div className="px-3 py-2 text-xs text-text-muted">
             Signed in as
-            <div className="truncate text-sm text-text">{me.email}</div>
+            <div className="truncate text-sm text-text" title={me.email}>
+              {me.email}
+            </div>
           </div>
           <button
             type="button"
             role="menuitem"
             onClick={async () => {
               await signOut()
-              navigate('/login', { replace: true })
+              // In sync: in a transition, RequireSession would first render the cleared session as one that ended.
+              navigate('/login', { replace: true, flushSync: true })
             }}
             className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-left font-[inherit] text-text hover:bg-nav-active"
           >

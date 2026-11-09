@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { fake } from '../../test/fakeApi'
+import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
 async function openSettings(path = '/settings') {
@@ -12,6 +12,11 @@ async function openSettings(path = '/settings') {
 }
 
 const section = (name: string) => screen.getByRole('region', { name })
+
+async function removeLocal(s: ReturnType<typeof within>) {
+  await userEvent.click(await s.findByRole('button', { name: 'Remove Local' }))
+  await userEvent.click(within(s.getByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
+}
 
 describe('account', () => {
   it('shows who is signed in, and only the sections the API supports', async () => {
@@ -52,10 +57,20 @@ describe('GitHub', () => {
 
     await userEvent.click(s.getByRole('button', { name: 'Unlink' }))
     expect(s.getByRole('alertdialog')).toHaveTextContent('Unlinking removes your access to every mission')
+    expect(s.getByRole('button', { name: 'Keep it linked' })).toHaveFocus()
     await userEvent.click(s.getByRole('button', { name: 'Unlink GitHub' }))
 
     expect(await s.findByRole('link', { name: 'Link with GitHub' })).toHaveAttribute('href', '/api/github/link')
     expect(fake.github).toBeNull()
+  })
+
+  it('cancels the unlink confirm with Esc', async () => {
+    await openSettings()
+    const s = within(section('GitHub'))
+    await userEvent.click(s.getByRole('button', { name: 'Unlink' }))
+    await userEvent.keyboard('{Escape}')
+    expect(s.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(s.getByRole('button', { name: 'Unlink' })).toHaveFocus()
   })
 
   it('links a personal access token, showing a refused one', async () => {
@@ -75,9 +90,28 @@ describe('GitHub', () => {
     expect(fake.github).toEqual({ login: 'octo', kind: 'pat' })
   })
 
-  it('says how the OAuth link went when GitHub sends the user back', async () => {
+  it('says when the account fails to refresh after linking, and tries again', async () => {
+    fake.github = null
+    await openSettings()
+    const s = within(section('GitHub'))
+    failNext('GET /api/me', { status: 500, code: 'internal', message: 'boom' })
+    await userEvent.type(await s.findByLabelText('Or use a personal access token'), 'ghp_good')
+    await userEvent.click(s.getByRole('button', { name: 'Link token' }))
+    expect(await s.findByRole('alert')).toHaveTextContent("Couldn't refresh your account: boom")
+    await userEvent.click(s.getByRole('button', { name: 'Try again' }))
+    expect(await s.findByText('octo')).toBeInTheDocument()
+    expect(s.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says how the OAuth link went when GitHub sends the user back, until linking another way', async () => {
+    fake.github = null
     await openSettings('/settings?github=error')
-    expect(within(section('GitHub')).getByRole('status')).toHaveTextContent("GitHub didn't link.")
+    const s = within(section('GitHub'))
+    expect(s.getByRole('status')).toHaveTextContent("GitHub didn't link.")
+    await userEvent.type(await s.findByLabelText('Or use a personal access token'), 'ghp_good')
+    await userEvent.click(s.getByRole('button', { name: 'Link token' }))
+    expect(await s.findByText('octo')).toBeInTheDocument()
+    expect(s.queryByRole('status')).not.toBeInTheDocument()
   })
 })
 
@@ -105,6 +139,22 @@ describe('LLM providers', () => {
 
     await waitFor(() => expect(fake.providers.find((p) => p.name === 'OpenAI')).toMatchObject({ keyLast4: '1234', models: ['qwen2'] }))
     expect(await s.findByText('qwen2')).toBeInTheDocument()
+  })
+
+  it('keeps the providers, and offers to try again, when refreshing them fails', async () => {
+    await openSettings()
+    const s = within(section('LLM providers'))
+    await userEvent.click(await s.findByRole('button', { name: 'Add provider' }))
+    await userEvent.type(s.getByLabelText('Name'), 'OpenAI')
+    await userEvent.type(s.getByLabelText('Base URL'), 'https://api.openai.com/v1')
+    await userEvent.type(s.getByLabelText('API key'), 'sk-secret-1234')
+    failNext('GET /api/providers', { status: 500, code: 'internal', message: 'Database is restarting.' })
+    await userEvent.click(within(s.getByRole('form', { name: 'Add provider' })).getByRole('button', { name: 'Add provider' }))
+
+    expect(await s.findByRole('alert')).toHaveTextContent('Database is restarting.')
+    expect(s.getByText('Local')).toBeInTheDocument()
+    await userEvent.click(s.getByRole('button', { name: 'Try again' }))
+    expect(await s.findByRole('form', { name: 'Pick models for OpenAI' })).toBeInTheDocument()
   })
 
   it('shows a taken name on the name field', async () => {
@@ -169,16 +219,23 @@ describe('LLM providers', () => {
       use()
       await openSettings()
       const s = within(section('LLM providers'))
-      await userEvent.click(await s.findByRole('button', { name: 'Remove Local' }))
+      await removeLocal(s)
       expect(await s.findByRole('alert')).toHaveTextContent('Automation or planning uses this provider.')
+      expect(s.getByRole('button', { name: 'Remove Local' })).toHaveFocus()
       expect(fake.providers).toHaveLength(1)
     })
   }
 
-  it('removes a provider nothing uses', async () => {
+  it('removes a provider nothing uses, after a confirm step', async () => {
     await openSettings()
     const s = within(section('LLM providers'))
     await userEvent.click(await s.findByRole('button', { name: 'Remove Local' }))
+    expect(s.getByRole('alertdialog')).toHaveTextContent('Remove Local? Its saved key is deleted too.')
+    await userEvent.click(s.getByRole('button', { name: 'Keep it' }))
+    expect(s.getByRole('button', { name: 'Remove Local' })).toHaveFocus()
+    expect(fake.providers).toHaveLength(1)
+
+    await removeLocal(s)
     await waitFor(() => expect(fake.providers).toEqual([]))
   })
 })

@@ -1,11 +1,12 @@
-import type { ReactNode } from 'react'
-import { Link, NavLink } from 'react-router'
+import { useId, useState, type ReactNode } from 'react'
+import { Link, NavLink, useLocation } from 'react-router'
 import type { AssignedGroup, AssignedTask } from '../data/api/types'
 import { useMyProjects } from '../data/views/addProject'
 import { useAssignedTasks } from '../data/views/assigned'
 import { columnLabels, labels, runStatusLabels } from '../labels/labels'
 import { runLook } from './runLook'
 import { Chip, type Tone } from './Chip'
+import { Button } from './controls'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
@@ -27,7 +28,7 @@ const stackedCap = 'max-md:max-h-60 max-md:overflow-y-auto'
 const itemBase = 'flex min-h-11 items-center rounded-lg no-underline'
 
 /** compact: tighter, for links nested under a mission */
-function RailLink({ item, className = '', compact = false }: { item: Item; className?: string; compact?: boolean }) {
+function RailLink({ item, className = '', labelClass, compact = false }: { item: Item; className?: string; labelClass?: string; compact?: boolean }) {
   return (
     <NavLink
       to={item.to}
@@ -41,7 +42,7 @@ function RailLink({ item, className = '', compact = false }: { item: Item; class
       {({ isActive }) => (
         <>
           <Icon name={item.icon} className={isActive ? 'text-ion' : ''} />
-          {item.label}
+          <span className={labelClass}>{item.label}</span>
         </>
       )}
     </NavLink>
@@ -62,6 +63,18 @@ function Section({ title, count, children }: { title: string; count?: number; ch
       </div>
       {children}
     </section>
+  )
+}
+
+/** A rail list that failed to load, in its place. */
+function LoadFailed({ what, retry }: { what: string; retry: () => void }) {
+  return (
+    <div role="alert" className="mt-4 flex flex-wrap items-center gap-2 px-3 text-[13px] text-text-muted">
+      Couldn't load {what}.
+      <Button className="min-h-9 px-3 text-sm" onClick={retry}>
+        Try again
+      </Button>
+    </div>
   )
 }
 
@@ -135,16 +148,25 @@ function AssignedList({ groups }: { groups: AssignedGroup[] }) {
  * their assigned tasks by mission with each one's stage.
  */
 export function NavRail({ projectId }: { projectId?: string }) {
-  const { data: projects = [], isPending } = useMyProjects()
-  const { data: assigned = [] } = useAssignedTasks()
+  const myProjects = useMyProjects()
+  const myTasks = useAssignedTasks()
+  const projects = myProjects.data ?? []
+  const assigned = myTasks.data ?? []
+  const assignedCount = assigned.reduce((n, g) => n + g.tasks.length, 0)
   const missions = projects.filter((p, i) => i < MAX_MISSIONS || String(p.id) === projectId)
   // Just added, before the list catches up: its pages still show.
-  const unlisted = projectId && !isPending && !projects.some((p) => String(p.id) === projectId)
+  const unlisted = projectId && !myProjects.isPending && !projects.some((p) => String(p.id) === projectId)
+  // Below md the rail stacks above the page, so its lists fold behind one button; going to another page folds them again.
+  const { pathname } = useLocation()
+  const [unfoldedAt, setUnfoldedAt] = useState<string>()
+  const unfolded = unfoldedAt === pathname
+  const listsId = useId()
+  const hasLists = missions.length > 0 || assigned.length > 0 || !!myProjects.error || !!myTasks.error
 
   return (
     <nav
       aria-label="Primary"
-      className="box-border flex flex-[1_1_200px] flex-col gap-1 border-r border-line-soft bg-rail px-4 py-6 md:sticky md:top-0 md:h-screen md:self-start md:overflow-y-auto"
+      className="box-border flex min-w-0 flex-[1_1_200px] flex-col gap-1 border-r border-line-soft bg-rail px-4 py-6 md:sticky md:top-0 md:h-screen md:self-start md:overflow-y-auto"
     >
       <Link to="/" className="px-2 pb-6 no-underline">
         <Logo />
@@ -155,44 +177,66 @@ export function NavRail({ projectId }: { projectId?: string }) {
       </Link>
       <RailLink item={{ label: labels.allProjects, to: '/projects', icon: 'hangar', end: true }} />
       {unlisted && projectItems(projectId).map((item) => <RailLink key={item.to} item={item} />)}
-      {missions.length > 0 && (
-        <Section title={labels.projects}>
-          <ul className={`m-0 flex list-none flex-col gap-1 p-0 ${stackedCap}`}>
-            {missions.map((p) => {
-              const open = String(p.id) === projectId
-              return (
-                <li key={p.id}>
-                  <Link
-                    to={`/projects/${p.id}`}
-                    title={`${p.owner}/${p.name}`}
-                    aria-current={open ? 'true' : undefined}
-                    className={`${itemBase} gap-3 px-3 ${open ? 'font-medium text-text' : 'text-text-muted-strong'} hover:text-text`}
-                  >
-                    <Icon name="github" className={`flex-none ${open ? 'text-ion' : ''}`} />
-                    <span className="truncate">{p.name}</span>
-                  </Link>
-                  {open && (
-                    <div className="ml-3 flex flex-col gap-1 border-l border-line-soft pl-1">
-                      {projectItems(projectId).map((item) => (
-                        <RailLink key={item.to} item={item} compact />
-                      ))}
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </Section>
+      {hasLists && (
+        <button
+          type="button"
+          aria-expanded={unfolded}
+          aria-controls={listsId}
+          onClick={() => setUnfoldedAt(unfolded ? undefined : pathname)}
+          className={`${itemBase} mt-2 cursor-pointer gap-3 border-0 bg-transparent px-3 text-left font-[inherit] text-text-muted-strong hover:text-text md:hidden`}
+        >
+          <Icon name="github" />
+          <span className="flex-1">{labels.projects}</span>
+          {assignedCount > 0 && <span className="text-[13px] text-text-muted">{assignedCount} {labels.assignedToYou.toLowerCase()}</span>}
+          <span aria-hidden="true" className="text-xs text-text-muted">
+            {unfolded ? '▴' : '▾'}
+          </span>
+        </button>
       )}
-      {assigned.length > 0 && (
-        <Section title={labels.assignedToYou} count={assigned.reduce((n, g) => n + g.tasks.length, 0)}>
-          <div className={`flex flex-col gap-1 ${stackedCap}`}>
-            <AssignedList groups={assigned} />
-          </div>
-        </Section>
-      )}
-      <div className="mt-auto flex items-center gap-2 pt-4">
-        <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1" />
+      <div id={listsId} className={unfolded ? 'contents' : 'contents max-md:hidden'}>
+        {myProjects.error && !myProjects.data && <LoadFailed what={labels.projects.toLowerCase()} retry={() => myProjects.refetch()} />}
+        {missions.length > 0 && (
+          <Section title={labels.projects}>
+            <ul className={`m-0 flex list-none flex-col gap-1 p-0 ${stackedCap}`}>
+              {missions.map((p) => {
+                const open = String(p.id) === projectId
+                return (
+                  <li key={p.id}>
+                    <Link
+                      to={`/projects/${p.id}`}
+                      title={`${p.owner}/${p.name}`}
+                      aria-current={open ? 'true' : undefined}
+                      className={`${itemBase} gap-3 px-3 ${open ? 'font-medium text-text' : 'text-text-muted-strong'} hover:text-text`}
+                    >
+                      <Icon name="github" className={`flex-none ${open ? 'text-ion' : ''}`} />
+                      <span className="truncate">{p.name}</span>
+                    </Link>
+                    {open && (
+                      <div className="ml-3 flex flex-col gap-1 border-l border-line-soft pl-1">
+                        {projectItems(projectId).map((item) => (
+                          <RailLink key={item.to} item={item} compact />
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </Section>
+        )}
+        {assigned.length > 0 && (
+          <Section title={labels.assignedToYou} count={assignedCount}>
+            <div className={`flex flex-col gap-1 ${stackedCap}`}>
+              <AssignedList groups={assigned} />
+            </div>
+          </Section>
+        )}
+        {myTasks.error && !myTasks.data && <LoadFailed what={`${labels.tasks.toLowerCase()} ${labels.assignedToYou.toLowerCase()}`} retry={() => myTasks.refetch()} />}
+      </div>
+      {/* At md+ the rail scrolls, so the footer sticks over the padding with the rail's own colour on an opaque page
+          background. It also anchors the account menu, which then spans the rail instead of running past its edge. */}
+      <div className="relative mt-auto flex items-center gap-2 pt-4 md:sticky md:-bottom-6 md:-mb-6 md:bg-background md:bg-linear-to-b md:from-rail md:to-rail md:pb-6">
+        <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1 md:flex-none" labelClass="md:sr-only" />
         <ThemeToggle />
         <UserMenu placement="above" />
       </div>

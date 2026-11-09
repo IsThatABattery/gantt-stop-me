@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { Dialog } from '../../components/Dialog'
 import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
+import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import { Button, Field, Textarea, TextInput } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
 import type { TaskDetail } from '../../data/api/types'
@@ -69,12 +70,12 @@ function TaskFields({ value, onChange, problems, idPrefix, bodyRows }: FieldsPro
   )
 }
 
-/** Errors with no field of their own, such as no permission or GitHub being down. */
+/** Errors with no field of their own, such as no permission or GitHub being down. A 401 has the session dialog. */
 function GeneralError({ error }: { error: Error | null }) {
   const code = errorCode(error)
-  if (!error || code === 'invalid_title' || code === 'invalid_body') return null
+  if (!error || code === 'invalid_title' || code === 'invalid_body' || code === 'unauthorized') return null
   return (
-    <p role="alert" className="m-0 text-[13px] text-critical">
+    <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
       {error.message}
     </p>
   )
@@ -99,6 +100,16 @@ export function NewTaskDialog() {
     if (titleProblem(value.title)) return
     const task = await create.mutateAsync({ title: value.title.trim(), body: value.body }).catch(() => null)
     if (task) navigate(`/projects/${projectId}/tasks/${task.id}`)
+  }
+
+  if (project.permission === 'read') {
+    return (
+      <Dialog label={formLabels.task.titleNew} onClose={close}>
+        <StatusMessage title="You have read access only" body={`Adding a ${labels.task.toLowerCase()} needs write access to the repository on GitHub.`}>
+          <Button onClick={close}>{actionLabels.backToBoard}</Button>
+        </StatusMessage>
+      </Dialog>
+    )
   }
 
   return (
@@ -131,14 +142,26 @@ export function NewTaskDialog() {
 export function TaskEditPage() {
   const project = useProjectContext()
   const { taskId = '' } = useParams()
-  const { data: task, error } = useTask(String(project.id), taskId)
+  const { data: task, error, refetch } = useTask(String(project.id), taskId)
 
-  if (error) {
+  if (project.permission === 'read') {
+    return (
+      <StatusMessage title="You have read access only" body={`Editing a ${labels.task.toLowerCase()} needs write access to the repository on GitHub.`}>
+        <Link to={`/projects/${project.id}`} className={buttonClass('secondary')}>
+          {actionLabels.backToBoard}
+        </Link>
+      </StatusMessage>
+    )
+  }
+  // A failed refetch keeps the task, and the edits, on screen.
+  if (error && !task) {
+    const notFound = error instanceof NotFoundError
     return (
       <StatusMessage
-        title={error instanceof NotFoundError ? `${labels.task} not found` : 'Something went wrong'}
-        body={error instanceof NotFoundError ? `Check the link, or open the ${labels.task.toLowerCase()} from the board.` : error.message}
+        title={notFound ? `${labels.task} not found` : 'Something went wrong'}
+        body={notFound ? `Check the link, or open the ${labels.task.toLowerCase()} from the board.` : error.message}
       >
+        {!notFound && <Button onClick={() => refetch()}>Try again</Button>}
         <Link to={`/projects/${project.id}`} className={buttonClass('secondary')}>
           {actionLabels.backToBoard}
         </Link>
@@ -153,6 +176,8 @@ function TaskEditor({ task }: { task: TaskDetail }) {
   const project = useProjectContext()
   const navigate = useNavigate()
   const projectId = String(project.id)
+  // The drawer this page was opened from, over the board or the Hangar.
+  const back = (useLocation().state as { back?: string } | null)?.back ?? `/projects/${projectId}/tasks/${task.id}`
   const save = useEditTask(projectId, String(task.id))
   const [saved, setSaved] = useState<TaskInput>({ title: task.title, body: task.body })
   const [value, setValue] = useState(saved)
@@ -190,7 +215,7 @@ function TaskEditor({ task }: { task: TaskDetail }) {
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
         <Link to={`/projects/${projectId}`}>{project.name}</Link>
         <span aria-hidden="true">/</span>
-        <Link to={`/projects/${projectId}/tasks/${task.id}`}>#{task.issueNumber}</Link>
+        <Link to={back}>#{task.issueNumber}</Link>
         <span aria-hidden="true">/</span>
         <span aria-current="page">Edit</span>
       </nav>
@@ -208,13 +233,14 @@ function TaskEditor({ task }: { task: TaskDetail }) {
             <Icon name="github" size={16} />
             View on GitHub
           </a>
-          <Button onClick={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}>{actionLabels.cancel}</Button>
+          <Button onClick={() => navigate(back)}>{actionLabels.cancel}</Button>
           <Button type="submit" variant="primary" disabled={save.isPending || !dirty}>
             {save.isPending ? 'Saving…' : actionLabels.save}
           </Button>
         </div>
       </header>
 
+      <UnsavedChangesGuard when={dirty && !save.isPending} />
       <GeneralError error={save.error} />
 
       <section aria-labelledby="basics-heading" className="flex max-w-[820px] flex-col gap-[18px] rounded-[14px] border border-line bg-surface p-6">

@@ -12,7 +12,7 @@ const variants: Record<ButtonVariant, string> = {
 /** Shared button classes, so links can look like buttons. */
 export function buttonClass(variant: ButtonVariant = 'secondary', extra = '') {
   return cx(
-    `inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control px-4 font-[inherit] no-underline ${variants[variant]}`,
+    `inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control px-4 font-[inherit] no-underline disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]}`,
     extra,
   )
 }

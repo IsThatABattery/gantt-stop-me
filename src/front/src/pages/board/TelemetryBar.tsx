@@ -20,15 +20,15 @@ export function TelemetryBar({ project, counts, active, onToggle }: TelemetryBar
   return (
     <header className="flex flex-wrap items-center gap-6 border-b border-line-soft bg-header px-7 py-5">
       <div className="min-w-0 flex-[1_1_320px]">
-        <h1 className="m-0 font-heading text-2xl font-semibold">{project.name}</h1>
+        <h1 className="m-0 font-heading text-2xl font-semibold wrap-anywhere">{project.name}</h1>
         <a
           href={`https://github.com/${repo}`}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[13px] text-text-muted-strong"
+          className="mt-1 inline-flex max-w-full min-h-11 items-center gap-1.5 text-[13px] text-text-muted-strong"
         >
-          <Icon name="github" size={14} />
-          {repo}
+          <Icon name="github" size={14} className="shrink-0" />
+          <span className="min-w-0 wrap-anywhere">{repo}</span>
         </a>
       </div>
 

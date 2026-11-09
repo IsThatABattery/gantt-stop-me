@@ -1,10 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { Button, Field, TextInput } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
 import { Icon } from '../../components/Icon'
 import type { Me } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
+import { useMe } from '../../data/session'
 import { GITHUB_OAUTH_URL, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
 import { labels, settingsLabels } from '../../labels/labels'
 import { Section } from './Section'
@@ -22,9 +24,12 @@ const returnNotes = {
 // it (docs/github.md). Every project needs it: the board reads and writes the
 // repository's issues with this credential.
 export function GitHubSection({ me }: { me: Me }) {
+  // Linking and unlinking refetch the user; if that fails, what shows here is out of date.
+  const refresh = useMe()
   const [params] = useSearchParams()
   const returned = params.get('github')
-  const note = returned === 'linked' || returned === 'error' ? returnNotes[returned] : null
+  // Only while it still holds: linking with a token or unlinking afterwards outdates it.
+  const note = returned === 'linked' && me.github ? returnNotes.linked : returned === 'error' && !me.github ? returnNotes.error : null
 
   return (
     <Section
@@ -37,6 +42,12 @@ export function GitHubSection({ me }: { me: Me }) {
           {note.text}
         </p>
       )}
+      {refresh.error && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 text-[13px] text-critical">
+          <span className="min-w-0 wrap-anywhere">Couldn't refresh your account: {refresh.error.message}</span>
+          <Button onClick={() => refresh.refetch()}>Try again</Button>
+        </div>
+      )}
       {me.github ? <Linked login={me.github.login} kind={me.github.kind} /> : <NotLinked />}
     </Section>
   )
@@ -44,7 +55,12 @@ export function GitHubSection({ me }: { me: Me }) {
 
 function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }) {
   const unlink = useUnlinkGitHub()
+  const id = useId()
   const [confirming, setConfirming] = useState(false)
+  const confirm = (open: boolean) => {
+    flushSync(() => setConfirming(open))
+    document.getElementById(`${id}-${open ? 'keep' : 'unlink'}`)?.focus()
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -54,26 +70,38 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
         <span className="text-[13px] text-text-muted">with a {kindLabel[kind]}</span>
       </p>
       {confirming ? (
-        <div role="alertdialog" aria-label="Unlink GitHub" className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
-          <p className="m-0 flex-1 text-[13px]">
+        <div
+          role="alertdialog"
+          aria-label="Unlink GitHub"
+          onKeyDown={(e) => e.key === 'Escape' && confirm(false)}
+          className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4"
+        >
+          <p className="m-0 min-w-48 flex-1 text-[13px]">
             Unlinking removes your access to every {labels.project.toLowerCase()} until you link again.
           </p>
-          <Button onClick={() => setConfirming(false)}>Keep it linked</Button>
-          <Button
-            onClick={() => unlink.mutate()}
-            disabled={unlink.isPending}
-            className="border-warning text-warning hover:border-warning hover:text-warning"
-          >
-            Unlink GitHub
-          </Button>
+          {/* One group for the buttons: where they don't fit beside the text, they go under it together. */}
+          <div className="flex flex-wrap gap-3">
+            <Button id={`${id}-keep`} onClick={() => confirm(false)}>
+              Keep it linked
+            </Button>
+            <Button
+              onClick={() => unlink.mutate()}
+              disabled={unlink.isPending}
+              className="border-warning text-warning hover:border-warning hover:text-warning"
+            >
+              Unlink GitHub
+            </Button>
+          </div>
         </div>
       ) : (
         <div>
-          <Button onClick={() => setConfirming(true)}>Unlink</Button>
+          <Button id={`${id}-unlink`} onClick={() => confirm(true)}>
+            Unlink
+          </Button>
         </div>
       )}
       {unlink.error && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
           {unlink.error.message}
         </p>
       )}
@@ -122,7 +150,7 @@ function NotLinked() {
           </span>
         </Field>
         {link.error && (
-          <p role="alert" className="m-0 text-[13px] text-critical">
+          <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
             {link.error.message}
           </p>
         )}

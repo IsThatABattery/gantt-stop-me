@@ -73,6 +73,22 @@
   --color-text-soft: #2a3550;
   --color-text-muted: #5b6780;
   --color-text-muted-strong: #4a5670;
+  --color-rail: rgba(255, 255, 255, 0.85);
+  --color-header: rgba(255, 255, 255, 0.8);
+  --color-nav-active: #e3eaf6;
+  /* Darker hues so text in them reaches 4.5:1 on white; on-ion turns white to stay readable on the darker fills. */
+  --color-ion: #0e7490;
+  --color-ion-hover: #155e75;
+  --color-on-ion: #ffffff;
+  --color-astronaut: #7c3aed;
+  --color-astronaut-text: #6d28d9;
+  --color-good: #147a38;
+  --color-warning: #a84d08;
+  --color-critical: #b91c1c;
+  --color-phase-core: #0e7490;
+  --color-phase-telemetry: #7c3aed;
+  --color-phase-comms: #a84d08;
+  color-scheme: light;
 }
 
 @layer base {
