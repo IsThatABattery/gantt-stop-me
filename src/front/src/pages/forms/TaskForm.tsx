@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { Dialog } from '../../components/Dialog'
 import { Icon } from '../../components/Icon'
@@ -76,14 +76,14 @@ function TaskFields({ value, onChange, problems, idPrefix, bodyRows }: FieldsPro
   )
 }
 
-/** Errors with no field of their own, such as no permission or GitHub being down. */
+/** Errors with no field of their own, such as no permission or GitHub being down. A 401 has the session dialog. */
 function GeneralError({ error }: { error: Error | null }) {
   const code = errorCode(error)
-  if (!error || code === 'invalid_title' || code === 'invalid_body') return null
+  if (!error || code === 'invalid_title' || code === 'invalid_body' || code === 'unauthorized') return null
   return (
     <p role="alert" className="m-0 flex items-start gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] leading-normal text-signal-ink">
       <Icon name="alert" size={16} className="mt-px flex-none" />
-      {error.message}
+      <span className="min-w-0 wrap-anywhere">{error.message}</span>
     </p>
   )
 }
@@ -100,10 +100,6 @@ export function NewTaskDialog() {
   const [submitted, setSubmitted] = useState(false)
   const close = () => navigate(`/projects/${projectId}`)
   const problems = problemsFor(value, create.error, submitted)
-  // Start in Title. This runs after the Dialog put focus on its first control, the close button.
-  useEffect(() => {
-    document.getElementById('new-task-title')?.focus()
-  }, [])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -114,6 +110,20 @@ export function NewTaskDialog() {
     }
     const task = await create.mutateAsync({ title: value.title.trim(), body: value.body }).catch(() => null)
     if (task) navigate(`/projects/${projectId}/tasks/${task.id}`)
+  }
+
+  if (project.permission === 'read') {
+    return (
+      <Dialog label={formLabels.task.titleNew} title={formLabels.task.titleNew} onClose={close}>
+        <StatusMessage
+          icon="lock"
+          title="You have read access only"
+          body={`Adding a ${labels.task.toLowerCase()} needs write access to the repository on GitHub.`}
+        >
+          <Button onClick={close}>{actionLabels.backToBoard}</Button>
+        </StatusMessage>
+      </Dialog>
+    )
   }
 
   return (
@@ -147,16 +157,32 @@ export function NewTaskDialog() {
 export function TaskEditPage() {
   const project = useProjectContext()
   const { taskId = '' } = useParams()
-  const { data: task, error } = useTask(String(project.id), taskId)
+  const { data: task, error, refetch } = useTask(String(project.id), taskId)
 
-  if (error) {
+  if (project.permission === 'read') {
     return (
       <StatusMessage
-        tone={error instanceof NotFoundError ? 'neutral' : 'signal'}
-        icon={error instanceof NotFoundError ? 'search' : undefined}
-        title={error instanceof NotFoundError ? `${labels.task} not found` : 'Something went wrong'}
-        body={error instanceof NotFoundError ? `Check the link, or open the ${labels.task.toLowerCase()} from the board.` : error.message}
+        icon="lock"
+        title="You have read access only"
+        body={`Editing a ${labels.task.toLowerCase()} needs write access to the repository on GitHub.`}
       >
+        <Link to={`/projects/${project.id}`} className={buttonClass('secondary')}>
+          {actionLabels.backToBoard}
+        </Link>
+      </StatusMessage>
+    )
+  }
+  // A failed refetch keeps the task, and the edits, on screen.
+  if (error && !task) {
+    const notFound = error instanceof NotFoundError
+    return (
+      <StatusMessage
+        tone={notFound ? 'neutral' : 'signal'}
+        icon={notFound ? 'search' : undefined}
+        title={notFound ? `${labels.task} not found` : 'Something went wrong'}
+        body={notFound ? `Check the link, or open the ${labels.task.toLowerCase()} from the board.` : error.message}
+      >
+        {!notFound && <Button onClick={() => refetch()}>Try again</Button>}
         <Link to={`/projects/${project.id}`} className={buttonClass('secondary')}>
           {actionLabels.backToBoard}
         </Link>
@@ -171,6 +197,8 @@ function TaskEditor({ task }: { task: TaskDetail }) {
   const project = useProjectContext()
   const navigate = useNavigate()
   const projectId = String(project.id)
+  // The drawer this page was opened from, over the board or the Backlog.
+  const back = (useLocation().state as { back?: string } | null)?.back ?? `/projects/${projectId}/tasks/${task.id}`
   const save = useEditTask(projectId, String(task.id))
   const [saved, setSaved] = useState<TaskInput>({ title: task.title, body: task.body })
   const [value, setValue] = useState(saved)
@@ -178,7 +206,6 @@ function TaskEditor({ task }: { task: TaskDetail }) {
   const [done, setDone] = useState(false)
   const problems = problemsFor(value, save.error, submitted)
   const dirty = value.title !== saved.title || value.body !== saved.body
-  const drawer = `/projects/${projectId}/tasks/${task.id}`
 
   const edit = (next: TaskInput) => {
     setValue(next)
@@ -222,7 +249,7 @@ function TaskEditor({ task }: { task: TaskDetail }) {
               <Icon name="chevronRight" size={14} />
             </li>
             <li>
-              <Link to={drawer} className="inline-flex min-h-8 items-center font-mono">
+              <Link to={back} className="inline-flex min-h-8 items-center font-mono">
                 #{task.issueNumber}
               </Link>
             </li>
@@ -256,7 +283,7 @@ function TaskEditor({ task }: { task: TaskDetail }) {
               <Icon name="github" size={16} />
               View on GitHub
             </a>
-            <Button onClick={() => navigate(drawer)}>{actionLabels.cancel}</Button>
+            <Button onClick={() => navigate(back)}>{actionLabels.cancel}</Button>
             <Button type="submit" variant="primary" busy={save.isPending} disabled={!dirty} className="px-[22px]">
               {save.isPending ? 'Saving…' : actionLabels.save}
             </Button>

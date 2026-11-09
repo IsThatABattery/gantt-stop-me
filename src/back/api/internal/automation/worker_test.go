@@ -25,17 +25,24 @@ const twoTests = "## Tests\n- [ ] `go test ./...`\n- [ ] `go vet ./...`\n"
 func withLLM(t *testing.T, configure ...func(*app.Config)) *fixture {
 	f := setup(t, configure...)
 	f.llm = llmtest.New(t)
+	f.automate(f.llm.URL, f.llm.Key, llmtest.DecisionModel, llmtest.ChatModel)
+	return f
+}
+
+// automate stores ada's provider at baseURL with key and the models decision and chat, and turns automation on as
+// her with them as the decision and chat models.
+func (f *fixture) automate(baseURL, key, decision, chat string) {
+	f.t.Helper()
 	var provider int64
 	err := f.DB.QueryRow(context.Background(), `
-		insert into providers (user_id, name, base_url, key_enc, models) values ($1, 'Fake', $2, $3, $4) returning id`,
-		f.adaID, f.llm.URL, f.Config.Secrets.Seal([]byte(f.llm.Key)), f.llm.Models).Scan(&provider)
+		insert into providers (user_id, name, base_url, key_enc, models) values ($1, 'LLM', $2, $3, $4) returning id`,
+		f.adaID, baseURL, f.Config.Secrets.Seal([]byte(key)), []string{decision, chat}).Scan(&provider)
 	if err != nil {
-		t.Fatal(err)
+		f.t.Fatal(err)
 	}
 	f.Do("PUT", f.path("/automation"), map[string]any{
-		"decisionProviderId": provider, "decisionModel": llmtest.DecisionModel, "chatProviderId": provider, "chatModel": llmtest.ChatModel,
+		"decisionProviderId": provider, "decisionModel": decision, "chatProviderId": provider, "chatModel": chat,
 	}, f.ada).Expect(http.StatusOK, "")
-	return f
 }
 
 // tests sets the body of issue number on GitHub.

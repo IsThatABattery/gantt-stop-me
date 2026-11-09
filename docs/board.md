@@ -52,9 +52,8 @@ Returns the projects the caller has added or opened, most recently visited first
 | `200` | `projects`, each as [Add project](#add-project) answers it; `[]` for none |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
-| `502` | `github_error` |
 
-A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. Unlinking GitHub forgets every project.
+A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. When GitHub fails that check for another reason, such as an outage, the project is listed with the permission last checked. A credential GitHub no longer accepts answers `github_not_linked`. Unlinking GitHub forgets every project. Linking it again keeps them, and checks each on GitHub again with the new credential.
 
 ```json
 { "projects": [{ "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }] }
@@ -79,7 +78,6 @@ Returns the open tasks assigned to the caller's GitHub account, grouped by proje
 | `200` | `projects`, each a `project` as [Add project](#add-project) answers it and its `tasks` in board order; `[]` for none |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
-| `502` | `github_error` |
 
 Each task is as [Show board](#show-board) gives it, with `column`, the `key` and `name` of the column it is in. Assignees are as the project's last sync read them, so an assignment made on GitHub shows once someone opens that project's board.
 
@@ -101,6 +99,7 @@ Each task is as [Show board](#show-board) gives it, with `column`, the `key` and
           "runStatus": "running",
           "needsAttention": null,
           "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1" }],
+          "branch": "feature/12-draw-the-timeline",
           "column": { "key": "testing", "name": "Testing" }
         }
       ]
@@ -156,7 +155,8 @@ Every task, here and wherever an endpoint answers one, has `runStatus`, its late
       "url": "https://github.com/ada/gantt/issues/12",
       "runStatus": null,
       "needsAttention": null,
-      "assignees": []
+      "assignees": [],
+      "branch": null
     },
     {
       "id": 9,
@@ -169,7 +169,8 @@ Every task, here and wherever an endpoint answers one, has `runStatus`, its late
       "url": "https://github.com/ada/gantt/issues/14",
       "runStatus": "passed",
       "needsAttention": null,
-      "assignees": []
+      "assignees": [],
+      "branch": "feature/14-set-up-ci"
     }
   ]
 }
@@ -217,7 +218,8 @@ Opens an issue labeled `board:backlog` on GitHub and adds its task at the end of
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": null,
   "needsAttention": null,
-  "assignees": []
+  "assignees": [],
+  "branch": null
 }
 ```
 
@@ -270,6 +272,7 @@ Returns a task with its issue's title, state, body, labels and assignees as last
   "runStatus": "failed",
   "needsAttention": null,
   "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }],
+  "branch": "feature/12-draw-the-timeline",
   "body": "One bar per task, by week.\n\n## Tests\n- [ ] `npm test`\n- [ ] The timeline shows one bar per task\n  1. Open a board with two tasks.\n",
   "labels": [
     { "name": "board:in-progress", "color": "fbca04" },
@@ -334,7 +337,8 @@ At least one of `title`, `body` and `assignees` is sent.
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": null,
   "needsAttention": null,
-  "assignees": []
+  "assignees": [],
+  "branch": "feature/12-draw-the-timeline"
 }
 ```
 
@@ -357,7 +361,7 @@ Returns the people the project's tasks can be assigned to, as GitHub lists the r
 | --- | --- |
 | `200` | `assignees`, each a `login` and `avatarUrl` |
 | `401` | `unauthorized` |
-| `403` | `github_not_linked` |
+| `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
 | `502` | `github_error` |
 
@@ -494,7 +498,8 @@ The rules hold for this endpoint only. A sync follows GitHub: a board label adde
   "url": "https://github.com/ada/gantt/issues/12",
   "runStatus": "queued",
   "needsAttention": null,
-  "assignees": []
+  "assignees": [],
+  "branch": "feature/12-draw-the-timeline"
 }
 ```
 
@@ -524,7 +529,8 @@ The rules hold for this endpoint only. A sync follows GitHub: a board label adde
     "url": "https://github.com/ada/gantt/issues/12",
     "runStatus": null,
     "needsAttention": null,
-    "assignees": []
+    "assignees": [],
+    "branch": "feature/12-draw-the-timeline"
   }
 }
 ```

@@ -56,3 +56,15 @@ func TestEditTaskAssignees(t *testing.T) {
 		f.Do("PATCH", f.path("/tasks/%d", id), map[string]any{"assignees": bad}, f.ada).Expect(http.StatusBadRequest, "invalid_assignees")
 	}
 }
+
+func TestAssignEnterpriseManagedUser(t *testing.T) {
+	f := setup(t, "One")
+	// An Enterprise Managed User's login is handle_shortcode.
+	mona := f.SignUp("mona@example.com", "correct horse")
+	f.repo.Grant(f.LinkGitHub(mona, "mona-cat_octo"), "push")
+	id, _ := f.task(1)
+	f.Do("PATCH", f.path("/tasks/%d", id), map[string]any{"assignees": []string{"mona-cat_octo"}}, f.ada).Expect(http.StatusOK, "")
+	if got := f.repo.Issue(1).Assignees; !slices.Equal(got, []string{"mona-cat_octo"}) {
+		t.Fatalf("issue assignees = %v", got)
+	}
+}

@@ -1,8 +1,10 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { Checkbox, Textarea } from '../../components/controls'
 import { Icon } from '../../components/Icon'
+import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { TaskDetail } from '../../data/api/types'
-import { useApprove, useRequestChanges, useRun, useRuns, type Run } from '../../data/views/runs'
+import { NotFoundError } from '../../data/errors'
+import { useRun, useRuns, type Run, type useApprove, type useRequestChanges } from '../../data/views/runs'
 import { actionLabels, columnLabels } from '../../labels/labels'
 import { band, bandMark, bandPrimary, bandSecondary } from './band'
 import { splitTestText } from './testText'
@@ -10,13 +12,18 @@ import { splitTestText } from './testText'
 interface ApprovalBandProps {
   projectId: string
   task: TaskDetail
-  /** Called with a short confirmation once the task is approved or sent back */
-  onDone: (message: string) => void
+  /**
+   * The drawer's own approve and request changes. They outlive the band: a failed approve can refetch the task out of
+   * User Check, taking the band along, and the drawer still shows why. The drawer confirms a success.
+   */
+  approve: ReturnType<typeof useApprove>
+  changes: ReturnType<typeof useRequestChanges>
 }
 
 /** Why Approve is not open yet, from the latest test run. */
-function blockedBy(latest: Run | undefined, loading: boolean): string | null {
+function blockedBy(latest: Run | undefined, loading: boolean, failed: boolean): string | null {
   if (loading) return 'Loading the latest test run…'
+  if (failed) return 'The latest test run didn’t load. Try again from the Tests tab.'
   if (!latest) return 'Approve and merge needs a passed test run, and this task has none yet.'
   switch (latest.status) {
     case 'queued':
@@ -37,13 +44,11 @@ function blockedBy(latest: Run | undefined, loading: boolean): string | null {
  * The yellow band pinned to the foot of the drawer while a task waits in User Check: the manual tests to tick, then
  * Approve and merge, or Request changes with a note for the pull request.
  */
-export function ApprovalBand({ projectId, task, onDone }: ApprovalBandProps) {
+export function ApprovalBand({ projectId, task, approve, changes }: ApprovalBandProps) {
   const taskId = String(task.id)
   const runs = useRuns(projectId, taskId)
   const latest = runs.data?.[0]
   const run = useRun(projectId, latest?.id)
-  const approve = useApprove(projectId, taskId)
-  const changes = useRequestChanges(projectId, taskId)
   const [checked, setChecked] = useState<number[]>([])
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState('')
@@ -51,11 +56,12 @@ export function ApprovalBand({ projectId, task, onDone }: ApprovalBandProps) {
   const id = useId()
 
   const manual = run.data?.results.filter((r) => r.status === 'manual') ?? []
-  const blocked = blockedBy(latest, runs.isPending || (latest !== undefined && run.isPending))
+  // A 404 means the API has no runner, so no run: that is "none yet", not a failure.
+  const runsFailed = (!!runs.error && !runs.data && !(runs.error instanceof NotFoundError)) || (!!run.error && !run.data)
+  const blocked = blockedBy(latest, runs.isPending || (latest !== undefined && run.isPending), runsFailed)
   const unticked = manual.filter((r) => !checked.includes(r.id)).length
   const canApprove = !blocked && unticked === 0
   const busy = approve.isPending || changes.isPending
-  const error = approve.error ?? changes.error
 
   useEffect(() => {
     if (noting) document.getElementById(`${id}-note`)?.focus()
@@ -68,9 +74,9 @@ export function ApprovalBand({ projectId, task, onDone }: ApprovalBandProps) {
       document.getElementById(`${id}-note`)?.focus()
       return
     }
-    changes.mutate(note.trim(), {
-      onSuccess: () => onDone(`Changes requested. #${task.issueNumber} is back in ${columnLabels['in-progress'].name}.`),
-    })
+    // Only the last action's error shows, under its own button.
+    approve.reset()
+    changes.mutate(note.trim())
   }
 
   const summary = blocked
@@ -130,6 +136,12 @@ export function ApprovalBand({ projectId, task, onDone }: ApprovalBandProps) {
               {actionLabels.cancel}
             </button>
           </div>
+          {changes.error && <BandError>{changes.error.message}</BandError>}
+          {/* Esc or a click outside closes the drawer; ask before dropping the note. The prompt is paper, so it takes
+              the page's ink rather than the band's. */}
+          <div className="contents text-ink">
+            <UnsavedChangesGuard when={!!note.trim() && !changes.isPending && !changes.isSuccess} />
+          </div>
         </form>
       ) : (
         <>
@@ -161,9 +173,10 @@ export function ApprovalBand({ projectId, task, onDone }: ApprovalBandProps) {
               className={`${bandPrimary} flex-[1_1_180px]`}
               disabled={!canApprove || busy}
               aria-busy={approve.isPending || undefined}
-              onClick={() =>
-                approve.mutate(checked, { onSuccess: () => onDone(`Approved and merged. #${task.issueNumber} is closed.`) })
-              }
+              onClick={() => {
+                changes.reset()
+                approve.mutate(checked)
+              }}
             >
               <Icon name="check" size={16} />
               {approve.isPending ? 'Merging…' : actionLabels.approveLand}
@@ -172,10 +185,9 @@ export function ApprovalBand({ projectId, task, onDone }: ApprovalBandProps) {
               {actionLabels.requestChanges}
             </button>
           </div>
+          {approve.error && <BandError>{approve.error.message}</BandError>}
         </>
       )}
-
-      {error && <BandError>{error.message}</BandError>}
     </section>
   )
 }
@@ -187,7 +199,7 @@ function BandError({ id, children }: { id?: string; children: string }) {
       <span className="grid size-5 flex-none place-items-center rounded-[2px] bg-signal text-on-signal" aria-hidden="true">
         <Icon name="alert" size={12} />
       </span>
-      {children}
+      <span className="min-w-0 wrap-anywhere">{children}</span>
     </p>
   )
 }

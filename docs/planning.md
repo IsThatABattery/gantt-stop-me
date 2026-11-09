@@ -54,7 +54,7 @@ Replaces the caller's planning settings. The agents of every plan the caller sta
 | `interviewer` | body | object | required, so a save cannot wipe it by leaving it out; `{}` has no model and no instructions |
 | `taskAgent` | body | object | required, as `interviewer` |
 | `….providerId` | body | integer or null | one of the caller's providers; `null` with `model` picks no model, so the caller can delete the provider |
-| `….model` | body | string or null | one of that provider's chosen `models`; it should support tool calling |
+| `….model` | body | string or null | one of that provider's chosen `models`; it should serve the OpenAI Responses API, `POST {baseUrl}/responses`, with tool calling, `store` false and the reasoning's encrypted content |
 | `….instructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added to the agent's prompt after its own rules, which win where they conflict |
 
 ```json

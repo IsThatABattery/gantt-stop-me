@@ -2,8 +2,11 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+/** Open modals, newest last. Only the newest takes Esc and Tab: one over a drawer must not close the drawer too. */
+const open: object[] = []
+
 /**
- * Shared behavior for Drawer and Dialog: Esc closes, focus moves inside on
+ * Shared behavior for Drawer and Dialog: Esc closes the topmost, focus moves inside on
  * open and is kept there with Tab, focus returns on close, and the page
  * behind stops scrolling.
  */
@@ -21,8 +24,11 @@ export function useModal<T extends HTMLElement>(onClose: () => void) {
     ;(first ?? panel)?.focus()
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    const self = {}
+    open.push(self)
 
     const onKey = (e: KeyboardEvent) => {
+      if (open[open.length - 1] !== self) return
       if (e.key === 'Escape') {
         e.stopPropagation()
         close.current()
@@ -43,6 +49,7 @@ export function useModal<T extends HTMLElement>(onClose: () => void) {
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
+      open.splice(open.indexOf(self), 1)
       document.body.style.overflow = overflow
       previous?.focus?.()
     }

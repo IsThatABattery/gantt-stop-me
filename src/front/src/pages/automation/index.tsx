@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { useParams } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
@@ -12,7 +12,7 @@ import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { AgentSettings, Automation, Me, Permission, Provider } from '../../data/api/types'
 import { errorCode, NotFoundError } from '../../data/errors'
 import { keys } from '../../data/keys'
-import { useMe } from '../../data/session'
+import { useSignedInUser } from '../../data/session'
 import {
   agentProblems,
   firstError,
@@ -38,9 +38,9 @@ export function AutomationPage() {
   const { projectId = '' } = useParams()
   const automation = useAutomation(projectId)
   const providers = useProviders()
-  const me = useMe()
+  const me = useSignedInUser()
   // A failed refetch keeps the data, and the form with its edits.
-  const error = [automation, providers, me].find((q) => !q.data && q.error)?.error
+  const failed = [automation, providers, me].find((q) => !q.data && q.error)
 
   return (
     <div className="flex flex-col gap-6 px-4 pt-5 pb-12 md:px-7">
@@ -59,8 +59,17 @@ export function AutomationPage() {
             title="Automation isn't available for this project"
             body="The server may have no test runner, or the project wasn't found."
           />
-        ) : error ? (
-          <Notice tone="signal" title="Something went wrong" body={error.message} />
+        ) : failed ? (
+          <Notice
+            tone="signal"
+            title="Something went wrong"
+            body={failed.error?.message}
+            action={
+              <Button variant="primary" onClick={() => failed.refetch()}>
+                Try again
+              </Button>
+            }
+          />
         ) : !automation.data || !providers.data || !me.data ? (
           <p role="status" className="m-0 text-sm text-ink-2">
             Loading {labels.automation.toLowerCase()}…
@@ -81,21 +90,24 @@ export function AutomationPage() {
   )
 }
 
-/** In place of the form when there's none to show: a square mark, a heading and what to do. */
-function Notice({ title, body, tone = 'neutral' }: { title: string; body: string; tone?: 'neutral' | 'signal' }) {
+/** In place of the form when there's none to show: a square mark, a heading, what to do and a way out if there is one. */
+function Notice({ title, body, tone = 'neutral', action }: { title: string; body?: string; tone?: 'neutral' | 'signal'; action?: ReactNode }) {
   return (
     <Card>
       <div className="flex items-start gap-3.5">
-      <span
-        aria-hidden="true"
-        className={`grid size-10 flex-none place-items-center rounded-[2px] ${tone === 'signal' ? 'bg-signal text-on-signal' : 'border-[1.5px] border-ink text-ink'}`}
-      >
-        <Icon name={tone === 'signal' ? 'alert' : 'automation'} size={20} />
-      </span>
-      <div role="status" className="flex min-w-0 flex-col gap-1">
-        <h2 className="m-0 text-base font-bold">{title}</h2>
-        <p className="m-0 max-w-[60ch] text-[13px] leading-normal text-ink-2">{body}</p>
-      </div>
+        <span
+          aria-hidden="true"
+          className={`grid size-10 flex-none place-items-center rounded-[2px] ${tone === 'signal' ? 'bg-signal text-on-signal' : 'border-[1.5px] border-ink text-ink'}`}
+        >
+          <Icon name={tone === 'signal' ? 'alert' : 'automation'} size={20} />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <div role="status" className="flex flex-col gap-1">
+            <h2 className="m-0 text-base font-bold">{title}</h2>
+            {body && <p className="m-0 max-w-[60ch] text-[13px] leading-normal wrap-anywhere text-ink-2">{body}</p>}
+          </div>
+          {action && <div className="mt-2 flex flex-wrap gap-2.5">{action}</div>}
+        </div>
       </div>
     </Card>
   )
@@ -164,7 +176,7 @@ function AutomationForm({
       })
       document.getElementById(`${id}-readonly`)?.focus()
       client.invalidateQueries({ queryKey: keys.board(projectId) })
-    } else setFormError(err.message)
+    } else if (errorCode(err) !== 'unauthorized') setFormError(err.message) // a 401 has the session dialog; the edits stay
   }
 
   const openOff = (open: boolean) => {

@@ -65,17 +65,31 @@ export function Card({ children, as: As = 'div', className = '', gap = 'gap-4', 
   )
 }
 
+interface ConfirmProps {
+  id: string
+  question: ReactNode
+  children: ReactNode
+  /** Esc inside the confirm calls it, as the button that keeps things as they are does */
+  onCancel?: () => void
+}
+
 /**
  * A question that needs an answer before anything happens, in place: an approve mark, the question, then the
- * buttons. The same look as the unsaved-changes guard.
+ * buttons. The same look as the unsaved-changes guard. The buttons stay one group, so on a phone they go under the
+ * question together.
  */
-export function Confirm({ id, question, children }: { id: string; question: ReactNode; children: ReactNode }) {
+export function Confirm({ id, question, children, onCancel }: ConfirmProps) {
   return (
-    <div role="alertdialog" aria-labelledby={id} className="flex flex-wrap items-center gap-3 rounded-card border-[1.5px] border-ink bg-paper p-3">
+    <div
+      role="alertdialog"
+      aria-labelledby={id}
+      onKeyDown={onCancel && ((e) => e.key === 'Escape' && onCancel())}
+      className="flex flex-wrap items-center gap-3 rounded-card border-[1.5px] border-ink bg-paper p-3"
+    >
       <span aria-hidden="true" className="grid size-9 flex-none place-items-center rounded-[2px] bg-approve text-on-approve">
         <Icon name="alert" size={18} />
       </span>
-      <p id={id} className="m-0 min-w-[12rem] flex-1 text-sm font-semibold">
+      <p id={id} className="m-0 min-w-[12rem] flex-1 text-sm font-semibold wrap-anywhere">
         {question}
       </p>
       <div className="flex flex-wrap gap-2.5">{children}</div>
@@ -83,3 +97,30 @@ export function Confirm({ id, question, children }: { id: string; question: Reac
   )
 }
 
+interface ProblemProps {
+  children: ReactNode
+  /** Announce it: for a failure that follows something the person did, or a refresh that failed under them */
+  alert?: boolean
+  /** A way out beside the words, such as a Try again button */
+  action?: ReactNode
+  className?: string
+}
+
+/**
+ * A problem in place, on the signal wash: the alert mark and the words, which wrap however long a name or URL in
+ * them is, then the way out if there is one.
+ */
+export function Problem({ children, alert, action, className = '' }: ProblemProps) {
+  return (
+    <div
+      role={alert ? 'alert' : undefined}
+      className={cx('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] font-semibold text-signal-ink', className)}
+    >
+      <p className="m-0 flex min-w-[min(100%,12rem)] flex-1 items-start gap-2">
+        <Icon name="alert" size={16} className="mt-px flex-none" />
+        <span className="min-w-0 wrap-anywhere">{children}</span>
+      </p>
+      {action}
+    </div>
+  )
+}

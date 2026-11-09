@@ -40,7 +40,8 @@ export function Drawer({ label, title, onClose, footer, children }: DrawerProps)
             <Icon name="close" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {/* wrap-anywhere: a long unbroken title, URL or branch wraps inside the drawer instead of widening it. */}
+        <div className="min-h-0 flex-1 overflow-y-auto wrap-anywhere">{children}</div>
         {footer && <div className="border-t border-rule bg-ground">{footer}</div>}
       </div>
     </div>

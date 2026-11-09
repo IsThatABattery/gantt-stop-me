@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"testing"
 
@@ -43,9 +44,14 @@ func TestLinkTokenReplacesOldLink(t *testing.T) {
 	if len(links) != 2 || links[0].Login != "new-gh" || links[0].Token != token {
 		t.Fatalf("github_links = %+v, want the new link and bob's", links)
 	}
-	// Access was checked with the old credential, so it must not outlive it.
-	if n := memberships(t, env, session); n != 0 {
-		t.Fatalf("relinking kept %d project memberships", n)
+	// Access was checked with the old credential, so it must not outlive it, but the project stays opened.
+	var fresh int
+	if err := env.DB.QueryRow(context.Background(), `select count(*) from project_members where user_id = $1 and checked_at > now() - interval '5 minutes'`,
+		userID(t, env, session)).Scan(&fresh); err != nil {
+		t.Fatal(err)
+	}
+	if n := memberships(t, env, session); n != 1 || fresh != 0 {
+		t.Fatalf("relinking left %d project memberships, %d still fresh; want 1, stale", n, fresh)
 	}
 	if n := memberships(t, env, bob); n != 1 {
 		t.Fatalf("bob has %d project memberships, want his 1 untouched", n)

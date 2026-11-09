@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { PlanningSettings, Provider } from '../../data/api/types'
@@ -149,6 +149,20 @@ describe('agent settings', () => {
     expect(form.getByText('Unsaved changes')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: 'Add a project' }))
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('You have unsaved changes')
+  })
+
+  it('keeps the typed instructions when the session ends on save', async () => {
+    const { form, agent } = await openAgents()
+    await userEvent.type(agent('Interviewer').getByLabelText(/^Your instructions/), 'Be brief.')
+    fake.signedInId = null
+    await userEvent.click(form.getByRole('button', { name: 'Save agent settings' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Session ended' })
+    await userEvent.type(within(dialog).getByLabelText('Password'), 'correct horse')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Session ended' })).not.toBeInTheDocument())
+    expect(agent('Interviewer').getByLabelText(/^Your instructions/)).toHaveValue('Be brief.')
+    expect(form.getByText('Unsaved changes')).toBeInTheDocument()
   })
 
   it('shows invalid_model on the model field of the agent it is about', async () => {

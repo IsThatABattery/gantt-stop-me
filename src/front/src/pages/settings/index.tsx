@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { PageTitle } from '../../components/PageTitle'
-import { useMe } from '../../data/session'
+import { useSignedInUser } from '../../data/session'
 import { labels, settingsLabels } from '../../labels/labels'
 import { AppearanceSection } from './AppearanceSection'
 import { GitHubSection } from './GitHubSection'
@@ -32,7 +32,8 @@ function sectionInView(linked: string | null) {
 // Settings, with the sections the API supports: the account, this browser's theme, the GitHub link, LLM providers
 // and the planning agents. Each section saves on its own.
 export function SettingsPage() {
-  const { data: me } = useMe()
+  // While the session-ended dialog is up, the last signed-in user keeps the sections and what was typed in them.
+  const { data: me } = useSignedInUser()
   const { hash } = useLocation()
   const linked = hash.slice(1) || null
   // Follows the scroll, so the ink block in the section nav is the section on screen.

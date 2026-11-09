@@ -1,8 +1,11 @@
 package automation
 
 import (
+	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -78,25 +81,39 @@ func (a *Automation) saveWorkflows(w http.ResponseWriter, r *http.Request) {
 	if in.SHA != nil {
 		sha = *in.SHA
 	}
-	// On its own branch, with a pull request, so the change is reviewed and tested like any other.
-	branch := fmt.Sprintf("chore/gantt-workflows-%d", time.Now().Unix())
+	// On its own branch, with a pull request, so the change is reviewed and tested like any other. The random part keeps
+	// another save, or a branch someone made ahead, from sharing it.
+	var nonce [4]byte
+	rand.Read(nonce[:])
+	branch := fmt.Sprintf("chore/gantt-workflows-%d-%x", time.Now().Unix(), nonce)
 	base, err := a.GitHub.CreateBranch(r.Context(), token, p.RepoID, branch)
-	if err == nil {
-		_, err = a.GitHub.PutWorkflows(r.Context(), token, p.RepoID, branch, in.Content, sha, "Update "+github.WorkflowsPath)
+	if err != nil {
+		github.Fail(w, r, err)
+		return
 	}
+	// A save that fails takes its branch with it, so nothing is left saved.
+	drop := func() {
+		if err := a.GitHub.DeleteBranch(context.WithoutCancel(r.Context()), token, p.RepoID, branch); err != nil {
+			log.Printf("delete branch %s: %v", branch, err)
+		}
+	}
+	_, err = a.GitHub.PutWorkflows(r.Context(), token, p.RepoID, branch, in.Content, sha, "Update "+github.WorkflowsPath)
 	var ghErr *github.Error
 	// 409: sha is no longer the file's. 422 without a sha: the file appeared since it was loaded.
 	if errors.As(err, &ghErr) && (ghErr.Status == http.StatusConflict || ghErr.Status == http.StatusUnprocessableEntity && in.SHA == nil) {
+		drop()
 		httpx.Error(w, http.StatusConflict, "workflows_changed", "The workflows file changed on GitHub since it was loaded. Reload it and save again.")
 		return
 	}
 	if err != nil {
+		drop()
 		github.Fail(w, r, err)
 		return
 	}
 	number, url, err := a.GitHub.CreatePullRequest(r.Context(), token, p.RepoID, "Update "+github.WorkflowsPath,
 		"Changes the workflows that test runs build, from the board's Automation page.", branch, base)
 	if err != nil {
+		drop()
 		github.Fail(w, r, err)
 		return
 	}

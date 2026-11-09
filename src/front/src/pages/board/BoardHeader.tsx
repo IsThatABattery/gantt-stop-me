@@ -16,6 +16,8 @@ interface BoardHeaderProps {
   shown: number
   /** The counter filtering the board; clicking it again clears it */
   active: CounterFilter | null
+  /** Read-only members get no create links and no move keys */
+  canWrite: boolean
   onToggle: (filter: CounterFilter) => void
   onClear: () => void
 }
@@ -25,16 +27,18 @@ const hitArea = "relative before:absolute before:-inset-x-1 before:-inset-y-3 be
 
 /**
  * The board's header, as in the process-flow sheet: the project name huge in display caps, the repository and task
- * count under it, then the three counters (each a filter), Plan a feature and the ink New task button.
+ * count under it, then the three counters (each a filter), Plan a feature and the ink New task button. Read-only
+ * members get the counters alone.
  */
-export function BoardHeader({ project, counts, total, shown, active, onToggle, onClear }: BoardHeaderProps) {
+export function BoardHeader({ project, counts, total, shown, active, canWrite, onToggle, onClear }: BoardHeaderProps) {
   const repo = `${project.owner}/${project.name}`
   return (
     // From 1400px the title and the actions fit on one row (the 224px rail, the gutters and B's header row), and the
     // repository line runs under both, so a filter changes only its words, never the layout. Narrower, it stacks:
     // title, repository line, then the actions.
     <header className="flex flex-col gap-y-4 min-[1400px]:flex-row min-[1400px]:flex-wrap min-[1400px]:items-end min-[1400px]:justify-between min-[1400px]:gap-x-8 min-[1400px]:gap-y-2.5">
-      <PageTitle size="lg" className="min-w-0 min-[1400px]:order-1">
+      {/* A repository name with no break points wraps anywhere rather than scrolling the page sideways. */}
+      <PageTitle size="lg" className="min-w-0 wrap-anywhere min-[1400px]:order-1">
         {project.name}
       </PageTitle>
       <p className="m-0 -mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[15px] text-ink-2 min-[1400px]:order-3 min-[1400px]:mt-0 min-[1400px]:basis-full">
@@ -42,10 +46,10 @@ export function BoardHeader({ project, counts, total, shown, active, onToggle, o
           href={`https://github.com/${repo}`}
           target="_blank"
           rel="noreferrer"
-          className={`${hitArea} inline-flex items-center gap-1.5 font-semibold text-ink no-underline decoration-1 hover:text-ink hover:underline`}
+          className={`${hitArea} inline-flex max-w-full min-w-0 items-center gap-1.5 font-semibold text-ink no-underline decoration-1 hover:text-ink hover:underline`}
         >
           <Icon name="github" size={15} className="flex-none" />
-          {repo}
+          <span className="min-w-0 wrap-anywhere">{repo}</span>
         </a>
         <span aria-hidden="true">·</span>
         <span aria-live="polite">{active ? `Showing ${taskCount(shown, total)}` : taskCount(total)}</span>
@@ -64,7 +68,7 @@ export function BoardHeader({ project, counts, total, shown, active, onToggle, o
       </p>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 min-[1400px]:order-2">
-        <div role="group" aria-label="Filter the board" className="flex flex-wrap gap-2 lg:border-r lg:border-rule lg:pr-4">
+        <div role="group" aria-label="Filter the board" className={`flex flex-wrap gap-2 ${canWrite ? 'lg:border-r lg:border-rule lg:pr-4' : ''}`}>
           {counters.map((c) => (
             <Counter
               key={c.filter}
@@ -76,21 +80,24 @@ export function BoardHeader({ project, counts, total, shown, active, onToggle, o
             />
           ))}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link to={`/projects/${project.id}/plans`} className={buttonClass('secondary', 'min-h-[52px]')}>
-            <Icon name="plan" size={16} className="flex-none" />
-            {labels.plans}
-          </Link>
-          <Link to={`/projects/${project.id}/new/task`} className={buttonClass('primary', 'min-h-[52px] pl-2 pr-[18px]')}>
-            <ButtonMark icon="plus" />
-            {labels.newTask}
-          </Link>
-        </div>
+        {canWrite && (
+          <div className="flex flex-wrap gap-2">
+            <Link to={`/projects/${project.id}/plans`} className={buttonClass('secondary', 'min-h-[52px]')}>
+              <Icon name="plan" size={16} className="flex-none" />
+              {labels.plans}
+            </Link>
+            <Link to={`/projects/${project.id}/new/task`} className={buttonClass('primary', 'min-h-[52px] pl-2 pr-[18px]')}>
+              <ButtonMark icon="plus" />
+              {labels.newTask}
+            </Link>
+          </div>
+        )}
       </div>
 
-      {/* Cards drag with the pointer; the keys stay for keyboard users, described to screen readers on every card. */}
+      {/* Cards drag with the pointer; the keys stay for keyboard users, described to screen readers on every card.
+          Read-only members can't move cards, so they hear only the keys that move focus and open one. */}
       <p id="board-keys" className="sr-only">
-        Arrow keys move between {labels.tasks.toLowerCase()}. [ and ] move one column left or right. Enter opens it.
+        Arrow keys move between {labels.tasks.toLowerCase()}. {canWrite && '[ and ] move one column left or right. '}Enter opens it.
       </p>
     </header>
   )

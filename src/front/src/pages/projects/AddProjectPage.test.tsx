@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { fake } from '../../test/fakeApi'
+import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
 async function submit(url: string) {
@@ -22,6 +22,24 @@ describe('home', () => {
     renderApp('/')
     expect(await screen.findByLabelText('Repository URL')).toBeInTheDocument()
   })
+
+  it('says when the projects could not load, instead of offering to add one', async () => {
+    fake.opened = [fake.project]
+    failNext('GET /api/projects', { status: 500, code: 'internal', message: 'Database is restarting.' })
+    renderApp('/')
+    expect(await screen.findByText('Database is restarting.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Repository URL')).not.toBeInTheDocument()
+
+    await userEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Try again' }))
+    // The rail lists it too; this is the home page's own list.
+    expect(await within(screen.getByRole('main')).findByRole('link', { name: /ada\/gantt/ })).toBeInTheDocument()
+  })
+
+  it('asks to link GitHub on All projects too', async () => {
+    fake.github = null
+    renderApp('/projects')
+    expect(await screen.findByRole('heading', { name: 'Link GitHub first' })).toBeInTheDocument()
+  })
 })
 
 describe('add a project', () => {
@@ -34,10 +52,13 @@ describe('add a project', () => {
     expect(fake.requests.find((r) => r.method === 'POST' && r.path === '/api/projects')?.body).toEqual({ url: 'https://github.com/ada/gantt.git' })
   })
 
-  it('explains a URL that is not a repository', async () => {
+  it('explains a URL that is not a repository, until the URL is edited', async () => {
     renderApp('/')
     await submit('github.com/ada')
     expect(await screen.findByRole('alert')).toHaveTextContent('Use a repository URL like https://github.com/owner/name.')
+    await userEvent.type(screen.getByLabelText('Repository URL'), '/gantt')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Repository URL')).toHaveAttribute('aria-invalid', 'false')
   })
 
   it('explains a repository it cannot find', async () => {

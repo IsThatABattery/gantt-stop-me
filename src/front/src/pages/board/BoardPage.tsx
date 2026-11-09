@@ -41,7 +41,8 @@ export function BoardPage() {
   const { data: board, isPending, error, refetch, isRefetching } = useBoard(String(project.id))
 
   if (isPending) return <BoardSkeleton />
-  if (error)
+  // Only a failed first load ends here: a failed refetch keeps the board that already loaded.
+  if (error && !board)
     return (
       <StatusMessage tone="signal" title="The board didn’t load" body={error.message}>
         <Button variant="primary" busy={isRefetching} onClick={() => void refetch()}>
@@ -59,8 +60,12 @@ const nameOf = (column: Pick<Column, 'key' | 'name'>) => (columnLabels as Partia
 const PAGE = 'flex min-w-0 flex-1 flex-col px-4 pt-5 pb-4 md:px-7'
 /** Bleeds to the page edge so a column cut off by the viewport runs to it, then scrolls sideways; the page never does */
 const SCROLLER = 'relative -mx-4 mt-5 flex flex-1 overflow-x-auto px-4 pb-1 md:-mx-7 md:px-7'
-/** Any number of columns, each at least 220px (272px on phones) and growing to fill; rows: tab, purpose, cards */
-const TRACKS = 'grid flex-1 grid-flow-col auto-cols-[minmax(17rem,1fr)] grid-rows-[auto_auto_1fr] gap-x-3 md:auto-cols-[minmax(13.75rem,1fr)]'
+/**
+ * Any number of columns, each at least 220px (272px on phones) and growing to fill; rows: tab, purpose, cards. At most
+ * a screen tall: a long column scrolls its own cards, so the sideways scrollbar under the tiles stays in reach.
+ */
+const TRACKS =
+  'grid max-h-[calc(100dvh-2rem)] flex-1 grid-flow-col auto-cols-[minmax(17rem,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] gap-x-3 md:auto-cols-[minmax(13.75rem,1fr)]'
 
 /** Card ids per column key, as shown. Ids are strings here, as drag and drop needs. */
 type Layout = Record<string, string[]>
@@ -121,14 +126,19 @@ function BoardView({ board }: { board: Board }) {
   )
   const layout = drag?.layout ?? visible
   const filtered = isFiltered(filter)
+  const canWrite = board.project.permission !== 'read'
 
+  // `task` is where the card lands: where it was, or for a conflict where the API says it is.
   const onRejected = useCallback(
     (task: Task, error: Error) => {
-      pending.current = null
       const back = lookup.keyOf.get(task.columnId)
-      const why = error instanceof ConflictError && error.code === 'conflict' ? 'someone else changed it first' : error.message
+      // The rollback remounts the card, so focus follows it back if it was on it.
+      const focused = document.activeElement?.getAttribute('data-task-id') === String(task.id)
+      pending.current = focused && back ? { taskId: String(task.id), column: back, from: null, refocus: true } : null
+      const conflict = error instanceof ConflictError && error.code === 'conflict'
+      const why = conflict ? 'someone else changed it first' : error.message
       const sentence = /[.!?]$/.test(why) ? why : `${why}.`
-      setRejection(`#${task.issueNumber} couldn't move: ${sentence}${back ? ` It's back in ${lookup.name(back)}.` : ''}`)
+      setRejection(`#${task.issueNumber} couldn't move: ${sentence}${back ? ` It's ${conflict ? '' : 'back '}in ${lookup.name(back)}.` : ''}`)
     },
     [lookup],
   )
@@ -268,7 +278,7 @@ function BoardView({ board }: { board: Board }) {
       case MOVE_LEFT:
       case MOVE_RIGHT: {
         const target = order[col + (e.key === MOVE_LEFT ? -1 : 1)]
-        if (!target) return
+        if (!target || !canWrite) return
         e.preventDefault()
         // Lands at the same height in the next column, or at the bottom.
         requestMove(task, target, visible[target][row] ?? null, cardEl(id)?.getBoundingClientRect() ?? null, true)
@@ -304,29 +314,15 @@ function BoardView({ board }: { board: Board }) {
           total={lookup.total}
           shown={shown}
           active={filter.counter}
+          canWrite={canWrite}
           onToggle={toggleCounter}
           onClear={() => setFilter(noFilter)}
         />
-        {rejection && (
-          <div role="alert" className="mt-5 flex items-center gap-3 rounded-card border border-signal bg-signal-wash py-1 pr-1 pl-2 text-[13px] text-signal-ink">
-            <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-[2px] bg-signal text-on-signal">
-              <Icon name="alert" size={16} />
-            </span>
-            <span className="min-w-0 flex-1 font-medium">{rejection}</span>
-            <button
-              type="button"
-              onClick={() => setRejection(null)}
-              className="min-h-11 flex-none cursor-pointer rounded-control border-0 bg-transparent px-3 font-[inherit] text-[13px] font-semibold text-signal-ink underline decoration-1 underline-offset-[3px] hover:bg-signal/10 hover:decoration-2 active:bg-signal/20"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
         <p aria-live="polite" className="sr-only">
           {announcement}
         </p>
         <DndContext
-          sensors={sensors}
+          sensors={canWrite ? sensors : []}
           collisionDetection={collision}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
@@ -347,6 +343,7 @@ function BoardView({ board }: { board: Board }) {
                   filtered={filtered}
                   filterLabel={filterLabel}
                   dropTarget={dropColumn === column.key}
+                  canWrite={canWrite}
                   renderCard={(t) => card(t)}
                 />
               ))}
@@ -355,6 +352,26 @@ function BoardView({ board }: { board: Board }) {
           <DragOverlay>{dragged ? card(dragged, true) : null}</DragOverlay>
         </DndContext>
       </section>
+      {/* Out of flow, so it never shifts the columns under the pointer and shows at any scroll position. It floats
+          above the page and closes, so it takes the menu shadow. */}
+      {rejection && (
+        <div
+          role="alert"
+          className="fixed right-4 bottom-4 left-4 z-40 flex items-center gap-3 rounded-card border border-signal bg-signal-wash py-1 pr-1 pl-2 text-[13px] text-signal-ink shadow-lg sm:left-auto sm:max-w-md"
+        >
+          <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-[2px] bg-signal text-on-signal">
+            <Icon name="alert" size={16} />
+          </span>
+          <span className="min-w-0 flex-1 font-medium wrap-anywhere">{rejection}</span>
+          <button
+            type="button"
+            onClick={() => setRejection(null)}
+            className="min-h-11 flex-none cursor-pointer rounded-control border-0 bg-transparent px-3 font-[inherit] text-[13px] font-semibold text-signal-ink underline decoration-1 underline-offset-[3px] hover:bg-signal/10 hover:decoration-2 active:bg-signal/20"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* The drawer and dialogs read the project too. */}
       <Outlet context={board.project} />
     </>
@@ -385,9 +402,10 @@ export function BoardSkeleton() {
               <div className="h-10 rounded-[3px] bg-ink/15" />
               <div className="row-span-2 grid grid-rows-subgrid gap-y-2.5 rounded-[3px] border border-tile-keyline p-2">
                 <div className="h-[26px] w-3/5 rounded-[2px] bg-ink/8" />
-                <div className="flex flex-col gap-2 self-start">
+                {/* Clipped, like a real column's cards, when the screen is shorter than the stack */}
+                <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
                   {Array.from({ length: 4 - (i % 3) }, (_, j) => (
-                    <div key={j} className="h-24 rounded-card border border-tile-keyline bg-paper/55" />
+                    <div key={j} className="h-24 flex-none rounded-card border border-tile-keyline bg-paper/55" />
                   ))}
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useProjectContext } from '../../app/projectContext'
 import { Chip } from '../../components/Chip'
 import { Button, Field, TextInput, Textarea } from '../../components/controls'
 import { Dialog } from '../../components/Dialog'
@@ -7,6 +8,7 @@ import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
 import { Tabs } from '../../components/Tabs'
 import { InkTab, Tile } from '../../components/Tile'
+import { errorCode } from '../../data/errors'
 import { usePlan, usePlanAction, usePlans, useStartPlan, type Plan } from '../../data/views/plans'
 import { labels } from '../../labels/labels'
 import { band, bandMark, bandPrimary } from '../task-drawer/band'
@@ -29,7 +31,7 @@ function Problem({ children, action }: { children: ReactNode; action?: ReactNode
   return (
     <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] leading-normal text-signal-ink">
       <Icon name="alert" size={16} className="flex-none" />
-      <span className="min-w-0 flex-1">{children}</span>
+      <span className="min-w-0 flex-1 wrap-anywhere">{children}</span>
       {action}
     </div>
   )
@@ -39,6 +41,7 @@ function Problem({ children, action }: { children: ReactNode; action?: ReactNode
 export function PlansPage() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
+  const readOnly = useProjectContext().permission === 'read'
   const plans = usePlans(projectId)
   const start = useStartPlan(projectId)
   const [title, setTitle] = useState('')
@@ -58,7 +61,8 @@ export function PlansPage() {
     const shown = plans.data?.filter(keep) ?? []
     return (
       <div className="flex flex-col gap-2 pt-4">
-        {plans.error && <Problem>{plans.error.message}</Problem>}
+        {/* A failed refresh keeps the list that already loaded. */}
+        {plans.error && !plans.data && <Problem action={<Button onClick={() => plans.refetch()}>Try again</Button>}>{plans.error.message}</Problem>}
         {plans.isPending && (
           <p role="status" className="m-0 text-[13px] text-ink-2">
             Loading plans…
@@ -78,7 +82,7 @@ export function PlansPage() {
                 >
                   <span className="flex min-h-12 items-center justify-between gap-3 rounded-[2px] border border-keyline px-3 py-2 transition-colors duration-150 group-hover:border-ink">
                     <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-sm font-semibold">{p.title}</span>
+                      <span className="text-sm font-semibold wrap-anywhere">{p.title}</span>
                       {p.description && <span className="truncate text-xs text-ink-2">{p.description}</span>}
                     </span>
                     <Chip tone={look.tone} icon={look.icon} iconClassName={look.iconClass} className="flex-none">
@@ -108,7 +112,9 @@ export function PlansPage() {
           {
             id: 'new',
             label: 'New plan',
-            content: (
+            content: readOnly ? (
+              <StatusMessage icon="lock" title="You have read access only" body="Planning a feature needs write access to the repository on GitHub." />
+            ) : (
               <form onSubmit={submit} className="flex flex-col gap-4 pt-5">
                 <Field id="plan-title" label="Feature">
                   <TextInput
@@ -131,8 +137,14 @@ export function PlansPage() {
                 </Field>
                 {start.error && (
                   <Problem>
-                    {start.error.message} {/* planning_not_set_up: the interviewer has no model yet */}
-                    <Link to="/settings">Settings</Link>
+                    {start.error.message}
+                    {/* planning_not_set_up: the interviewer has no model yet */}
+                    {errorCode(start.error) === 'planning_not_set_up' && (
+                      <>
+                        {' '}
+                        <Link to="/settings">Settings</Link>
+                      </>
+                    )}
                   </Problem>
                 )}
                 <div className="flex justify-end border-t border-rule pt-4">
@@ -163,19 +175,28 @@ export function PlansPage() {
 /** One plan: answer the interviewer, approve the doc, then approve the proposed tasks. */
 export function PlanPage() {
   const { projectId = '', planId = '' } = useParams()
-  const { data: plan, error, isPending } = usePlan(projectId, planId)
+  const readOnly = useProjectContext().permission === 'read'
+  const { data: plan, error, isPending, refetch } = usePlan(projectId, planId)
   const act = usePlanAction(projectId, planId)
   const [answer, setAnswer] = useState('')
 
-  if (isPending || error)
+  // A failed refresh keeps the plan, and the typed answer. Its own Dialog, so the loaded plan's opens afresh and
+  // focuses its first link rather than Close.
+  if (!plan)
     return (
-      <PlanDialog>
-        {isPending ? <StatusMessage title="Loading plan…" /> : <StatusMessage tone="signal" title="Something went wrong" body={error.message} />}
+      <PlanDialog key="loading">
+        {isPending ? (
+          <StatusMessage title="Loading plan…" />
+        ) : (
+          <StatusMessage tone="signal" title="Something went wrong" body={error?.message}>
+            <Button onClick={() => refetch()}>Try again</Button>
+          </StatusMessage>
+        )}
       </PlanDialog>
     )
 
   const send = (path: string, body?: unknown) => act.mutate({ path, body }, { onSuccess: () => setAnswer('') })
-  const busy = act.isPending || plan.pending !== null
+  const busy = readOnly || act.isPending || plan.pending !== null
   const messages = plan.messages ?? []
   const last = messages[messages.length - 1]
   const question = plan.status === 'briefing' && !plan.pending && last?.role === 'agent' ? last : null
@@ -194,12 +215,12 @@ export function PlanPage() {
 
       <header>
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <h1 className="m-0 min-w-0 text-[22px] leading-[1.25] font-bold tracking-[-0.01em] text-balance break-words">{plan.title}</h1>
+          <h1 className="m-0 min-w-0 text-[22px] leading-[1.25] font-bold tracking-[-0.01em] text-balance wrap-anywhere">{plan.title}</h1>
           <Chip tone={look.tone} icon={look.icon} iconClassName={look.iconClass} className="mt-1 flex-none">
             {look.word}
           </Chip>
         </div>
-        {plan.description && <p className="m-0 mt-2 max-w-[68ch] text-sm leading-normal text-ink-2">{plan.description}</p>}
+        {plan.description && <p className="m-0 mt-2 max-w-[68ch] text-sm leading-normal wrap-anywhere text-ink-2">{plan.description}</p>}
         <div role="status">
           {plan.pending && (
             <p className="m-0 mt-3 flex items-center gap-2 text-[13px] font-semibold">
@@ -213,7 +234,7 @@ export function PlanPage() {
       {plan.error && (
         <Problem
           action={
-            <Button onClick={() => send('retry')} disabled={act.isPending}>
+            <Button onClick={() => send('retry')} disabled={readOnly || act.isPending}>
               Retry
             </Button>
           }
@@ -253,7 +274,7 @@ export function PlanPage() {
                       <Icon name="agent" size={16} />
                     </span>
                     <Card className="flex-1">
-                      <p className="m-0 text-sm leading-normal">
+                      <p className="m-0 text-sm leading-normal wrap-anywhere">
                         <span className="sr-only">The interviewer asked: </span>
                         {m.text}
                       </p>
@@ -261,7 +282,7 @@ export function PlanPage() {
                   </li>
                 ) : (
                   <li key={m.id} className="flex justify-end pl-12 max-sm:pl-6">
-                    <p className="m-0 rounded-card bg-block px-3.5 py-2.5 text-sm leading-normal">
+                    <p className="m-0 min-w-0 rounded-card bg-block px-3.5 py-2.5 text-sm leading-normal wrap-anywhere">
                       <span className="sr-only">You answered: </span>
                       {m.skipped ? <span className="text-ink-2">Skipped</span> : m.text}
                     </p>
@@ -281,7 +302,7 @@ export function PlanPage() {
               {question.options.length > 0 && (
                 <div role="group" aria-label="Suggested answers" className="flex flex-wrap gap-2">
                   {question.options.map((o) => (
-                    <Button key={o} disabled={busy} onClick={() => send('answer', { text: o })}>
+                    <Button key={o} disabled={busy} onClick={() => send('answer', { text: o })} className="max-w-full wrap-anywhere">
                       {o}
                     </Button>
                   ))}
@@ -310,7 +331,7 @@ export function PlanPage() {
         {plan.doc.length === 0 ? (
           <p className="m-0 text-[13px] text-ink-2">The interviewer writes the doc once the interview is done.</p>
         ) : (
-          <Card frameClassName="gap-0 divide-y divide-keyline py-0">
+          <Card frameClassName="gap-0 divide-y divide-keyline py-0 wrap-anywhere">
             {plan.doc.map((s) => (
               <div key={s.key} className="flex flex-col gap-1 py-3">
                 <h3 className="m-0 text-sm font-bold">{s.title}</h3>

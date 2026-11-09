@@ -71,7 +71,7 @@ function TaskRow({ task }: { task: Task }) {
       >
         <span className="col-start-1 row-start-1 font-mono text-[12.5px] font-semibold text-ink-2">#{task.issueNumber}</span>
         <span className="col-[1/-1] row-start-2 flex min-w-0 flex-col gap-1.5 sm:col-[2] sm:row-start-1">
-          <span className="text-sm leading-snug font-semibold">{task.title}</span>
+          <span className="text-sm leading-snug font-semibold wrap-anywhere">{task.title}</span>
           {task.branch && (
             <span className="flex min-w-0 items-center gap-1 text-xs text-ink-2">
               <Icon name="pr" size={12} className="flex-none" />
@@ -79,7 +79,7 @@ function TaskRow({ task }: { task: Task }) {
             </span>
           )}
           {trouble && (
-            <span className="rounded-[2px] bg-signal-wash px-2 py-1.5 text-[12.5px] leading-snug text-signal-ink">
+            <span className="rounded-[2px] bg-signal-wash px-2 py-1.5 text-[12.5px] leading-snug wrap-anywhere text-signal-ink">
               <span className="sr-only">Needs attention: </span>
               {task.needsAttention}
             </span>
@@ -123,7 +123,7 @@ export function HangarPage() {
           <div className="min-w-0">
             <PageTitle>{labels.backlog}</PageTitle>
             <p className="mt-2.5 mb-0 text-[15px] text-ink-2" aria-live="polite">
-              <span className="font-semibold text-ink">
+              <span className="font-semibold wrap-anywhere text-ink">
                 {project.owner}/{project.name}
               </span>
               {board && (
@@ -140,7 +140,8 @@ export function HangarPage() {
           </Link>
         </header>
 
-        {error ? (
+        {/* A failed refetch keeps the list that loaded; only a failed first load shows the error. */}
+        {error && !board ? (
           <Notice
             role="alert"
             tone="signal"

@@ -6,6 +6,7 @@ import { useAssignedTasks } from '../data/views/assigned'
 import { columnLabels, labels, runStatusLabels } from '../labels/labels'
 import { runLook } from './runLook'
 import { Chip, type Tone } from './Chip'
+import { Button } from './controls'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
 import { UserMenu } from './UserMenu'
@@ -32,8 +33,8 @@ function RailLink({ item }: { item: Item }) {
         }`
       }
     >
-      <Icon name={item.icon} />
-      {item.label}
+      <Icon name={item.icon} className="flex-none" />
+      <span className="min-w-0 truncate">{item.label}</span>
     </NavLink>
   )
 }
@@ -53,6 +54,19 @@ function PageLink({ item }: { item: Item }) {
       <Icon name={item.icon} size={16} />
       {item.label}
     </NavLink>
+  )
+}
+
+/** A rail list that failed to load, in its place on the signal wash, with Try again: the section never just vanishes. */
+function LoadFailed({ what, retry }: { what: string; retry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-col items-start gap-2 rounded-[3px] bg-signal-wash p-2.5 text-[13px] leading-snug font-medium text-signal-ink">
+      <span className="flex items-start gap-2">
+        <Icon name="alert" size={16} className="mt-px flex-none" />
+        Couldn't load {what}.
+      </span>
+      <Button onClick={retry}>Try again</Button>
+    </div>
   )
 }
 
@@ -131,10 +145,11 @@ function AssignedList({ groups }: { groups: AssignedGroup[] }) {
         id={`rail-assigned-${project.id}`}
         to={`/projects/${project.id}`}
         title={`${project.owner}/${project.name}`}
-        className="mx-1 flex min-h-8 items-center gap-1.5 self-start text-xs font-bold text-ink no-underline hover:text-ink hover:underline"
+        // max-w-full: sized to its name, a long one truncates instead of running past the rail.
+        className="mx-1 flex min-h-8 max-w-full items-center gap-1.5 self-start text-xs font-bold text-ink no-underline hover:text-ink hover:underline"
       >
         <Icon name="github" size={14} className="flex-none text-ink-2" />
-        <span className="truncate">{project.name}</span>
+        <span className="min-w-0 truncate">{project.name}</span>
       </Link>
       <ul aria-labelledby={`rail-assigned-${project.id}`} className="m-0 flex list-none flex-col gap-1.5 p-0">
         {tasks.map((t) => {
@@ -156,7 +171,7 @@ function AssignedList({ groups }: { groups: AssignedGroup[] }) {
                     {s.label}
                   </Chip>
                 </span>
-                <span className="line-clamp-2 text-[13px] leading-[1.3] font-semibold">{t.title}</span>
+                <span className="line-clamp-2 text-[13px] leading-[1.3] font-semibold wrap-anywhere">{t.title}</span>
               </NavLink>
             </li>
           )
@@ -172,8 +187,10 @@ function AssignedList({ groups }: { groups: AssignedGroup[] }) {
  * and the account at the foot. Below md it is a bar with a Menu button that opens the rest above the page.
  */
 export function NavRail({ projectId }: { projectId?: string }) {
-  const { data: projects = [], isPending } = useMyProjects()
-  const { data: assigned = [] } = useAssignedTasks()
+  const myProjects = useMyProjects()
+  const myTasks = useAssignedTasks()
+  const projects = myProjects.data ?? []
+  const assigned = myTasks.data ?? []
   const { pathname } = useLocation()
   // Open on one page only: following a link closes the menu.
   const [openOn, setOpenOn] = useState<string | null>(null)
@@ -181,12 +198,13 @@ export function NavRail({ projectId }: { projectId?: string }) {
   const bodyId = useId()
   const listed = projects.filter((p, i) => i < MAX_PROJECTS || String(p.id) === projectId)
   // Just added, before the list catches up: its pages still show.
-  const unlisted = projectId && !isPending && !projects.some((p) => String(p.id) === projectId)
+  const unlisted = projectId && !myProjects.isPending && !projects.some((p) => String(p.id) === projectId)
 
   return (
     <nav
       aria-label="Primary"
-      className="box-border flex flex-col border-rule bg-rail max-md:border-b md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-r"
+      // min-w-0: a long project name truncates instead of widening the rail.
+      className="box-border flex min-w-0 flex-col border-rule bg-rail max-md:border-b md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-r"
     >
       <div className="flex items-center justify-between gap-3 px-3.5 py-2 md:pt-[18px] md:pb-0">
         <Link to="/" className="flex min-h-11 items-center rounded-[3px] px-1 no-underline">
@@ -204,8 +222,9 @@ export function NavRail({ projectId }: { projectId?: string }) {
         </button>
       </div>
 
-      <div id={bodyId} className={`flex-1 flex-col gap-6 px-3.5 pt-4 pb-3.5 md:flex md:pt-6 ${menuOpen ? 'flex' : 'hidden'}`}>
+      <div id={bodyId} className={`flex-1 flex-col gap-6 px-3.5 pt-4 pb-3.5 md:flex md:pt-6 md:pb-0 ${menuOpen ? 'flex' : 'hidden'}`}>
         <div className="flex flex-col gap-2">
+          {myProjects.error && !myProjects.data && <LoadFailed what={labels.projects.toLowerCase()} retry={() => myProjects.refetch()} />}
           {listed.length > 0 && (
             <Section title={labels.projects}>
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
@@ -235,8 +254,13 @@ export function NavRail({ projectId }: { projectId?: string }) {
             </div>
           </Section>
         )}
+        {myTasks.error && !myTasks.data && (
+          <LoadFailed what={`${labels.tasks.toLowerCase()} ${labels.assignedToYou.toLowerCase()}`} retry={() => myTasks.refetch()} />
+        )}
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-rule pt-3">
+        {/* At md+ the rail scrolls, so the foot sticks to its bottom on the rail's own colour: Settings and the account
+            stay in view however long the lists above run. */}
+        <div className="mt-auto flex flex-col gap-1 border-t border-rule bg-rail pt-3 md:sticky md:bottom-0 md:z-10 md:pb-3.5">
           <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} />
           <UserMenu placement="above" showEmail />
         </div>

@@ -1,8 +1,10 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { fake, failNext } from './fakeApi'
 import { renderApp } from './render'
+import { server } from './server'
 
 const column = (name: RegExp) => screen.getByRole('region', { name })
 const cardsIn = (name: RegExp) =>
@@ -75,6 +77,19 @@ describe('board', () => {
     expect(within(card(14)).getByText('Tests running').querySelector('svg')).toHaveClass('motion-safe:animate-live')
   })
 
+  it('gives read-only members no create links and no move keys', async () => {
+    fake.project.permission = 'read'
+    await openBoard()
+    const board = within(screen.getByRole('region', { name: 'Board' }))
+    expect(board.queryByRole('link', { name: 'Plan a feature' })).not.toBeInTheDocument()
+    expect(board.queryByRole('link', { name: 'New task' })).not.toBeInTheDocument()
+    expect(card(12)).toHaveAccessibleDescription('Arrow keys move between tasks. Enter opens it.')
+    card(12).focus()
+    await userEvent.keyboard(']')
+    expect(cardsIn(/^Backlog/)).toContain('#12')
+    expect(moves()).toHaveLength(0)
+  })
+
   it('shows only Closed on a closed card, keeping the run in its name', async () => {
     await openBoard()
     expect(within(card(17)).getByText('Closed')).toBeInTheDocument()
@@ -131,10 +146,42 @@ describe('board moves', () => {
 
     await userEvent.keyboard(']')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent("#12 couldn't move: someone else changed it first. It's back in Backlog.")
+    expect(await screen.findByRole('alert')).toHaveTextContent("#12 couldn't move: someone else changed it first. It's in Backlog.")
     expect(cardsIn(/^Backlog/)).toContain('#12')
     expect(cardsIn(/^In Progress/)).not.toContain('#12')
     expect(task(7).columnId).toBe(1)
+  })
+
+  it('says where a conflicting card really is', async () => {
+    await openBoard()
+    Object.assign(task(7), { columnId: 3, position: 5, version: 2 }) // someone moved #12 to Testing
+    card(12).focus()
+    await userEvent.keyboard(']')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("#12 couldn't move: someone else changed it first. It's in Testing.")
+    expect(cardsIn(/^Testing/)).toContain('#12')
+  })
+
+  it('keeps focus on a card whose keyboard move is refused', async () => {
+    let refuse!: () => void
+    const refused = new Promise<void>((resolve) => (refuse = resolve))
+    server.use(
+      http.post('/api/projects/1/tasks/7/move', async () => {
+        await refused
+        return HttpResponse.json({ error: { code: 'bad_request', message: 'No.' } }, { status: 400 })
+      }),
+    )
+    await openBoard()
+    card(12).focus()
+    await userEvent.keyboard(']')
+    // Refused only once the card has moved, so the rollback remounts it.
+    await waitFor(() => expect(cardsIn(/^In Progress/)).toContain('#12'))
+    await waitFor(() => expect(card(12)).toHaveFocus())
+    refuse()
+
+    await screen.findByRole('alert')
+    expect(cardsIn(/^Backlog/)).toContain('#12')
+    await waitFor(() => expect(card(12)).toHaveFocus())
   })
 
   it("shows automation's reason for refusing a move", async () => {

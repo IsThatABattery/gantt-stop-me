@@ -1,5 +1,5 @@
 // Package llmtest fakes an OpenAI-compatible LLM provider for tests: the model listing settings checks, the
-// Decisions API and Chat Completions, answered from a script.
+// Decisions API and the Responses API, answered from a script.
 package llmtest
 
 import (
@@ -185,7 +185,8 @@ func (f *Fake) serveChat(w http.ResponseWriter, r *http.Request) {
 		Model string            `json:"model"`
 		Input []json.RawMessage `json:"input"`
 		Tools []struct {
-			Type string `json:"type"`
+			Type   string `json:"type"`
+			Strict *bool  `json:"strict"`
 			llm.Tool
 		} `json:"tools"`
 		Store   *bool    `json:"store"`
@@ -207,6 +208,11 @@ func (f *Fake) serveChat(w http.ResponseWriter, r *http.Request) {
 	for _, t := range in.Tools {
 		if t.Type != "function" {
 			fail(w, http.StatusBadRequest, fmt.Sprintf("llmtest: tool %q has type %q, not function", t.Name, t.Type))
+			return
+		}
+		// The Responses API defaults to strict, which makes every property required, unlike the calls tests script.
+		if t.Strict == nil || *t.Strict {
+			fail(w, http.StatusBadRequest, fmt.Sprintf("llmtest: tool %q is strict; send strict false, so the model may leave out a property", t.Name))
 			return
 		}
 	}

@@ -107,11 +107,11 @@ export function Proposals({ projectId, plan, act, busy }: { projectId: string; p
           return (
             <Card key={p.id} as="li" tone={c?.verdict === 'reject' ? 'signal' : 'plain'}>
               <div className="flex items-start gap-3">
-                <details className="group min-w-0 flex-1">
+                <details className="group min-w-0 flex-1 wrap-anywhere">
                   <summary className="-m-1 flex min-h-11 cursor-pointer list-none items-start gap-2 rounded-[2px] p-1 hover:bg-ink/5 [&::-webkit-details-marker]:hidden">
                     <Icon name="chevronRight" size={16} className="mt-0.5 flex-none transition-transform duration-150 group-open:rotate-90" />
                     <span className="flex min-w-0 flex-col gap-1.5">
-                      <span className="text-sm leading-snug font-semibold break-words">
+                      <span className="text-sm leading-snug font-semibold">
                         <span className="sr-only">Task {p.position}: </span>
                         {p.title}
                       </span>

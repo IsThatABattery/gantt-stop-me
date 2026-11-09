@@ -62,7 +62,8 @@ export function TaskCard({ task, to, awaitingApproval = false, overlay = false }
         overlay ? 'rotate-[1.5deg] cursor-grabbing border-ink bg-paper' : edge.outer
       }`}
     >
-      <div className={`flex flex-col gap-1.5 rounded-[2px] border transition-colors duration-150 ease-out-quint ${edge.inner}`}>
+      {/* Long unbroken titles and attention notes wrap inside the card instead of widening it. */}
+      <div className={`flex min-w-0 flex-col gap-1.5 rounded-[2px] border wrap-anywhere transition-colors duration-150 ease-out-quint ${edge.inner}`}>
         <div className="flex min-h-[22px] items-center justify-between gap-2">
           <span className="font-mono text-[12.5px] font-semibold text-ink-2">#{task.issueNumber}</span>
           {task.assignees.length > 0 && (

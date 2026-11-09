@@ -15,10 +15,10 @@ const fieldOf: Record<string, 'email' | 'password'> = {
   weak_password: 'password',
 }
 
-/** A field's refusal under it: the alert mark and the words. */
+/** A field's refusal under it: the alert mark and the words, announced as it appears. */
 function FieldError({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <span id={id} className="flex items-start gap-1.5 text-[13px] leading-snug font-medium text-signal-ink">
+    <span id={id} role="alert" className="flex items-start gap-1.5 text-[13px] leading-snug font-medium text-signal-ink">
       <Icon name="alert" size={14} className="mt-px flex-none" />
       {children}
     </span>
@@ -47,6 +47,8 @@ export function SignupPage() {
   const code = errorCode(mutation.error)
   const field = code ? fieldOf[code] : undefined
   const fieldError = (name: 'email' | 'password') => (field === name ? mutation.error?.message : undefined)
+  // Editing clears the refusal: it was about the old value.
+  const clearError = () => mutation.isError && mutation.reset()
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -77,7 +79,10 @@ export function SignupPage() {
               value={email}
               aria-invalid={!!fieldError('email')}
               aria-describedby={fieldError('email') ? 'signup-email-error' : undefined}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                clearError()
+              }}
             />
             {fieldError('email') && <FieldError id="signup-email-error">{fieldError('email')}</FieldError>}
           </Field>
@@ -89,7 +94,10 @@ export function SignupPage() {
               value={password}
               aria-invalid={!!fieldError('password')}
               aria-describedby={fieldError('password') ? 'signup-password-error' : 'signup-password-hint'}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                clearError()
+              }}
             />
             {fieldError('password') ? (
               <FieldError id="signup-password-error">{fieldError('password')}</FieldError>

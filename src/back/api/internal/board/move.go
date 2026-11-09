@@ -78,8 +78,9 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
+	from := t.ColumnID
 	t, err = b.place(ctx, tx, token, p, t, to, in.BeforeTaskID, true)
-	if err == nil && to.Key == "in-progress" && t.Branch == nil {
+	if err == nil && to.Key == "in-progress" && from != to.ID && t.Branch == nil {
 		t.Branch = b.branch(ctx, tx, token, p, t)
 	}
 	if err == nil {
@@ -272,6 +273,8 @@ func BranchName(issue int, title string) string {
 	if len(slug) > 40 { // at a word's end
 		if slug = slug[:41]; strings.LastIndex(slug, "-") > 0 {
 			slug = slug[:strings.LastIndex(slug, "-")]
+		} else {
+			slug = slug[:40] // one long word
 		}
 		slug = strings.TrimRight(slug, "-")
 	}
