@@ -8,7 +8,7 @@ import type { PlanningSettings, Provider } from '../../data/api/types'
 import { agentProblems, firstError, usePlaceApiError, usePlanning, useSavePlanning, type AgentErrors } from '../../data/views/agentSettings'
 import { useProviders } from '../../data/views/settings'
 import { labels, llmAgentLabels, settingsLabels } from '../../labels/labels'
-import { Section } from './Section'
+import { Card, Section } from './Section'
 import { sectionIds } from './sections'
 
 type PlanningAgent = 'interviewer' | 'taskAgent'
@@ -26,11 +26,12 @@ export function PlanningSection() {
   return (
     <Section id={sectionIds.agents} title={settingsLabels.agents} intro={settingsLabels.agentsHelp}>
       {error ? (
-        <p role="status" className="m-0 text-critical">
-          {error.message}
+        <p role="status" className="m-0 flex items-start gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] font-semibold text-signal-ink">
+          <Icon name="alert" size={16} className="mt-px flex-none" />
+          <span>Couldn't load the agents. {error.message}</span>
         </p>
       ) : !planning.data || !providers.data ? (
-        <p role="status" className="m-0 text-text-muted">
+        <p role="status" className="m-0 px-0.5 text-[13px] text-ink-2">
           Loading agents…
         </p>
       ) : (
@@ -84,43 +85,56 @@ function PlanningForm({ initial, providers }: { initial: PlanningSettings; provi
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-label={settingsLabels.agents} className="flex flex-col gap-5">
-      <div className="flex min-h-14 items-center gap-4">
-        <span className="flex flex-1 flex-col gap-0.5">
-          <span className="font-medium">{settingsLabels.review}</span>
-          <span className="text-[13px] text-text-muted-strong">{settingsLabels.reviewHelp}</span>
-        </span>
-        <Toggle label={settingsLabels.review} checked={form.review} onChange={(review) => update({ ...form, review })} />
-      </div>
-      {providers.length === 0 && <NoProviders />}
+    <form onSubmit={submit} noValidate aria-label={settingsLabels.agents} className="flex flex-col gap-3">
+      <Card frameClassName="py-3">
+        <div className="flex items-center gap-4">
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="font-bold">{settingsLabels.review}</span>
+            <span className="text-[13px] text-ink-2">{settingsLabels.reviewHelp}</span>
+          </span>
+          <Toggle label={settingsLabels.review} checked={form.review} onChange={(review) => update({ ...form, review })} />
+        </div>
+      </Card>
+      {providers.length === 0 && (
+        <Card>
+          <NoProviders />
+        </Card>
+      )}
       {agents.map((a) => (
-        <AgentEditor
-          key={a}
-          id={`${id}-${a}`}
-          {...llmAgentLabels[a]}
-          deep
-          providers={providers}
-          value={form[a]}
-          errors={errors[a]}
-          onChange={(v) => update({ ...form, [a]: v })}
-        />
+        // The editor draws a rule above itself for stacking in one panel; as its own card it needs none.
+        <Card key={a} frameClassName="[&>div]:border-t-0 [&>div]:pt-0">
+          <AgentEditor
+            id={`${id}-${a}`}
+            {...llmAgentLabels[a]}
+            deep
+            providers={providers}
+            value={form[a]}
+            errors={errors[a]}
+            onChange={(v) => update({ ...form, [a]: v })}
+          />
+        </Card>
       ))}
-      <p className="m-0 text-[13px] text-text-muted-strong">
+      <p className="m-0 px-0.5 text-[13px] leading-normal text-ink-2">
         The test agents, {llmAgentLabels.decision.name.toLowerCase()} and {llmAgentLabels.chat.name.toLowerCase()}, are set per {labels.project.toLowerCase()} on its {labels.automation} page.
       </p>
       <UnsavedChangesGuard when={dirty && !save.isPending} />
-      <div className="flex flex-wrap items-center justify-end gap-2.5">
-        <div role="status" className="mr-auto text-[13px]">
+      <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-rule pt-3">
+        <div role="status" className="mr-auto px-0.5 text-[13px] font-semibold">
           {saved && (
-            <span className="inline-flex items-center gap-1.5 text-good">
-              <Icon name="check" size={16} />
+            <span className="inline-flex items-center gap-1.5 text-ink">
+              <Icon name="check" size={16} className="text-good" />
               Agent settings saved
             </span>
           )}
-          {formError && <span className="text-critical">{formError}</span>}
-          {!saved && !formError && dirty && <span className="text-text-muted">Unsaved changes</span>}
+          {formError && (
+            <span className="inline-flex items-center gap-1.5 text-signal-ink">
+              <Icon name="alert" size={16} />
+              {formError}
+            </span>
+          )}
+          {!saved && !formError && dirty && <span className="text-ink-2">Unsaved changes</span>}
         </div>
-        <Button type="submit" variant="primary" disabled={save.isPending}>
+        <Button type="submit" variant="primary" busy={save.isPending}>
           {settingsLabels.saveAgents}
         </Button>
       </div>

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { fake } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
-const list = async () => screen.findByRole('list', { name: 'Hangar payloads' })
+const list = async () => screen.findByRole('list', { name: 'Backlog tasks' })
 
-describe('hangar', () => {
-  it('lists the Hangar column in board order', async () => {
+describe('backlog', () => {
+  it('lists the Backlog column in board order', async () => {
     renderApp('/projects/1/backlog')
     const backlog = fake.tasks.filter((t) => t.columnId === 1).sort((a, b) => a.position - b.position)
     const rows = within(await list()).getAllByRole('link').map((l) => l.textContent)
@@ -22,9 +22,9 @@ describe('hangar', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1/backlog'))
   })
 
-  it('says so when the Hangar is empty', async () => {
+  it('says so when the Backlog is empty', async () => {
     fake.tasks = fake.tasks.filter((t) => t.columnId !== 1)
     renderApp('/projects/1/backlog')
-    expect(await screen.findByText(/The Hangar is empty/)).toBeInTheDocument()
+    expect(await screen.findByText(/The Backlog is empty/)).toBeInTheDocument()
   })
 })

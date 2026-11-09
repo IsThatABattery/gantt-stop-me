@@ -1,32 +1,40 @@
-/* Light: a standard light theme. Neutral grays, a blue accent, no starfield. */
+/* Light: the default. The process-flow board in one cool neutral family: stepped gray tiles,
+   solid ink tabs, white cards. Colour only where a person is needed.
+   It also applies when the root has no data-theme, or one no theme knows. */
+:where(:root),
 [data-theme='light'] {
   color-scheme: light;
 
-  --background: #f6f7f9;
-  --surface: #ffffff;
-  --surface-sunken: #f0f1f4;
-  --rail: rgba(255, 255, 255, 0.85);
-  --header: rgba(255, 255, 255, 0.75);
-  --nav-active: #e8eaee;
+  --ground: #f2f4f6;
+  --rail: #e6e9ed;
+  --block: #d5dae0;
+  --block-hover: #c9cfd6;
+  --tile-first: #e4e8ec;
+  --tile-last: #c8d0d8;
+  --tile-keyline: rgba(255, 255, 255, 0.85);
+  --paper: #ffffff;
 
-  --line: #dcdfe5;
-  --line-soft: #e9ebef;
-  --line-strong: #c2c6cf;
+  --keyline: #e1e5ea;
+  --rule: #c9cfd6;
+  --line: #646e79;
 
-  --text: #18191c;
-  --text-soft: #34363c;
-  --text-muted: #5e616a;
-  --text-muted-strong: #4a4d55;
+  --ink: #14171b;
+  --ink-hover: #2b3138;
+  --ink-2: #48515b;
+  --on-ink: #ffffff;
+  --on-ink-2: #b6bec8;
 
-  --ion: #1b52c8;
-  --ion-hover: #1e40af;
-  --on-ion: #ffffff;
-  --astronaut: #6d2fd6;
-  --astronaut-text: #5b21b6;
+  --accent: #14171b;
+  --on-accent: #ffffff;
 
-  --good: #146c36;
-  --warning: #964306;
-  --critical: #b31b1b;
+  --signal: #c8341a;
+  --signal-ink: #a72a13;
+  --on-signal: #ffffff;
+  --signal-wash: #fcebe7;
+  --approve: #ffd02a;
+  --on-approve: #14171b;
+  --approve-ink: #6b4c00;
+  --good: #175c31;
 
   --stars: none;
 }

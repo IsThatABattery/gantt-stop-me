@@ -33,8 +33,8 @@ export function TaskReviewPage() {
   const list = proposals.data
   const header = (
     <div>
-      <h1 className="m-0 font-heading text-[28px] font-semibold">Review proposed {tasksWord}</h1>
-      <p className="mt-2 mb-0 max-w-[680px] leading-normal text-text-muted-strong">
+      <h1 className="m-0 text-[28px] font-semibold">Review proposed {tasksWord}</h1>
+      <p className="mt-2 mb-0 max-w-[680px] leading-normal text-ink-2">
         Approved {tasksWord} go to the {labels.backlog}. Denied ones go back to the planning {agentWord} with your feedback.
       </p>
     </div>
@@ -89,12 +89,12 @@ function Review({ list, context, summary, base, children }: ReviewProps) {
         <ProposalDetail proposal={selected} proposals={list} context={context} summary={summary} onSelect={setPicked} />
       </div>
 
-      <div className="sticky bottom-0 -mx-8 -mb-12 flex flex-wrap items-center gap-4 border-t border-line-soft bg-rail px-8 py-4 backdrop-blur">
+      <div className="sticky bottom-0 -mx-8 -mb-12 flex flex-wrap items-center gap-4 border-t border-keyline bg-rail px-8 py-4 backdrop-blur">
         <div className="flex-[1_1_280px]">
           <div role="status" className="text-[13px]">
             {reviewed} of {list.length} reviewed · {approved} approved · {sentBack} sent back
           </div>
-          <div role="img" aria-label={`${reviewed} of ${list.length} reviewed`} className="mt-2 h-1.5 overflow-hidden rounded-[3px] bg-line-soft">
+          <div role="img" aria-label={`${reviewed} of ${list.length} reviewed`} className="mt-2 h-1.5 overflow-hidden rounded-[3px] bg-keyline">
             <div className="h-1.5 bg-good" style={{ width: `${Math.round((reviewed / list.length) * 100)}%` }} />
           </div>
         </div>

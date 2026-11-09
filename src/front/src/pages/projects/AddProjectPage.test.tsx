@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { fake } from '../../test/fakeApi'
@@ -6,14 +6,15 @@ import { renderApp } from '../../test/render'
 
 async function submit(url: string) {
   await userEvent.type(await screen.findByLabelText('Repository URL'), url)
-  await userEvent.click(screen.getByRole('button', { name: 'Open mission' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Open project' }))
 }
 
-describe('flight deck', () => {
+describe('home', () => {
   it('lists the projects opened before, and opens one', async () => {
     fake.opened = [fake.project]
     const { router } = renderApp('/')
-    await userEvent.click(await screen.findByRole('link', { name: /ada\/gantt/ }))
+    // The rail lists it too; this is the home page's own list.
+    await userEvent.click(await within(await screen.findByRole('main')).findByRole('link', { name: /ada\/gantt/ }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1'))
   })
 

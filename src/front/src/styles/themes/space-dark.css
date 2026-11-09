@@ -1,34 +1,38 @@
-/* Space dark: the navy mission-control console over a starfield, from design/tokens.json.
-   The default: it also applies when the root has no data-theme, or one no theme knows. */
-:where(:root),
+/* Space dark: the process-flow board on the navy console, with ice tabs, a cyan accent for what is live,
+   and the static starfield. */
 [data-theme='space-dark'] {
   color-scheme: dark;
 
-  --background: #070b16;
-  --surface: #0f1626;
-  --surface-sunken: #0b1120;
-  --rail: rgba(10, 15, 28, 0.85);
-  --header: rgba(10, 15, 28, 0.7);
-  --nav-active: #13203a;
+  --ground: #070b16;
+  --rail: #0b1120;
+  --block: #18223a;
+  --block-hover: #212d4a;
+  --tile-first: #0f1626;
+  --tile-last: #1a2540;
+  --tile-keyline: rgba(230, 236, 247, 0.07);
+  --paper: #1f2a47;
 
-  --line: #24304a;
-  --line-soft: #1c2640;
-  --line-strong: #36456a;
+  --keyline: #2b3858;
+  --rule: #24304a;
+  --line: #7584a3;
 
-  --text: #e6ecf7;
-  --text-soft: #c2ccdd;
-  --text-muted: #9aa7bf;
-  --text-muted-strong: #aab6cc;
+  --ink: #e6ecf7;
+  --ink-hover: #c9d4e6;
+  --ink-2: #a6b2c8;
+  --on-ink: #070b16;
+  --on-ink-2: #435069;
 
-  --ion: #3fd5e8;
-  --ion-hover: #8be9f4;
-  --on-ion: #062029;
-  --astronaut: #a78bfa;
-  --astronaut-text: #c4b5fd;
+  --accent: #3fd5e8;
+  --on-accent: #062029;
 
+  --signal: #f6674b;
+  --signal-ink: #ff9580;
+  --on-signal: #070b16;
+  --signal-wash: #3a1d24;
+  --approve: #ffd02a;
+  --on-approve: #070b16;
+  --approve-ink: #ffd02a;
   --good: #4ade80;
-  --warning: #fbbf24;
-  --critical: #f87171;
 
   --stars:
     radial-gradient(1px 1px at 20px 30px, rgba(230, 236, 247, 0.2) 50%, transparent 51%),

@@ -66,32 +66,32 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="m-0 font-heading text-[28px] font-semibold">
+        <h1 className="m-0 text-[28px] font-semibold">
           {mode === 'deny' ? `Deny the ${featureWord} doc` : `Review the ${featureWord} doc`}
         </h1>
       </div>
 
       <div className="flex flex-wrap items-start gap-6">
-        <article aria-label={`${labels.feature} doc`} className="flex min-w-0 flex-[999_1_600px] flex-col gap-5 rounded-[14px] border border-line bg-surface p-8">
+        <article aria-label={`${labels.feature} doc`} className="flex min-w-0 flex-[999_1_600px] flex-col gap-5 rounded-[14px] border border-rule bg-paper p-8">
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <Chip tone={statusTone[draft.status]} className="px-2.5">
                 {draftStatusLabels[draft.status]}
               </Chip>
-              <span className="text-xs text-text-muted">
+              <span className="text-xs text-ink-2">
                 Version {draft.version} · drafted by the briefing {agentWord} from {answers} {answers === 1 ? 'answer' : 'answers'}
               </span>
             </div>
-            <h2 className="mt-3 mb-0 font-heading text-[30px] font-semibold">{draft.name}</h2>
+            <h2 className="mt-3 mb-0 text-[30px] font-semibold">{draft.name}</h2>
           </div>
 
           {mode === 'edit'
             ? draft.sections.map((s) => (
-                <div key={s.key} className="flex flex-col gap-2 border-t border-line-soft pt-5">
-                  <label htmlFor={`edit-${s.key}`} className="font-heading text-base font-semibold">
+                <div key={s.key} className="flex flex-col gap-2 border-t border-keyline pt-5">
+                  <label htmlFor={`edit-${s.key}`} className="text-base font-semibold">
                     {s.title}
                   </label>
-                  {Array.isArray(s.body) && <span className="text-xs text-text-muted">One item per line</span>}
+                  {Array.isArray(s.body) && <span className="text-xs text-ink-2">One item per line</span>}
                   <Textarea
                     id={`edit-${s.key}`}
                     rows={Array.isArray(s.body) ? Math.max(3, s.body.length + 1) : 3}
@@ -108,7 +108,7 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
           className="flex min-w-0 flex-[1_1_380px] flex-col gap-4"
         >
           {mode === 'deny' ? (
-            <div className="rounded-[14px] border border-line bg-surface-sunken p-6">
+            <div className="rounded-[14px] border border-rule bg-ground p-6">
               <FeedbackForm
                 heading="Why are you denying this doc?"
                 intro={`The briefing ${agentWord} will revise the doc and bring it back for review. Your feedback stays attached to this version.`}
@@ -127,16 +127,16 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
               />
             </div>
           ) : mode === 'edit' ? (
-            <Panel title="Editing the doc" tone="border-ion">
-              <p className="m-0 leading-normal text-text-muted-strong">Change any section, then save. The doc stays waiting for your review.</p>
+            <Panel title="Editing the doc" tone="border-accent">
+              <p className="m-0 leading-normal text-ink-2">Change any section, then save. The doc stays waiting for your review.</p>
               <Button variant="primary" onClick={saveEdit} disabled={save.isPending}>
                 Save changes
               </Button>
               <Button onClick={() => setMode('decide')}>Cancel</Button>
             </Panel>
           ) : reviewing ? (
-            <Panel title="Your decision" tone="border-warning">
-              <p className="m-0 leading-normal text-text-muted-strong">
+            <Panel title="Your decision" tone="border-approve">
+              <p className="m-0 leading-normal text-ink-2">
                 Approving hands this doc to the planning {agentWord}. It proposes {labels.tasks.toLowerCase()}, and you review each one before
                 it reaches the board.
               </p>
@@ -150,7 +150,7 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
               <Button onClick={() => setMode('deny')}>{plannerLabels.denyDoc}</Button>
               <Button onClick={startEdit}>{plannerLabels.editDoc}</Button>
               {approve.error && (
-                <p role="alert" className="m-0 text-[13px] text-critical">
+                <p role="alert" className="m-0 text-[13px] text-signal-ink">
                   {approve.error.message}
                 </p>
               )}
@@ -160,16 +160,16 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
           )}
 
           {draft.comments.length > 0 && (
-            <section aria-labelledby="comments-h" className="rounded-[14px] border border-line bg-surface-sunken p-5">
-              <h3 id="comments-h" className="mt-0 mb-2.5 font-heading text-[15px] font-semibold">
+            <section aria-labelledby="comments-h" className="rounded-[14px] border border-rule bg-ground p-5">
+              <h3 id="comments-h" className="mt-0 mb-2.5 text-[15px] font-semibold">
                 Comments ({draft.comments.length})
               </h3>
               <ul className="m-0 flex list-none flex-col gap-3 p-0">
                 {draft.comments.map((c) => {
                   const section = draft.sections.find((s) => s.key === c.sectionKey)
                   return (
-                    <li key={c.id} className="text-[13px] leading-normal text-text-soft">
-                      <span className="text-astronaut-text">{plannerLabels.briefingAgent}</span>
+                    <li key={c.id} className="text-[13px] leading-normal text-ink">
+                      <span className="text-accent">{plannerLabels.briefingAgent}</span>
                       {section && (
                         <>
                           {' on '}
@@ -191,8 +191,8 @@ function DocReview({ draft }: { draft: FeatureDraft }) {
 
 function Panel({ title, tone, children }: { title: string; tone: string; children: ReactNode }) {
   return (
-    <section className={`flex flex-col gap-3 rounded-[14px] border bg-surface-sunken p-6 ${tone}`}>
-      <h2 className="m-0 font-heading text-lg font-semibold">{title}</h2>
+    <section className={`flex flex-col gap-3 rounded-[14px] border bg-ground p-6 ${tone}`}>
+      <h2 className="m-0 text-lg font-semibold">{title}</h2>
       {children}
     </section>
   )
@@ -203,7 +203,7 @@ function DonePanel({ draft, base, projectId }: { draft: FeatureDraft; base: stri
   if (draft.status === 'approved') {
     return (
       <Panel title="Approved" tone="border-good">
-        <p className="m-0 leading-normal text-text-muted-strong">
+        <p className="m-0 leading-normal text-ink-2">
           The planning {agentWord} is proposing {labels.tasks.toLowerCase()} from this doc.
         </p>
         <Link to={`${base}/tasks`} className={buttonClass('primary')}>
@@ -214,8 +214,8 @@ function DonePanel({ draft, base, projectId }: { draft: FeatureDraft; base: stri
   }
   if (draft.status === 'denied') {
     return (
-      <Panel title="Sent back" tone="border-warning">
-        <p className="m-0 leading-normal text-text-muted-strong">The briefing {agentWord} is revising the doc with your feedback.</p>
+      <Panel title="Sent back" tone="border-approve">
+        <p className="m-0 leading-normal text-ink-2">The briefing {agentWord} is revising the doc with your feedback.</p>
         <Link to={`${base}/briefing`} className={buttonClass('secondary')}>
           Back to the briefing
         </Link>
@@ -223,8 +223,8 @@ function DonePanel({ draft, base, projectId }: { draft: FeatureDraft; base: stri
     )
   }
   return (
-    <Panel title="Discarded" tone="border-line">
-      <p className="m-0 leading-normal text-text-muted-strong">Nothing was created from this draft.</p>
+    <Panel title="Discarded" tone="border-rule">
+      <p className="m-0 leading-normal text-ink-2">Nothing was created from this draft.</p>
       <Link to={`/projects/${projectId}`} className={buttonClass('secondary')}>
         Back to the board
       </Link>

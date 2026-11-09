@@ -2,8 +2,9 @@ import { expect, it } from 'vitest'
 import { themes } from './themes'
 
 // WCAG contrast for every theme, on the pairs the components use. Text needs
-// 4.5:1, focus rings and icons 3:1. Translucent colors and tints are composited
-// over what sits behind them, as the browser does.
+// 4.5:1; control boundaries, focus rings and the signal border need 3:1.
+// Translucent colours are composited over what sits behind them, as the
+// browser does.
 
 const sheets = import.meta.glob<string>('../styles/themes/*.css', { query: '?raw', import: 'default', eager: true })
 const sheetById = Object.fromEntries(Object.entries(sheets).map(([path, css]) => [path.match(/([^/]+)\.css$/)![1], css]))
@@ -25,11 +26,11 @@ function parse(value: string): Rgba | undefined {
 
 /** fg drawn over an opaque bg */
 const over = (fg: Rgba, bg: Rgba): Rgba => [0, 1, 2].map((i) => fg[i] * fg[3] + bg[i] * (1 - fg[3])).concat(1) as Rgba
-/** A Tailwind opacity modifier, e.g. bg-warning/20, over an opaque bg */
+/** A Tailwind opacity modifier, e.g. bg-signal/10, over an opaque bg */
 const tint = (c: Rgba, percent: number, bg: Rgba) => over([c[0], c[1], c[2], percent / 100], bg)
 
 function luminance([r, g, b]: Rgba) {
-  const channel = (v: number) => (v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  const channel = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 }
 
@@ -39,25 +40,16 @@ function ratio(a: Rgba, b: Rgba) {
 }
 
 it.each(themes.map((t) => t.id))('%s meets WCAG AA on every pair the components use', (id) => {
-  const vars = Object.fromEntries([...sheetById[id].matchAll(/--([a-z-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]))
+  const vars = Object.fromEntries([...sheetById[id].matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]))
   const color = (name: string) => {
     const c = parse(vars[name] ?? '')
     if (!c) throw new Error(`--${name} in ${id}.css is not a hex or rgb() color`)
     return c
   }
-  const background = color('background')
-  const surface = color('surface')
-  /** Opaque backgrounds text sits on. The rail and header are translucent over the page. */
-  const grounds: Record<string, Rgba> = {
-    background,
-    surface,
-    'surface-sunken': color('surface-sunken'),
-    'nav-active': color('nav-active'),
-    rail: over(color('rail'), background),
-    header: over(color('header'), background),
-  }
-  const accents = ['ion', 'ion-hover', 'astronaut', 'astronaut-text', 'good', 'warning', 'critical']
-  const tones = ['ion', 'astronaut', 'good', 'warning', 'critical']
+  /** Every opaque ground text sits on. Stage tiles step from first to last, so both ends count. */
+  const grounds: Record<string, Rgba> = Object.fromEntries(
+    ['ground', 'rail', 'block', 'block-hover', 'tile-first', 'tile-last', 'paper'].map((n) => [n, color(n)]),
+  )
 
   const failures: string[] = []
   const check = (fg: string, fgColor: Rgba, on: string, bg: Rgba, min: number) => {
@@ -65,20 +57,21 @@ it.each(themes.map((t) => t.id))('%s meets WCAG AA on every pair the components 
     if (r < min) failures.push(`${fg} on ${on}: ${r.toFixed(2)}, needs ${min}`)
   }
 
-  for (const text of ['text', 'text-soft', 'text-muted-strong', 'text-muted'])
-    for (const [name, bg] of Object.entries(grounds)) check(text, color(text), name, bg, 4.5)
-  for (const accent of accents) for (const name of ['background', 'surface', 'surface-sunken']) check(accent, color(accent), name, grounds[name], 4.5)
-  // State text on its own tint: chips (/10), pressed counters and placeholders (/20), over a card or the header.
-  for (const tone of tones)
-    for (const percent of [10, 20])
-      for (const name of ['surface', 'header']) check(tone, color(tone), `${tone}/${percent} over ${name}`, tint(color(tone), percent, grounds[name]), 4.5)
-  // Icons on a hovered /25 tint
-  for (const tone of tones) check(tone, color(tone), `${tone}/25 over surface`, tint(color(tone), 25, surface), 3)
-  check('astronaut-text', color('astronaut-text'), 'astronaut/10 over surface', tint(color('astronaut'), 10, surface), 4.5)
-  check('on-ion', color('on-ion'), 'ion', color('ion'), 4.5)
-  check('on-ion', color('on-ion'), 'ion-hover', color('ion-hover'), 4.5)
-  // The focus ring, and the border of a focused card
-  for (const name of ['background', 'surface']) check('ion', color('ion'), name, grounds[name], 3)
+  for (const text of ['ink', 'ink-2']) for (const [name, bg] of Object.entries(grounds)) check(text, color(text), name, bg, 4.5)
+  // Text on the ink fills: stage tabs, the primary action, the active nav block
+  for (const fill of ['ink', 'ink-hover']) for (const text of ['on-ink', 'on-ink-2']) check(text, color(text), fill, color(fill), 4.5)
+  check('on-accent', color('on-accent'), 'accent', color('accent'), 4.5)
+  check('on-signal', color('on-signal'), 'signal', color('signal'), 4.5)
+  check('on-approve', color('on-approve'), 'approve', color('approve'), 4.5)
+  // Coloured words: links and live marks, what needs a person, what awaits approval, success
+  for (const text of ['accent', 'signal-ink', 'approve-ink', 'good'])
+    for (const name of ['ground', 'tile-first', 'tile-last', 'paper']) check(text, color(text), name, grounds[name], 4.5)
+  check('signal-ink', color('signal-ink'), 'signal-wash', color('signal-wash'), 4.5)
+  check('ink', color('ink'), 'signal-wash', color('signal-wash'), 4.5)
+  check('ink', color('ink'), 'approve/20 over paper', tint(color('approve'), 20, color('paper')), 4.5)
+  // Control boundaries and card edges, the focus ring, and the signal border, against what they sit on
+  for (const edge of ['line', 'accent', 'signal'])
+    for (const name of ['ground', 'tile-first', 'tile-last', 'paper']) check(edge, color(edge), name, grounds[name], 3)
 
   expect(failures).toEqual([])
 })

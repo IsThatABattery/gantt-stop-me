@@ -5,12 +5,12 @@ import { db } from '../../data/mock/store'
 import { clearFavoritesCache } from '../../data/views/projects'
 import { renderApp } from '../../test/render'
 
-/** Mission names on the grid, in order. */
-async function missionNames() {
-  const grid = await screen.findByRole('region', { name: 'Missions' })
+/** Project names on the grid, in order. */
+async function projectNames() {
+  const grid = await screen.findByRole('region', { name: 'Projects' })
   return within(grid)
     .queryAllByRole('link')
-    .map((a) => a.querySelector('.font-heading')?.textContent)
+    .map((a) => a.querySelector('.')?.textContent)
 }
 
 const filter = (name: string) => userEvent.click(screen.getByRole('button', { name }))
@@ -22,28 +22,28 @@ beforeEach(() => {
 
 // Skipped: this screen runs on mock data and isn't routed until its API exists
 // (docs/implementation/api-gaps.md). Unskip it when the screen is wired.
-describe.skip('mission select', () => {
-  it('shows every mission, most recent first', async () => {
+describe.skip('project select', () => {
+  it('shows every project, most recent first', async () => {
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
-    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
+    expect(await projectNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('filters to missions the signed-in operator is on', async () => {
+  it('filters to projects the signed-in person is on', async () => {
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
     await filter('Mine')
 
     expect(screen.getByRole('button', { name: 'Mine' })).toHaveAttribute('aria-pressed', 'true')
-    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
+    expect(await projectNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
   })
 
-  it('stars a mission and shows it under Favorites', async () => {
+  it('stars a project and shows it under Favorites', async () => {
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
     await filter('Favorites')
-    expect(screen.getByText(/No favorite missions yet/)).toBeInTheDocument()
+    expect(screen.getByText(/No favorite projects yet/)).toBeInTheDocument()
 
     await filter('All')
     const star = screen.getByRole('button', { name: 'Favorite Lunar Relay' })
@@ -51,7 +51,7 @@ describe.skip('mission select', () => {
     expect(star).toHaveAttribute('aria-pressed', 'true')
     await filter('Favorites')
 
-    expect(await missionNames()).toEqual(['Lunar Relay'])
+    expect(await projectNames()).toEqual(['Lunar Relay'])
     expect(JSON.parse(localStorage.getItem('gsm.favorites.u-tv')!)).toEqual(['lunar-relay'])
   })
 
@@ -59,37 +59,37 @@ describe.skip('mission select', () => {
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
     await filter('Mine')
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search missions' }), 'relay')
-    expect(await missionNames()).toEqual(['Lunar Relay'])
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search projects' }), 'relay')
+    expect(await projectNames()).toEqual(['Lunar Relay'])
 
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search missions' }), ' nope')
-    expect(await missionNames()).toEqual([])
-    expect(screen.getByText('No missions match “relay nope”.')).toBeInTheDocument()
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search projects' }), ' nope')
+    expect(await projectNames()).toEqual([])
+    expect(screen.getByText('No projects match “relay nope”.')).toBeInTheDocument()
   })
 
-  it('sorts by name and by launch window end', async () => {
+  it('sorts by name and by sprint end', async () => {
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
     const sort = screen.getByRole('combobox', { name: 'Sort by' })
 
     await userEvent.selectOptions(sort, 'Name')
-    expect(await missionNames()).toEqual(['Lunar Relay', 'Orbital-Nav'])
+    expect(await projectNames()).toEqual(['Lunar Relay', 'Orbital-Nav'])
 
-    await userEvent.selectOptions(sort, 'Launch window end')
-    expect(await missionNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
+    await userEvent.selectOptions(sort, 'Sprint end')
+    expect(await projectNames()).toEqual(['Orbital-Nav', 'Lunar Relay'])
   })
 
-  it('shows archived missions only under Archived', async () => {
+  it('shows archived projects only under Archived', async () => {
     db.projects.find((p) => p.id === 'lunar-relay')!.archived = true
     renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
-    expect(await missionNames()).not.toContain('Lunar Relay')
+    expect(await projectNames()).not.toContain('Lunar Relay')
 
     await filter('Archived')
-    expect(await missionNames()).toEqual(['Lunar Relay'])
+    expect(await projectNames()).toEqual(['Lunar Relay'])
   })
 
-  it('Review now opens the mission that needs attention most', async () => {
+  it('Review now opens the project that needs attention most', async () => {
     const { router } = renderApp('/')
     await userEvent.click(await screen.findByRole('link', { name: /Review now/ }))
     expect(router.state.location.pathname).toBe('/projects/orbital-nav')
@@ -102,17 +102,17 @@ describe.skip('mission select', () => {
     expect(screen.queryByRole('region', { name: 'Needs your attention' })).not.toBeInTheDocument()
   })
 
-  it('creates a mission and opens its empty board', async () => {
+  it('creates a project and opens its empty board', async () => {
     const { router } = renderApp('/')
     await screen.findByRole('link', { name: /^Orbital-Nav/ })
-    await userEvent.click(screen.getAllByRole('button', { name: /New mission/ })[0])
-    const dialog = screen.getByRole('dialog', { name: 'New mission' })
+    await userEvent.click(screen.getAllByRole('button', { name: /New project/ })[0])
+    const dialog = screen.getByRole('dialog', { name: 'New project' })
 
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Create mission' }))
-    expect(within(dialog).getByText('Give the mission a name.')).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create project' }))
+    expect(within(dialog).getByText('Give the project a name.')).toBeInTheDocument()
 
     await userEvent.type(within(dialog).getByLabelText('Name'), 'Test Mission')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Create mission' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create project' }))
 
     expect(await screen.findByRole('heading', { name: 'Test Mission' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/projects/test-mission')

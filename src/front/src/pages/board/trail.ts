@@ -1,8 +1,9 @@
-// The short trail a card leaves when it changes column (AGENT_BRIEF §9).
-// Drawn imperatively with the Web Animations API: one streak from the old
-// spot to the new one that grows and fades in under half a second.
+// The short trail a card leaves when it changes column: one flat line in the accent (ink in Light and Dark), with
+// square ends like the rest of the sheet, drawn from the old spot to the new one and gone in under half a second.
+// Drawn imperatively with the Web Animations API. Nothing is drawn when the user asks for reduced motion.
 
-const DURATION_MS = 450
+const DURATION_MS = 420
+const WEIGHT_PX = 2
 
 export function prefersReducedMotion() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -25,25 +26,24 @@ export function drawTrail(from: DOMRect, to: DOMRect) {
   Object.assign(el.style, {
     position: 'fixed',
     left: `${x1}px`,
-    top: `${y1 - 2}px`,
+    top: `${y1 - WEIGHT_PX / 2}px`,
     width: `${length}px`,
-    height: '4px',
-    borderRadius: '999px',
+    height: `${WEIGHT_PX}px`,
     pointerEvents: 'none',
     zIndex: '50',
     transformOrigin: '0 50%',
-    background: 'linear-gradient(90deg, transparent, var(--ion))',
-    boxShadow: '0 0 12px var(--ion)',
+    background: 'var(--accent)',
   })
   document.body.append(el)
 
+  // The line draws out to the new spot, then withdraws into it.
   const rotate = `rotate(${angle}rad)`
   el.animate(
     [
-      { transform: `${rotate} scaleX(0)`, opacity: 0.9 },
-      { transform: `${rotate} scaleX(1)`, opacity: 0.7, offset: 0.55 },
-      { transform: `${rotate} scaleX(1) translateX(8%)`, opacity: 0 },
+      { transform: `${rotate} translateX(0) scaleX(0)` },
+      { transform: `${rotate} translateX(0) scaleX(1)`, offset: 0.5 },
+      { transform: `${rotate} translateX(${length}px) scaleX(0)` },
     ],
-    { duration: DURATION_MS, easing: 'ease-out' },
+    { duration: DURATION_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
   ).onfinish = () => el.remove()
 }

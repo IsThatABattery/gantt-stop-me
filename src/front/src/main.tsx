@@ -5,6 +5,9 @@ import { RouterProvider } from 'react-router/dom'
 import { router } from './app/router'
 import { createQueryClient } from './data/queryClient'
 import { startTheme } from './theme/theme'
+import '@fontsource-variable/big-shoulders-display'
+import '@fontsource-variable/public-sans'
+import '@fontsource-variable/red-hat-mono'
 import './styles/index.css'
 
 startTheme()

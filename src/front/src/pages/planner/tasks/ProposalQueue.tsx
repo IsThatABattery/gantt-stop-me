@@ -22,13 +22,13 @@ export function ProposalQueue({ proposals, selectedId, onSelect }: ProposalQueue
                 type="button"
                 aria-current={selected ? 'true' : undefined}
                 onClick={() => onSelect(p.id)}
-                className={`flex w-full cursor-pointer flex-col gap-2 rounded-card border p-3.5 text-left font-[inherit] text-text ${
-                  selected ? 'border-ion bg-ion/8' : 'border-line bg-surface hover:border-line-strong'
+                className={`flex w-full cursor-pointer flex-col gap-2 rounded-card border p-3.5 text-left font-[inherit] text-ink ${
+                  selected ? 'border-accent bg-accent/8' : 'border-rule bg-paper hover:border-line'
                 }`}
               >
                 <span className="flex items-center justify-between gap-2">
                   <Chip tone={statusTone[p.status]}>{proposalStatusLabels[p.status]}</Chip>
-                  <span className="font-mono text-xs text-text-muted">{p.estimate} pt</span>
+                  <span className="font-mono text-xs text-ink-2">{p.estimate} pt</span>
                 </span>
                 <span className={`leading-[1.4] ${selected ? 'font-medium' : ''}`}>
                   <span className="sr-only">Proposal {p.order}: </span>

@@ -36,18 +36,18 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
     [...extra, errors[f] && `${fieldId(f)}-error`].filter(Boolean).join(' ') || undefined
   const error = (f: AgentField) =>
     errors[f] && (
-      <span id={`${fieldId(f)}-error`} className="text-xs text-critical">
+      <span id={`${fieldId(f)}-error`} className="text-xs text-signal-ink">
         {errors[f]}
       </span>
     )
 
   return (
-    <div role="group" aria-labelledby={`${id}-name`} aria-describedby={`${id}-about`} className="flex flex-col gap-4 border-t border-line-soft pt-5">
+    <div role="group" aria-labelledby={`${id}-name`} aria-describedby={`${id}-about`} className="flex flex-col gap-4 border-t border-rule pt-5">
       <div>
-        <h3 id={`${id}-name`} className="m-0 font-heading text-base font-semibold">
+        <h3 id={`${id}-name`} className="m-0 text-base font-bold">
           {name}
         </h3>
-        <p id={`${id}-about`} className="m-0 mt-1 text-[13px] text-text-muted-strong">
+        <p id={`${id}-about`} className="m-0 mt-1 text-[13px] text-ink-2">
           {description}
         </p>
       </div>
@@ -85,7 +85,7 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
             aria-invalid={!!errors.model}
             aria-describedby={describedBy('model')}
           />
-          {value.model && provider && !models.includes(value.model) && <span className="text-xs text-warning">{value.model} is no longer available.</span>}
+          {value.model && provider && !models.includes(value.model) && <span className="text-xs text-approve-ink">{value.model} is no longer available.</span>}
           {error('model')}
         </Field>
       </div>
@@ -93,7 +93,7 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
         id={fieldId('instructions')}
         label={
           <>
-            Your instructions <span className="text-text-muted">(optional)</span>
+            Your instructions <span className="font-normal">(optional)</span>
           </>
         }
       >
@@ -104,9 +104,9 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
           aria-describedby={describedBy('instructions', `${id}-help`, `${id}-count`)}
           onChange={(e) => onChange({ ...value, instructions: e.target.value })}
         />
-        <span className="flex flex-wrap justify-between gap-x-3 text-xs text-text-muted">
+        <span className="flex flex-wrap justify-between gap-x-3 text-xs text-ink-2">
           <span id={`${id}-help`}>Added to the agent's built-in instructions. They don't replace them.</span>
-          <span id={`${id}-count`} className={length > INSTRUCTIONS_MAX ? 'text-critical' : undefined}>
+          <span id={`${id}-count`} className={length > INSTRUCTIONS_MAX ? 'text-signal-ink' : undefined}>
             {length} / {INSTRUCTIONS_MAX}
           </span>
         </span>
@@ -119,7 +119,7 @@ export function AgentEditor({ id, name, description, providers, value, onChange,
 /** In place of the editors while the user has no providers to pick from. */
 export function NoProviders() {
   return (
-    <p className="m-0 text-[13px] text-text-muted-strong">
+    <p className="m-0 text-[13px] text-ink-2">
       You have no LLM providers yet. <Link to="/settings#providers">Add a provider</Link> to choose the agents' models.
     </p>
   )

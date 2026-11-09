@@ -14,19 +14,19 @@ afterEach(() => stop?.())
 describe('startTheme', () => {
   it('applies the default when nothing is saved, without saving it', () => {
     stop = startTheme()
-    expect(root.dataset.theme).toBe('space-dark')
+    expect(root.dataset.theme).toBe('light')
     expect(localStorage.getItem(storageKey)).toBeNull()
   })
 
   it('applies the saved theme, and the default for one it no longer knows', () => {
-    localStorage.setItem(storageKey, 'light')
+    localStorage.setItem(storageKey, 'dark')
     stop = startTheme()
-    expect(root.dataset.theme).toBe('light')
+    expect(root.dataset.theme).toBe('dark')
     stop()
 
     localStorage.setItem(storageKey, 'sepia')
     stop = startTheme()
-    expect(root.dataset.theme).toBe('space-dark')
+    expect(root.dataset.theme).toBe('light')
   })
 
   it("carries the old toggle's light choice over to Space light, and drops its saved dark", () => {
@@ -40,7 +40,7 @@ describe('startTheme', () => {
     localStorage.clear()
     localStorage.setItem('theme', 'dark')
     stop = startTheme()
-    expect(root.dataset.theme).toBe('space-dark')
+    expect(root.dataset.theme).toBe('light')
     expect(localStorage.getItem(storageKey)).toBeNull()
     expect(localStorage.getItem('theme')).toBeNull()
   })

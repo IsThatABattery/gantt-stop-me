@@ -10,12 +10,14 @@ export function RequireSession() {
 
   if (isPending || error) {
     return (
-      <div className="stars flex min-h-screen flex-col bg-background text-text">
+      <div className="stars flex min-h-screen flex-col bg-ground text-ink">
         {isPending ? (
           <StatusMessage title="Loading…" />
         ) : (
-          <StatusMessage title="Something went wrong" body={error.message}>
-            <Button onClick={() => refetch()}>Try again</Button>
+          <StatusMessage tone="signal" title="Something went wrong" body={error.message}>
+            <Button variant="primary" onClick={() => refetch()}>
+              Try again
+            </Button>
           </StatusMessage>
         )}
       </div>

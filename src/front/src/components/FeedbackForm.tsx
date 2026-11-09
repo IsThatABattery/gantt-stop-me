@@ -14,7 +14,7 @@ export interface FeedbackValue {
 interface FeedbackFormProps {
   heading: string
   intro: string
-  /** The two outcomes, e.g. "Send back for revision" / "Discard this objective" */
+  /** The two outcomes, e.g. "Send back for revision" / "Discard this feature" */
   outcomes: Record<FeedbackOutcome, { label: string; description: string }>
   reasons: string[]
   /** Offer an "Applies to" picker over these sections (doc denials only) */
@@ -28,7 +28,7 @@ interface FeedbackFormProps {
 }
 
 /**
- * Deny-with-feedback form shared by doc and payload denials (AGENT_BRIEF §8,
+ * Deny-with-feedback form shared by doc and task denials (AGENT_BRIEF §8,
  * PlanDocDeny and PlanPayloadsDeny mockups). Free text is required.
  */
 export function FeedbackForm({
@@ -55,7 +55,7 @@ export function FeedbackForm({
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!text.trim()) {
-      setError('Write what should change. The astronaut needs it to revise.')
+      setError('Write what should change. The agent needs it to revise.')
       return
     }
     setError(null)
@@ -65,12 +65,12 @@ export function FeedbackForm({
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
       <div>
-        <h2 className="m-0 font-heading text-lg font-semibold">{heading}</h2>
-        <p className="mt-1.5 mb-0 leading-normal text-text-muted-strong">{intro}</p>
+        <h2 className="m-0 text-lg font-bold">{heading}</h2>
+        <p className="mt-1.5 mb-0 leading-normal text-ink-2">{intro}</p>
       </div>
 
       <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
-        <legend className="mb-2.5 p-0 text-[13px] text-text-soft">What should happen next?</legend>
+        <legend className="mb-2.5 p-0 text-[13px] font-semibold text-ink-2">What should happen next?</legend>
         {(Object.keys(outcomes) as FeedbackOutcome[]).map((o) => (
           <RadioCard
             key={o}
@@ -85,8 +85,8 @@ export function FeedbackForm({
       </fieldset>
 
       <fieldset className="m-0 border-0 p-0">
-        <legend className="mb-1 p-0 text-[13px] text-text-soft">
-          What is wrong? <span className="text-text-muted">(pick any)</span>
+        <legend className="mb-1 p-0 text-[13px] font-semibold text-ink-2">
+          What is wrong? <span className="font-normal">(pick any)</span>
         </legend>
         <div className="flex flex-wrap gap-x-5">
           {reasons.map((r) => (
@@ -97,7 +97,7 @@ export function FeedbackForm({
 
       {sections && (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${id}-section`} className="text-[13px] text-text-soft">
+          <label htmlFor={`${id}-section`} className="text-[13px] font-semibold text-ink-2">
             Applies to
           </label>
           <Select id={`${id}-section`} value={sectionKey} onChange={(e) => setSectionKey(e.target.value)}>
@@ -112,8 +112,8 @@ export function FeedbackForm({
       )}
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={`${id}-text`} className="text-[13px] text-text-soft">
-          Feedback <span className="text-text-muted">(required)</span>
+        <label htmlFor={`${id}-text`} className="text-[13px] font-semibold text-ink-2">
+          Feedback <span className="font-normal">(required)</span>
         </label>
         <Textarea
           id={`${id}-text`}
@@ -125,14 +125,14 @@ export function FeedbackForm({
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <span id={`${id}-help`} className={`text-[13px] ${error ? 'text-critical' : 'text-text-muted'}`}>
-          {error ?? 'Be specific. The astronaut reads this word for word and shows what it changed.'}
+        <span id={`${id}-help`} className={`text-[13px] ${error ? 'text-signal-ink' : 'text-ink-2'}`}>
+          {error ?? 'Be specific. The agent reads this word for word and shows what it changed.'}
         </span>
       </div>
 
       <div className="flex flex-wrap justify-end gap-2.5">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="submit" variant="primary" disabled={submitting}>
+        <Button type="submit" variant="primary" busy={submitting}>
           Send feedback
         </Button>
       </div>
