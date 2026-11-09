@@ -12,8 +12,8 @@ import { signIn, useMe } from '../data/session'
 import { COLUMN_ORDER } from '../data/types'
 import { columnLabels, columnPurposeLabels, labels } from '../labels/labels'
 
-// Email and password sign in against the API. GitHub, SSO, Forgot password and
-// Keep me signed in are UI only (docs/implementation/api-gaps.md).
+// Email and password sign in against the API. Continue with GitHub, Continue
+// with SSO, Forgot password and Keep me signed in do nothing yet.
 export function LoginPage() {
   const { data: me } = useMe()
   const client = useQueryClient()

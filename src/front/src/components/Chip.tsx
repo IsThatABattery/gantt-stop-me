@@ -8,28 +8,11 @@ import { Icon, type IconName } from './Icon'
  * signal: a person is needed, because something failed or needs attention.
  * approve: waiting for a person's approval.
  * good: success, a gray block whose icon carries the colour.
- *
- * ion, astronaut, warning and critical are the old names, kept so older call sites compile:
- * ion and astronaut draw as live, warning as approve, critical as signal.
  */
-export type Tone = 'neutral' | 'live' | 'signal' | 'approve' | 'good' | 'ion' | 'astronaut' | 'warning' | 'critical'
-
-type Look = 'neutral' | 'live' | 'signal' | 'approve' | 'good'
-
-const lookOf: Record<Tone, Look> = {
-  neutral: 'neutral',
-  live: 'live',
-  signal: 'signal',
-  approve: 'approve',
-  good: 'good',
-  ion: 'live',
-  astronaut: 'live',
-  warning: 'approve',
-  critical: 'signal',
-}
+export type Tone = 'neutral' | 'live' | 'signal' | 'approve' | 'good'
 
 /** Solid fills: the board's chips. Text on each fill is its on- colour, checked for contrast in every theme. */
-const solid: Record<Look, string> = {
+const solid: Record<Tone, string> = {
   neutral: 'border-transparent bg-block text-ink',
   live: 'border-transparent bg-accent text-on-accent',
   signal: 'border-transparent bg-signal text-on-signal',
@@ -38,7 +21,7 @@ const solid: Record<Look, string> = {
 }
 
 /** Soft: quieter, for chips that sit beside a louder one or in running text. */
-const soft: Record<Look, string> = {
+const soft: Record<Tone, string> = {
   neutral: 'bg-transparent text-ink-2 border-line',
   live: 'bg-transparent text-accent border-accent',
   signal: 'border-transparent bg-signal-wash text-signal-ink',
@@ -56,20 +39,19 @@ interface ChipProps {
   iconClassName?: string
   /** A quieter look: an outline, or a wash for signal and approve */
   soft?: boolean
-  /** Kept for older call sites. Both are 2px-radius blocks now; tag is for counts and labels, at normal weight. */
+  /** Both are 2px-radius blocks; tag is for counts and labels, at medium weight. */
   shape?: 'pill' | 'tag'
   className?: string
 }
 
 /** A small 24px block: an icon slot and a word, filled by tone. */
 export function Chip({ tone, children, icon, iconClassName, soft: quiet = false, shape = 'pill', className = '' }: ChipProps) {
-  const look = lookOf[tone]
   return (
     <span
       className={cx(
         `inline-flex h-6 max-w-full items-center gap-[5px] rounded-[2px] border px-2 text-xs leading-none whitespace-nowrap ${
           shape === 'tag' ? 'font-medium' : 'font-semibold'
-        } ${(quiet ? soft : solid)[look]}`,
+        } ${(quiet ? soft : solid)[tone]}`,
         className,
       )}
     >

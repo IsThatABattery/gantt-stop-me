@@ -1,5 +1,5 @@
 // Who is signed in. The API keeps the session in an HttpOnly cookie that
-// scripts can't read, so GET /api/me is the only way to know (docs/accounts.md).
+// scripts can't read, so GET /api/me is the only way to know (docs/api/accounts.md).
 
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -9,7 +9,7 @@ import { ApiError } from './errors'
 import { keys } from './keys'
 
 /** The signed-in user, or null when signed out. */
-export async function getMe(): Promise<Me | null> {
+async function getMe(): Promise<Me | null> {
   try {
     return await api<Me>('GET', '/me')
   } catch (e) {

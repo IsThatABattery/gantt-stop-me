@@ -3,7 +3,7 @@ import { AutomationPage } from '../pages/automation'
 import { HangarPage } from '../pages/hangar/HangarPage'
 import { PlanPage, PlansPage } from '../pages/plans'
 import { BoardPage } from '../pages/board/BoardPage'
-import { NewTaskDialog, TaskEditPage } from '../pages/forms'
+import { NewTaskDialog, TaskEditPage } from '../pages/forms/TaskForm'
 import { LoginPage } from '../pages/LoginPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { AddProjectPage } from '../pages/projects/AddProjectPage'
@@ -15,10 +15,7 @@ import { AppShell } from './AppShell'
 import { ProjectLayout } from './ProjectLayout'
 import { RequireSession } from './RequireSession'
 
-// Every route in the app. Only screens the API supports are routed. The
-// mock-data screens (project list, objectives, agents, activity, planner,
-// backlog, sprints, retro) keep their files but aren't reachable until their
-// API exists; see docs/implementation/api-gaps.md.
+// Every route in the app.
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
@@ -56,7 +53,7 @@ export const routes: RouteObject[] = [
           { path: 'tasks/:taskId/edit', element: <TaskEditPage /> },
           { path: 'automation', element: <AutomationPage /> },
           {
-            // The Hangar tab: a list of the Hangar column; the drawer opens over it
+            // The Backlog tab: a list of the Backlog column; the drawer opens over it
             path: 'backlog',
             element: <HangarPage />,
             children: [

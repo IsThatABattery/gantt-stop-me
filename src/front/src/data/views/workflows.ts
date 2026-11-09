@@ -1,4 +1,4 @@
-// A project's workflows file, .gantt/workflows.yml on the default branch (docs/automation.md).
+// A project's workflows file, .gantt/workflows.yml on the default branch (docs/api/automation.md).
 
 import { useQuery } from '@tanstack/react-query'
 import { api, useApiMutation } from '../api/client'

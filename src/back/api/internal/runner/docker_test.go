@@ -22,7 +22,7 @@ func hostileSpec() Spec {
 	}
 }
 
-// fixedFlags are the Run flags table for execution 7 of a runner with prefix gantt.
+// fixedFlags are the fixed run flags, which no spec can change, of execution 7 of a runner with prefix gantt.
 var fixedFlags = []string{
 	"--network=gantt-x7",
 	"--security-opt=no-new-privileges",

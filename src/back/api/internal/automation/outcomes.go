@@ -31,12 +31,13 @@ func (a *Automation) finishAll(ctx context.Context) {
 }
 
 // finish ends test run runID: with reason, a runner error for the whole run, or else once it is over, by its test
-// results as Outcomes says. It applies the outcome to the task under the project's lock, as ordinary moves with the
-// owner's credential, unless someone moved the task out of Testing meanwhile: a test failure moves it to In Progress,
-// a runner error leaves it in Testing with needs_attention set to the first error's reason, and a pass moves it to
-// User Check. A test failure also turns its pull request back into a draft, wherever the task is, since the pull
-// request is still ready with failing tests. A run already finished, or not over, stays as it is. While the owner is
-// paused, or GitHub fails the move for now, it returns an error and the next pass tries again.
+// results as Outcomes in docs/api/automation.md says. It applies the outcome to the task under the project's lock,
+// as ordinary moves with the owner's credential, unless someone moved the task out of Testing meanwhile: a test
+// failure moves it to In Progress, a runner error leaves it in Testing with needs_attention set to the first error's
+// reason, and a pass moves it to User Check. A test failure also turns its pull request back into a draft, wherever
+// the task is, since the pull request is still ready with failing tests. A run already finished, or not over, stays
+// as it is. While the owner is paused, or GitHub fails the move for now, it returns an error and the next pass tries
+// again.
 func (a *Automation) finish(ctx context.Context, runID int64, reason string) error {
 	var p projects.Project
 	var taskID int64

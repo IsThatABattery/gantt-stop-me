@@ -11,8 +11,9 @@ services:
       - front-node-modules:/workspaces/gantt-stop-me/src/front/node_modules
     environment:
       DATABASE_URL: postgres://gantt:gantt@db:5432/gantt?sslmode=disable
-      # The browser opens Vite on :5173, which proxies /api, so writes arrive with that Origin.
-      PUBLIC_URL: http://localhost:5173
+      # The browser opens Vite on :5173, but Vite's proxy sends /api writes with Origin http://localhost:8080
+      # (src/front/vite.config.ts), so that is the origin the API must allow.
+      PUBLIC_URL: http://localhost:8080
       ENCRYPTION_KEY: rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=
       # The Runner entry listens here, and the API entry reaches it with the same dev token.
       RUNNER_URL: http://localhost:8081

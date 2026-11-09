@@ -5,7 +5,7 @@
 const DURATION_MS = 420
 const WEIGHT_PX = 2
 
-export function prefersReducedMotion() {
+function prefersReducedMotion() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 

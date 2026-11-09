@@ -1,4 +1,4 @@
-// A task's test runs, approve and merge, and request changes (docs/automation.md).
+// A task's test runs, approve and merge, and request changes (docs/api/automation.md).
 
 import { useQuery } from '@tanstack/react-query'
 import { api, useApiMutation } from '../api/client'

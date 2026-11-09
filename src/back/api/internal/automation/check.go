@@ -48,7 +48,7 @@ var (
 // statuses are the test results of report's outcomes.
 var statuses = map[string]string{"pass": "passed", "fail": "failed", "unverifiable": "manual"}
 
-// check runs LLM check r of execution e, as LLM checks in AUTOMATION.md says: a tool-calling loop over the owner's
+// check runs LLM check r of execution e, per LLM checks in docs/api/automation.md: a tool-calling loop over the owner's
 // chat model, with run_command, http_request when the app or a sidecar runs, the browser's tools when the app runs,
 // and report, until the model reports. The result keeps the reason, the transcript and, when the check used the
 // browser, a screenshot taken after the report and a recording of the browser from its first browser tool call to the

@@ -1,30 +1,33 @@
-# API
+# Docs
 
-Every endpoint is under `/api` and speaks JSON. One file per feature documents its endpoints.
+Every doc in the repository, and what it covers.
 
-## Conventions
+## Start here
 
-| Rule | Detail |
-| --- | --- |
-| Session | Endpoints that list the `session` cookie as input answer `401 unauthorized` without a valid one. Sign up and log in set it. |
-| Origin | `POST`, `PUT`, `PATCH` and `DELETE` need an `Origin` header equal to `PUBLIC_URL`, else `403 bad_origin`. The one exception is `POST /api/github/webhook/{projectID}`, which checks GitHub's signature instead. |
-| Errors | `{"error": {"code": "email_taken", "message": "An account with this email already exists."}}`. Output tables list the `code`. |
-| Bad body | A body that is not valid JSON, or over 1 MiB, answers `400 bad_request`. |
-| Unknown route | `404 not_found`. A known path with the wrong method answers `405 method_not_allowed` with an `Allow` header. |
-| Failure | `500 internal`. |
+- [README.md](../README.md): running the app, the dev container, tests, configuration, the repository layout and troubleshooting.
+- [AGENTS.md](../AGENTS.md): working notes for AI coding agents: starting the stack, the dev container, tests, the API-docs rule and where design files go.
 
-## Health
+## System
 
-Reports that the API is serving.
+- [architecture.md](architecture.md): how the frontend, API, runner and database fit together.
+- [glossary.md](glossary.md): the app's terms.
+- [gaps.md](gaps.md): features not built yet.
 
-`GET /api/health`
+## API
 
-**Input**
+One file per feature, each endpoint with its name, one sentence, method and path, input table and output table. Change an endpoint and its doc in the same commit.
 
-None.
+- [api/README.md](api/README.md): conventions every endpoint shares (session, origin, errors), health, and an index of the files below.
+- [api/accounts.md](api/accounts.md): sign up, log in and out, the current user, display name and password.
+- [api/github.md](api/github.md): link a GitHub account with OAuth or a personal access token, and unlink it.
+- [api/providers.md](api/providers.md): the user's LLM providers, their keys and chosen models.
+- [api/board.md](api/board.md): projects, the board, tasks, their tests, assignees and moves.
+- [api/planning.md](api/planning.md): planning settings, and plans from interview to proposed tasks.
+- [api/automation.md](api/automation.md): automation, workflows, the webhook, test runs, approve and merge, request changes, taking a task over, and the formats they read.
 
-**Output**
+## Frontend
 
-| Status | Body |
-| --- | --- |
-| `200` | `ok` (plain text) |
+- [src/front/README.md](../src/front/README.md): the frontend guide: running it, data hooks, tests, layout, themes and routes.
+- [src/front/PRODUCT.md](../src/front/PRODUCT.md): product context for design work: users, purpose, positioning and principles.
+- [src/front/DESIGN.md](../src/front/DESIGN.md): the design system: colors, type, layout, shapes and components.
+- [src/front/.impeccable/surfaces/](../src/front/.impeccable/surfaces/): impeccable's surface briefs, each the design brief for a screen and the surfaces it reaches.

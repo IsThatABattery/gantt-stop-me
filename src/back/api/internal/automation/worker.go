@@ -86,11 +86,12 @@ func (a *Automation) claimAll(ctx context.Context, drives *sync.WaitGroup) {
 	}
 }
 
-// claim takes the next queued workflow execution the queue allows, as Queue and restarts says: in id order across the
-// install, while fewer than MaxConcurrentWorkflows run, never beside a running one of the same project and workflow,
-// and never for a paused project, skipping those in skip. It marks the execution and its run running and counts the
-// attempt. It returns nil when the queue allows none. An execution of a run that ended, or whose row a cancel holds,
-// is not claimed: the run is locked with the execution, so a claim never waits on a cancel that waits on it.
+// claim takes the next queued workflow execution the queue allows, as Queue and restarts in docs/api/automation.md
+// says: in id order across the install, while fewer than MaxConcurrentWorkflows run, never beside a running one of
+// the same project and workflow, and never for a paused project, skipping those in skip. It marks the execution and
+// its run running and counts the attempt. It returns nil when the queue allows none. An execution of a run that
+// ended, or whose row a cancel holds, is not claimed: the run is locked with the execution, so a claim never waits
+// on a cancel that waits on it.
 func (a *Automation) claim(ctx context.Context, skip []int64) (*execution, error) {
 	e := &execution{claimed: time.Now()}
 	var spec []byte

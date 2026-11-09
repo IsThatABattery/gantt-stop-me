@@ -7,10 +7,8 @@ interface TileProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
   step?: number
   /** The ink tab on top, usually an InkTab. The content goes below it, inside the keyline frame. */
   tab?: ReactNode
-  /** The inset light keyline around the content, as in the process-flow reference; on by default */
-  frame?: boolean
   as?: ElementType
-  /** Classes for the frame (or the content area without one) */
+  /** Classes for the frame */
   frameClassName?: string
   children?: ReactNode
 }
@@ -21,11 +19,11 @@ interface TileProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
  *
  *   <Tile step={tileStep(i, n)} tab={<InkTab count={4}>Testing</InkTab>}>…cards…</Tile>
  */
-export function Tile({ step = 0, tab, frame = true, as: As = 'div', className = '', frameClassName = '', style, children, ...rest }: TileProps) {
+export function Tile({ step = 0, tab, as: As = 'div', className = '', frameClassName = '', style, children, ...rest }: TileProps) {
   return (
     <As className={cx('tile flex min-w-0 flex-col gap-1.5 rounded-card p-1.5', className)} style={{ '--tile-step': step, ...style } as CSSProperties} {...rest}>
       {tab}
-      <div className={cx(`flex min-h-0 flex-1 flex-col rounded-[3px] ${frame ? 'border border-tile-keyline p-2' : ''}`, frameClassName)}>{children}</div>
+      <div className={cx('flex min-h-0 flex-1 flex-col rounded-[3px] border border-tile-keyline p-2', frameClassName)}>{children}</div>
     </As>
   )
 }

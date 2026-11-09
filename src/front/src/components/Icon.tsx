@@ -6,51 +6,6 @@ import type { ReactNode, SVGProps } from 'react'
 const checkPath = <path d="M5 12.5l4.5 4.5L19 7.5" />
 const crossPath = <path d="M6 6l12 12M18 6L6 18" />
 
-const backlog = (
-  <>
-    <path d="M3 13.5h5.5l1.5 3h4l1.5-3H21" />
-    <path d="M5.5 4.5h13L21 13.5v6H3v-6z" />
-  </>
-)
-const plan = (
-  <>
-    <path d="M5.5 3h9l4 4v14h-13z" />
-    <path d="M14.5 3v4h4M9 12h6M9 16h4" />
-  </>
-)
-const automation = <path d="M13.5 2.5L4.5 14h6.5l-1 7.5 9-11.5h-6.5z" />
-/** A packet on the move: tests running. The caller animates the whole mark (runLook). */
-const running = (
-  <>
-    <path d="M2.5 9.5h5M4.5 14.5h3" />
-    <rect x="10" y="7" width="10" height="10" fill="currentColor" stroke="none" />
-  </>
-)
-const queued = (
-  <>
-    <circle cx="12" cy="12" r="8.5" />
-    <path d="M12 7.5v5l3 2" />
-  </>
-)
-const alert = (
-  <>
-    <path d="M12 3.5l9.5 17h-19z" />
-    <path d="M12 10v4.5M12 17v1" />
-  </>
-)
-const person = (
-  <>
-    <path d="M9 3.5h6v6H9z" />
-    <path d="M4 20.5c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" />
-  </>
-)
-const agent = (
-  <>
-    <path d="M4.5 8h15v12h-15z" />
-    <path d="M12 3.5V8M9.5 12.5v2M14.5 12.5v2M2 13v3M22 13v3" />
-  </>
-)
-
 const paths = {
   back: <path d="M15 5l-7 7 7 7" />,
   chevronDown: <path d="M6 9.5l6 6 6-6" />,
@@ -66,11 +21,32 @@ const paths = {
   projects: <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />,
   /** Stepped columns: the board */
   board: <path d="M3 4h5v16H3zM10 4h5v11h-5zM17 4h4v7h-4z" />,
-  backlog,
-  plan,
-  automation,
-  running,
-  queued,
+  backlog: (
+    <>
+      <path d="M3 13.5h5.5l1.5 3h4l1.5-3H21" />
+      <path d="M5.5 4.5h13L21 13.5v6H3v-6z" />
+    </>
+  ),
+  plan: (
+    <>
+      <path d="M5.5 3h9l4 4v14h-13z" />
+      <path d="M14.5 3v4h4M9 12h6M9 16h4" />
+    </>
+  ),
+  automation: <path d="M13.5 2.5L4.5 14h6.5l-1 7.5 9-11.5h-6.5z" />,
+  /** A packet on the move: tests running. The caller animates the whole mark (runLook). */
+  running: (
+    <>
+      <path d="M2.5 9.5h5M4.5 14.5h3" />
+      <rect x="10" y="7" width="10" height="10" fill="currentColor" stroke="none" />
+    </>
+  ),
+  queued: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5v5l3 2" />
+    </>
+  ),
   /** Tests passed, done, chosen */
   check: checkPath,
   passed: checkPath,
@@ -84,7 +60,12 @@ const paths = {
     </>
   ),
   /** Needs attention */
-  alert,
+  alert: (
+    <>
+      <path d="M12 3.5l9.5 17h-19z" />
+      <path d="M12 10v4.5M12 17v1" />
+    </>
+  ),
   closed: (
     <>
       <path d="M4 4h16v16H4z" />
@@ -100,15 +81,18 @@ const paths = {
     </>
   ),
   /** A person checks: awaiting approval, User Check */
-  person,
-  agent,
-  log: (
+  person: (
     <>
-      <path d="M5 4h14v16H5z" />
-      <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
+      <path d="M9 3.5h6v6H9z" />
+      <path d="M4 20.5c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" />
     </>
   ),
-  debrief: <path d="M4 20h16M7 16.5V10M12 16.5V5M17 16.5V12" />,
+  agent: (
+    <>
+      <path d="M4.5 8h15v12h-15z" />
+      <path d="M12 3.5V8M9.5 12.5v2M14.5 12.5v2M2 13v3M22 13v3" />
+    </>
+  ),
   /** Two sliders, as in the process-flow rail */
   settings: (
     <>
@@ -155,23 +139,6 @@ const paths = {
     </>
   ),
 
-  // Names from the space-mission vocabulary, kept so older call sites compile. Each draws its plain icon.
-  /** @deprecated use backlog */
-  hangar: backlog,
-  /** @deprecated use plan */
-  target: plan,
-  /** @deprecated use automation */
-  orbit: automation,
-  /** @deprecated use running */
-  liftoff: running,
-  /** @deprecated use running */
-  rocket: running,
-  /** @deprecated use queued */
-  launchpad: queued,
-  /** @deprecated use agent */
-  helmet: agent,
-  /** @deprecated use person */
-  dock: person,
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof paths

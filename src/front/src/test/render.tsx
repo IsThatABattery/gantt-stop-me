@@ -1,6 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
-import type { ReactElement } from 'react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { routes } from '../app/router'
@@ -23,12 +22,3 @@ export function renderApp(path: string, { signedIn = true } = {}) {
   return { ...utils, router, client }
 }
 
-/** Render one component with the query client and a router around it. */
-export function renderWithProviders(ui: ReactElement, { path = '/' } = {}) {
-  const router = createMemoryRouter([{ path: '*', element: ui }], { initialEntries: [path] })
-  return render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
-  )
-}

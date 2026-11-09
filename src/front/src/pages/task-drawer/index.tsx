@@ -19,9 +19,7 @@ import { DrawerHeader, DrawerTab } from './DrawerHeader'
 import { useTestCount } from './state'
 import { TestRuns } from './TestRuns'
 
-// The task drawer over the board, showing the GitHub issue as the API last read it. The mockup's subtasks, log,
-// files, trace and agent approval bar (TaskTabs, Trace, ApprovalBar) wait on data the API doesn't have yet
-// (docs/implementation/api-gaps.md).
+// The task drawer, over the board or the Backlog list, showing the GitHub issue as the API last read it.
 export function TaskDrawerPage() {
   const { projectId = '', taskId = '' } = useParams()
   // One drawer per task, so an approval's confirmation or failure never carries over to the next task opened.

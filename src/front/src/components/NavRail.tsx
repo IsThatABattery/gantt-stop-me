@@ -262,7 +262,7 @@ export function NavRail({ projectId }: { projectId?: string }) {
             stay in view however long the lists above run. */}
         <div className="mt-auto flex flex-col gap-1 border-t border-rule bg-rail pt-3 md:sticky md:bottom-0 md:z-10 md:pb-3.5">
           <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} />
-          <UserMenu placement="above" showEmail />
+          <UserMenu />
         </div>
       </div>
     </nav>

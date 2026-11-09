@@ -18,11 +18,9 @@ func (f *fixture) requestChanges(session *http.Cookie, feedback string) *apptest
 
 // shownTask is a task as Get task answers it, with what these tests check.
 type shownTask struct {
-	ID, ColumnID int64
+	ID           int64
 	PullRequests []struct {
 		Number int
-		State  string
-		Draft  bool
 	}
 	Assignees   []struct{ Login string }
 	TakenOverBy *struct {

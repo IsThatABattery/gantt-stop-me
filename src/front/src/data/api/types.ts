@@ -1,6 +1,5 @@
-// What the Go API sends, field for field (docs/accounts.md, github.md,
-// board.md, providers.md). Ids are numbers. The mock-only screens still use
-// the richer types in ../types.ts.
+// What the Go API sends, field for field (docs/api/accounts.md, github.md,
+// board.md, providers.md). Ids are numbers.
 
 import type { ColumnKey } from '../types'
 
@@ -73,7 +72,7 @@ export interface GitHubUser {
   avatarUrl: string
 }
 
-export interface Label {
+interface Label {
   name: string
   /** Hex without the #, as GitHub gives it */
   color: string
@@ -116,7 +115,7 @@ export interface ProviderWithModels extends Provider {
   availableModels: string[]
 }
 
-/** One LLM agent's model and the user's own instructions (docs/planning.md, automation.md). */
+/** One LLM agent's model and the user's own instructions (docs/api/planning.md, automation.md). */
 export interface AgentSettings {
   /** Both null for no model */
   providerId: number | null
