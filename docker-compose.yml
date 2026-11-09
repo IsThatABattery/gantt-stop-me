@@ -78,6 +78,18 @@ services:
       test-db:
         condition: service_healthy
 
+  # Runs the frontend tests, or any npm command: docker compose run --rm web-test [npm ...]
+  web-test:
+    profiles: [test]
+    image: node:26-alpine     # as src/front/Dockerfile
+    working_dir: /src
+    volumes:
+      - ./src/front:/src
+      - web-node-modules:/src/node_modules
+    # Installs into the volume first, so the host needs no node_modules. --no-package-lock: the repo keeps none.
+    entrypoint: ["sh", "-c", "npm install --no-audit --no-fund --no-package-lock --loglevel=error && exec \"$$@\"", "--"]
+    command: ["npm", "test"]
+
   # Runner tests against real Docker: docker compose --profile test run --rm runner-test
   runner-test:
     profiles: [test]
@@ -109,3 +121,4 @@ services:
 volumes:
   db-data:
   go-cache:
+  web-node-modules:
