@@ -3,12 +3,14 @@ import type { InputHTMLAttributes, ReactNode } from 'react'
 interface RadioCardProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label: ReactNode
   description?: ReactNode
+  /** Shown above the label, e.g. a theme's preview */
+  preview?: ReactNode
   /** astronaut (violet) for autonomy choices, ion otherwise */
   tone?: 'ion' | 'astronaut'
 }
 
 /** A radio button laid out as a card, from the Settings and feedback mockups. */
-export function RadioCard({ label, description, tone = 'ion', checked, className = '', ...rest }: RadioCardProps) {
+export function RadioCard({ label, description, preview, tone = 'ion', checked, className = '', ...rest }: RadioCardProps) {
   const on = tone === 'astronaut' ? 'border-astronaut bg-astronaut/10' : 'border-ion bg-ion/8'
   return (
     <label
@@ -16,6 +18,7 @@ export function RadioCard({ label, description, tone = 'ion', checked, className
         checked ? on : 'border-line'
       } ${className}`}
     >
+      {preview}
       <span className="flex items-center gap-2 font-semibold">
         <input type="radio" checked={checked} className={`size-4 ${tone === 'astronaut' ? 'accent-astronaut' : 'accent-ion'}`} {...rest} />
         {label}

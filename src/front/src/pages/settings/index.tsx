@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router'
 import { StatusMessage } from '../../components/StatusMessage'
 import { useMe } from '../../data/session'
 import { labels, settingsLabels } from '../../labels/labels'
+import { AppearanceSection } from './AppearanceSection'
 import { GitHubSection } from './GitHubSection'
 import { PasswordForm } from './PasswordForm'
 import { PlanningSection } from './PlanningSection'
@@ -11,7 +12,7 @@ import { Section } from './Section'
 import { sectionIds, sectionNav } from './sections'
 
 // Settings, from Settings.dc.html, with the sections the API supports: the
-// account, the GitHub link, LLM providers and the planning agents. Each section saves on its own.
+// account, the GitHub link, LLM providers and the planning agents, plus this browser's theme. Each section saves on its own.
 export function SettingsPage() {
   const { data: me } = useMe()
   const { hash } = useLocation()
@@ -54,6 +55,7 @@ export function SettingsPage() {
               </p>
               <PasswordForm />
             </Section>
+            <AppearanceSection />
             <GitHubSection me={me} />
             <ProvidersSection />
             <PlanningSection />

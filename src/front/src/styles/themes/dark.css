@@ -1,0 +1,32 @@
+/* Dark: a standard dark theme. Neutral grays, a blue accent, no starfield. */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --background: #111214;
+  --surface: #1a1b1e;
+  --surface-sunken: #151618;
+  --rail: rgba(17, 18, 20, 0.85);
+  --header: rgba(17, 18, 20, 0.7);
+  --nav-active: #27292d;
+
+  --line: #2e3035;
+  --line-soft: #24262a;
+  --line-strong: #41444b;
+
+  --text: #ececee;
+  --text-soft: #c9cbd0;
+  --text-muted: #9a9ca5;
+  --text-muted-strong: #afb1b9;
+
+  --ion: #60a5fa;
+  --ion-hover: #93c5fd;
+  --on-ion: #0b1a33;
+  --astronaut: #a78bfa;
+  --astronaut-text: #c4b5fd;
+
+  --good: #4ade80;
+  --warning: #fbbf24;
+  --critical: #f87171;
+
+  --stars: none;
+}

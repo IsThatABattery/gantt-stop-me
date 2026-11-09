@@ -71,8 +71,9 @@ Pages:
 1. **Sign up and sign in.** Email and password. No two-factor authentication.
 2. **Add project.** One field for a GitHub repository URL. Submitting it adds the project and opens its board. If the user has not linked GitHub yet, the page sends them to Settings first.
 3. **Board.** Five columns in a fixed order, cards ordered by position. Cards drag between columns and reorder within a column. Opening a card shows its issue title, body, labels and a link to GitHub. A "New task" form creates an issue. Each board has its own URL, `/projects/{id}`, so it can be bookmarked.
-4. **Settings.** Two sections.
+4. **Settings.** Three sections.
    - **Account.** Link a GitHub account with OAuth, or add a GitHub personal access token instead. Shows which GitHub login is linked, and allows unlinking. Also changes the user's password.
+   - **Appearance.** Picks the color theme. It applies at once and is saved in the browser, not the account.
    - **LLM providers.** See [Provider settings](#provider-settings).
 
 There is no list of projects yet. Entering the URL of a repository that is already a project opens its existing board.

@@ -32,7 +32,7 @@ export function UserAvatar({ user, size = 'md', stacked }: UserAvatarProps) {
 /** 1, 2 or 3 orbit rings for Tethered, Guided, Free flight. */
 export function AutonomyRings({ level, size = 14 }: { level: Autonomy; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="var(--color-astronaut)" strokeWidth="1.2" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="var(--astronaut)" strokeWidth="1.2" aria-hidden="true">
       {[0, 1, 2].slice(0, level + 1).map((i) => (
         <ellipse key={i} cx="8" cy="8" rx={3 + i * 2.2} ry={1.4 + i * 1.1} transform="rotate(-25 8 8)" />
       ))}

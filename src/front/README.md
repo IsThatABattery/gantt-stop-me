@@ -14,6 +14,8 @@ npm run lint
 npm test         # Vitest + Testing Library against a fake API (npm run test:watch to keep it running)
 ```
 
+From the repo root, `docker compose run --rm web-test` runs the tests in Docker, and `docker compose run --rm web-test npm run lint` runs the linter, so the host needs no Node.
+
 `npm run dev` needs the API on `localhost:8080`: the compose stack (`docker compose up --build` from the repo root) or the dev container's **API** launch entry. The Vite proxy presents the API's own origin, so saves pass its `Origin` check.
 
 In Docker, `docker compose up --build web` serves the production build at http://localhost:8080, with nginx proxying `/api`.
@@ -52,7 +54,9 @@ Tests for the hidden screens are `describe.skip`ped with a pointer to `api-gaps.
 
 | Path | What |
 | --- | --- |
-| `src/styles/index.css` | Tailwind theme tokens from `design/tokens.json`, starfield, reduced motion |
+| `src/styles/index.css` | Tailwind setup: the theme contract, fonts, radii, starfield, reduced motion |
+| `src/styles/themes/` | One stylesheet per color theme (see [Themes](#themes)) |
+| `src/theme/` | The list of themes, and `useTheme()` to read and set the one in use |
 | `src/labels/labels.ts` | Every space display label. Code uses plain names (Project, Task, Agent…) |
 | `src/data/` | See [Data](#data) |
 | `src/components/` | Shared pieces: nav rail, user menu, chips, avatars, form controls, drawer, dialog, tabs, and more |
@@ -60,13 +64,31 @@ Tests for the hidden screens are `describe.skip`ped with a pointer to `api-gaps.
 | `src/pages/` | One folder per view, plus login, sign-up and not-found |
 | `src/test/` | Test setup, the fake API and render helpers (`renderApp`, `renderWithProviders`) |
 
+## Themes
+
+Settings → Appearance picks the color theme: Space dark (the default, from `design/tokens.json`), Space light, Dark or Light. It applies at once and is saved in this browser under the `gsm.theme` key. `index.html` applies it before first paint.
+
+- **One stylesheet per theme.** `src/styles/themes/<id>.css` sets every theme variable (`--background`, `--surface`, `--ion`…), plus `--stars` (the starfield, or `none`) and `color-scheme`, for `[data-theme='<id>']`.
+- **One contract.** `src/styles/index.css` maps each Tailwind color onto a theme variable with `@theme inline`, so `bg-surface` reads `var(--surface)`. The comments there say what each one is for.
+- **Classes first.** Components use those classes. Where a class can't go, such as an SVG attribute, read the theme variable itself (`var(--ion)`), not Tailwind's `--color-*` name. Tailwind sets that only on `:root`, where it resolves once, so a `data-theme` lower down doesn't reach it.
+- **Scoped.** `data-theme` on any element themes just that subtree. The previews in Settings work this way.
+- **One list.** `themes` in `src/theme/themes.ts` names each theme for Settings.
+
+To add a theme:
+
+1. Copy a stylesheet in `src/styles/themes/` to `<id>.css`, change its selector to `[data-theme='<id>']` and set its colors.
+2. Import it in `src/styles/index.css` beside the others.
+3. Add `{ id, name, description }` to `themes` in `src/theme/themes.ts`.
+
+`src/theme/themes.test.ts` fails when a theme misses a variable or a step. `src/theme/contrast.test.ts` fails when its text, tints or focus ring fall below WCAG AA (4.5:1 for text, 3:1 for the ring) on the pairs the components use. To add a variable, set it in every theme and map it in `@theme inline`.
+
 ## Routes
 
 | Path | View |
 | --- | --- |
 | `/login`, `/signup` | Sign in, create an account |
 | `/` | Add a project by repository URL |
-| `/settings` | Settings: account, GitHub, LLM providers, planning agents |
+| `/settings` | Settings: account, appearance, GitHub, LLM providers, planning agents |
 | `/projects/:projectId` | Board |
 | `/projects/:projectId/tasks/:taskId` | Payload drawer over the board |
 | `/projects/:projectId/new/task` | New payload dialog over the board |

@@ -5,6 +5,7 @@ import { settingsLabels } from '../../labels/labels'
 // (docs/implementation/api-gaps.md).
 export const sectionIds = {
   account: 'account',
+  appearance: 'appearance',
   github: 'github',
   providers: 'providers',
   agents: 'agents',
@@ -12,6 +13,7 @@ export const sectionIds = {
 
 export const sectionNav = [
   { id: sectionIds.account, label: settingsLabels.account },
+  { id: sectionIds.appearance, label: settingsLabels.appearance },
   { id: sectionIds.github, label: settingsLabels.github },
   { id: sectionIds.providers, label: settingsLabels.providers },
   { id: sectionIds.agents, label: settingsLabels.agents },

@@ -1,0 +1,37 @@
+/* Space dark: the navy mission-control console over a starfield, from design/tokens.json.
+   The default: it also applies when the root has no data-theme, or one no theme knows. */
+:where(:root),
+[data-theme='space-dark'] {
+  color-scheme: dark;
+
+  --background: #070b16;
+  --surface: #0f1626;
+  --surface-sunken: #0b1120;
+  --rail: rgba(10, 15, 28, 0.85);
+  --header: rgba(10, 15, 28, 0.7);
+  --nav-active: #13203a;
+
+  --line: #24304a;
+  --line-soft: #1c2640;
+  --line-strong: #36456a;
+
+  --text: #e6ecf7;
+  --text-soft: #c2ccdd;
+  --text-muted: #9aa7bf;
+  --text-muted-strong: #aab6cc;
+
+  --ion: #3fd5e8;
+  --ion-hover: #8be9f4;
+  --on-ion: #062029;
+  --astronaut: #a78bfa;
+  --astronaut-text: #c4b5fd;
+
+  --good: #4ade80;
+  --warning: #fbbf24;
+  --critical: #f87171;
+
+  --stars:
+    radial-gradient(1px 1px at 20px 30px, rgba(230, 236, 247, 0.2) 50%, transparent 51%),
+    radial-gradient(1px 1px at 140px 90px, rgba(230, 236, 247, 0.14) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 260px 20px, rgba(230, 236, 247, 0.18) 50%, transparent 51%);
+}

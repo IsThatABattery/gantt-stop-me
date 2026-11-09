@@ -201,6 +201,9 @@ export const plannerLabels = {
 /** Settings section names (Settings.dc.html). */
 export const settingsLabels = {
   account: 'Account',
+  appearance: 'Appearance',
+  appearanceHelp: 'Applies right away, and is saved in this browser.',
+  theme: 'Theme',
   github: 'GitHub',
   providers: 'LLM providers',
   providersHelp: 'OpenAI-compatible endpoints your astronauts and test runs can use. Keys are stored encrypted and never shown again.',
