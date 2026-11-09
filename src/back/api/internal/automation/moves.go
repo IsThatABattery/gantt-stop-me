@@ -19,13 +19,13 @@ var (
 		Message: "A task enters User Check only once its latest test run passed on its pull request's current head."}
 )
 
-// Moving applies Moves while automated to a move of task taskID from column from to column to, in tx holding the
-// project's lock, while the project's automation is on. A person's move, byHand, out of Testing while the task's
-// latest test run is queued or running is refused with run_in_progress, and one into User Check with not_tested
-// unless that run passed on its pull request's head as the record has it now. A person's move into Testing starts a
-// test run for the task's linked pull request, whose author it checks on GitHub with token. Any move out of Testing
-// clears needs_attention. A task a member took over moves as the API's own moves do: no guard and no test run.
-// It implements board.Rules.
+// Moving applies Moves while automated, in docs/api/automation.md, to a move of task taskID from column from to column
+// to, in tx holding the project's lock, while the project's automation is on. A person's move, byHand, out of Testing
+// while the task's latest test run is queued or running is refused with run_in_progress, and one into User Check
+// with not_tested unless that run passed on its pull request's head as the record has it now. A person's move into
+// Testing starts a test run for the task's linked pull request, whose author it checks on GitHub with token. Any move
+// out of Testing clears needs_attention. A task a member took over moves as the API's own moves do: no guard and no
+// test run. It implements board.Rules.
 func (a *Automation) Moving(ctx context.Context, tx pgx.Tx, token string, p projects.Project, taskID int64, from, to string, byHand bool) error {
 	var on, takenOver bool
 	err := tx.QueryRow(ctx, `select exists (select from project_automation where project_id = $1),

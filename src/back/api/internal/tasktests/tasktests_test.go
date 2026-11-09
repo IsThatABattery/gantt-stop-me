@@ -10,7 +10,7 @@ import (
 	"gantt-stop-me/api/internal/tasktests"
 )
 
-// exampleTests is the example Tests section from AUTOMATION.md, verbatim.
+// exampleTests is the example under Tests section in docs/api/automation.md, verbatim.
 var exampleTests = strings.Join([]string{
 	"## Tests",
 	"- [ ] `go test ./internal/board -run Move`",

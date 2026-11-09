@@ -1,12 +1,12 @@
 // Add a GitHub repository as a project, or find the one added before
-// (POST /api/projects, docs/board.md).
+// (POST /api/projects, docs/api/board.md).
 
 import { useQuery } from '@tanstack/react-query'
 import { api, useApiMutation } from '../api/client'
 import type { Project } from '../api/types'
 import { keys } from '../keys'
 
-export const addProject = (url: string) => api<Project>('POST', '/projects', { url })
+const addProject = (url: string) => api<Project>('POST', '/projects', { url })
 
 export const useAddProject = () => useApiMutation(addProject, [keys.projects])
 

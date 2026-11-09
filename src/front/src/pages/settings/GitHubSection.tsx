@@ -21,7 +21,7 @@ const returnNotes = {
 } as const
 
 // Link one GitHub account, with OAuth or a personal access token, or unlink
-// it (docs/github.md). Every project needs it: the board reads and writes the
+// it (docs/api/github.md). Every project needs it: the board reads and writes the
 // repository's issues with this credential.
 export function GitHubSection({ me }: { me: Me }) {
   // Linking and unlinking refetch the user; if that fails, what shows here is out of date.

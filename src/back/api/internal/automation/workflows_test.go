@@ -12,7 +12,7 @@ import (
 	"gantt-stop-me/api/internal/automation"
 )
 
-// exampleWorkflows is this repository's own workflows file, verbatim from AUTOMATION.md.
+// exampleWorkflows is the example under Workflows file in docs/api/automation.md, verbatim.
 const exampleWorkflows = `workflows:
   backend:
     description: Go API, endpoints, database

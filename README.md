@@ -1,6 +1,6 @@
 # GanttStopMe
 
-A mission-control scrum board for GitHub repositories, where your team and AI agents work the backlog. Agents are put on tasks to test and review developers' code, reporting what they do back to the user. Testing and review processes are containerized to isolate agents' work and ensure system safety.
+A Kanban board for GitHub repositories, where your team and AI agents work the backlog. Every task is a GitHub issue. Agents plan features into tasks and test each task's pull request in isolated containers. They report what they find, and a person approves and merges with the results in hand.
 
 ## Contents
 
@@ -20,7 +20,7 @@ A mission-control scrum board for GitHub repositories, where your team and AI ag
 - **Git.**
 - For the dev container: **VS Code** with the **Dev Containers** extension.
 
-You don't need Go, Node or PostgreSQL on your machine. Everything builds and runs in docker containers.
+You don't need Go, Node or PostgreSQL on your machine. Everything builds and runs in Docker containers.
 
 > **Windows tip:** clone the repo inside your WSL filesystem (for example `~/code/gantt-stop-me`), not under `C:\`. Builds are much faster there.
 
@@ -54,27 +54,27 @@ The day-to-day setup, with hot reload and debuggers.
 
 1. Open the repo in VS Code and run **Dev Containers: Reopen in Container**.
 2. Wait for the first build. It installs Go, Node and the frontend dependencies.
-3. Open **Run and Debug** and start **Full stack**.
+3. Open **Run and Debug** and start **Full stack**. To run tests on pull requests, start **Runner** as well.
 4. Open **http://localhost:5173**.
 
-The dev container uses its own Compose project, `gantt-stop-me-dev`, so its containers and data stay separate from the stack in [Run the app with Docker](#run-the-app-with-docker).
+The dev container uses its own Compose project, `gantt-stop-me-dev`, so its containers and data stay separate from the stack in [Run the app with Docker](#run-the-app-with-docker). Its settings are in `.devcontainer/docker-compose.yml`, not `.env`.
 
 Run and Debug entries:
 
 | Entry | What it starts |
 | --- | --- |
 | **Full stack** | DB, API and Web together. Stopping one stops all. Start here. |
-| **DB** | The Postgres container, tailing its logs. |
+| **DB** | The Postgres container, tailing its logs. Stopping it stops the container. |
 | **API** | The Go API under the Delve debugger on :8080. Starts the DB first. |
+| **Runner** | The test runner under Delve on :8081, using the host's Docker, with prefix `gantt-dev`. Full stack doesn't start it. |
 | **Web** | Vite on :5173 with hot reload, forwarding `/api` to :8080. Opens your browser. |
 | **Web (Chrome debug)** | As Web, with Chrome attached for breakpoints. Needs Chrome on the host. |
-| **Runner** | The test runner under Delve on :8081, using the host's Docker. |
 
 > **After pulling changes to `.devcontainer/`**, run **Dev Containers: Rebuild Container**. A running container never picks up new settings, and a stale one can stop the API from starting (see [Troubleshooting](#troubleshooting)).
 
 ## Frontend only
 
-To work on the UI with hot reload, run Vite on its own. Its screens call the API through `/api`, which Vite proxies to the API on :8080, so keep the API running (`docker compose up db api runner`).
+To work on the UI with hot reload outside the dev container, run Vite on your machine. This one needs Node. Its screens call the API through `/api`, which Vite proxies to `localhost:8080`, so keep the Docker stack running too (`docker compose up --build`): nginx on :8080 forwards `/api` to the API.
 
 ```sh
 cd src/front
@@ -85,11 +85,13 @@ npm run dev      # http://localhost:5173, hot reload
 | Command | Does |
 | --- | --- |
 | `npm run dev` | Dev server with hot reload, proxying `/api` to :8080 |
-| `npm test` | Vitest and Testing Library (`npm run test:watch` to keep it running) |
+| `npm test` | Vitest and Testing Library against a fake API (`npm run test:watch` to keep it running) |
 | `npm run lint` | oxlint |
 | `npm run build` | Type check and production build |
 
-[`src/front/README.md`](src/front/README.md) covers the frontend's structure and how its views are split into branches.
+Keep `PUBLIC_URL` at `http://localhost:8080` while you do: Vite's proxy sends that origin on `/api` writes.
+
+[`src/front/README.md`](src/front/README.md) covers the frontend: its data hooks, tests, themes and routes.
 
 ## Tests
 
@@ -105,13 +107,14 @@ docker compose run --rm api-test go test ./internal/accounts -run Login
 # Any other go command
 docker compose run --rm --no-deps api-test go mod tidy
 
-# Runner tests against real Docker. Run after changes to the runner or automation.
+# Runner tests against real Docker. Run after changes to the runner or to how automation drives a run.
 docker compose --profile test run --rm runner-test
 ```
 
 - Each API endpoint test starts the whole API with its own migrated schema in `test-db`.
 - `test-db` stays up between runs. `docker compose --profile test down` stops it.
-- Both commands are done when they exit 0.
+- Each command is done when it exits 0.
+- A live test against a real LLM provider skips without a key. [`AGENTS.md`](AGENTS.md#tests) has the command.
 
 Frontend tests run in a container too:
 
@@ -121,6 +124,9 @@ docker compose run --rm web-test
 
 # Any npm command, such as the linter
 docker compose run --rm web-test npm run lint
+
+# Type check and production build
+docker compose build web
 ```
 
 ## Configuration
@@ -139,32 +145,49 @@ openssl rand -base64 32
 
 | Variable | Purpose |
 | --- | --- |
-| `PUBLIC_URL` | The URL users open. The API accepts writes only from this origin. Use `http://localhost:5173` when working through Vite. |
+| `PUBLIC_URL` | The URL users open. The API accepts writes only from this origin, and builds the GitHub callback, the webhook URL and the links it posts to GitHub from it. Keep `http://localhost:8080` when working through Vite. |
 | `DATABASE_URL` | Postgres connection string for the API. |
-| `ENCRYPTION_KEY` | 32 random bytes, base64. Encrypts stored GitHub credentials and provider keys. |
+| `ENCRYPTION_KEY` | 32 random bytes, base64. Encrypts stored GitHub credentials, provider keys and webhook secrets. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | A GitHub OAuth App for linking accounts, with callback `{PUBLIC_URL}/api/github/callback`. Leave empty to link with personal access tokens only. |
 | `ALLOW_PRIVATE_PROVIDER_URLS` | `true` lets LLM provider URLs reach local addresses, such as a local Ollama. |
-| `RUNNER_URL` | Where the API reaches the test runner. Defaults to the `runner` service. |
+| `RUNNER_URL` | Where the API reaches the test runner. Defaults to the `runner` service. Point it at a runner on another machine to keep test containers off this one. |
 | `RUNNER_TOKEN` | Shared secret between the API and the runner. |
-| `MAX_CONCURRENT_WORKFLOWS` | Test runs at once. Default 1. |
-| `RUN_PREFIX` | Prefix for everything the runner creates in Docker. Default `gantt`. |
+| `MAX_CONCURRENT_WORKFLOWS` | Workflow executions running at once. Default 1. |
+| `RUN_PREFIX` | Prefix for everything the runner creates in Docker. Default `gantt`. 2 to 32 lowercase letters, digits or `-`, starting with a letter and ending in a letter or digit. |
 
 [`.env.example`](.env.example) has the details for each.
 
 ## Repository layout
 
+Only what has to be at the root is there.
+
 ```
+├── README.md               this file
+├── LICENSE                 MIT
+├── AGENTS.md               working notes for AI coding agents
 ├── docker-compose.yml      every service: db, api, runner, web, and the test profile
-├── .env.example            configuration, documented
-├── .devcontainer/          the VS Code dev container
-├── .vscode/                Run and Debug entries
-├── docs/                   one file per API feature, plus design and plans
+├── .env.example            every setting, documented; copy it to .env to override
+├── .gitignore              .env, debug builds and other local files
+├── .devcontainer/          the VS Code dev container, layered on docker-compose.yml
+├── .vscode/                Run and Debug entries, and the Dev Containers recommendation
+├── .impeccable/            config.json for the impeccable design tool; its edit hook reads it only here
+├── .gantt/                 workflows.yml, this repo's test workflows; the app reads it at a repository's root
+├── docs/
+│   ├── README.md           index of every doc
+│   ├── architecture.md     how the frontend, API, runner and database fit together
+│   ├── glossary.md         the app's terms
+│   ├── gaps.md             features not built yet
+│   └── api/                every endpoint, one file per feature
 └── src/
     ├── front/              React + TypeScript (Vite), served by nginx in Docker
+    │   ├── PRODUCT.md      product context for design work
+    │   ├── DESIGN.md       the design system
+    │   ├── .impeccable/    DESIGN.md's sidecar and the surface briefs
+    │   └── src/            the app
     └── back/api/           Go module
         ├── cmd/api/        the API
         ├── cmd/runner/     the test runner
-        ├── internal/       accounts, github, board, projects, settings, automation, runner, ...
+        ├── internal/       accounts, github, board, projects, planning, automation, runner, ...
         └── migrations/     SQL, embedded in the binary and run at startup
 ```
 
@@ -180,13 +203,16 @@ rm -rf src/front/node_modules/.vite
 
 **The API exits with `ENCRYPTION_KEY: secret: key must be 32 bytes`.** The key is missing. In the dev container, the container is older than its config: run **Dev Containers: Rebuild Container**. With Docker on the host, either delete `.env` to use the defaults or set `ENCRYPTION_KEY` in it.
 
-**`/api` requests return 502.** The API isn't running. Start the **API** entry (or **Full stack**) and check its Debug Console for the error.
+**`/api` requests return 502.** The API isn't running. In the dev container, start the **API** entry (or **Full stack**) and check its Debug Console for the error. With Docker on the host, check `docker compose logs api`.
 
-**"Port in use" when starting an entry.** Something else is already on 5173 or 8080, often a server from an earlier session. Stop it, then try again:
+**Saves fail with `403 bad_origin`.** The browser's `Origin` isn't `PUBLIC_URL`. Open the app at `PUBLIC_URL`, or through Vite on :5173 with `PUBLIC_URL` left at `http://localhost:8080`.
+
+**"Port in use" when starting an entry.** Something else is already on 5173, 8080 or 8081, often a server from an earlier session. Stop it, then try again:
 
 ```sh
 pkill -f vite
 pkill -f 'cmd/api'
+pkill -f 'cmd/runner'
 ```
 
 **Frontend edits don't show up.** On some Docker and WSL setups, Vite misses file changes. Restart the **Web** entry, then hard-reload.
@@ -200,10 +226,14 @@ docker volume rm gantt-stop-me-dev_db-data
 
 ## Further reading
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md): how the frontend, API and database fit together.
-- [`GLOSSARY.md`](GLOSSARY.md): the app's terms.
-- [`docs/`](docs/README.md): every API endpoint, one file per feature. Change an endpoint and its doc in the same commit.
-- [`docs/ganttstopme-plan/`](docs/ganttstopme-plan/README.md): the product brief and design mockups.
+- [`docs/README.md`](docs/README.md): an index of every doc.
+- [`docs/architecture.md`](docs/architecture.md): how the frontend, API, runner and database fit together.
+- [`docs/glossary.md`](docs/glossary.md): the app's terms.
+- [`docs/api/`](docs/api/README.md): every API endpoint, one file per feature, and the conventions they share.
+- [`docs/gaps.md`](docs/gaps.md): features not built yet.
+- [`src/front/README.md`](src/front/README.md): the frontend guide.
+- [`src/front/PRODUCT.md`](src/front/PRODUCT.md): product context for design work.
+- [`src/front/DESIGN.md`](src/front/DESIGN.md): the frontend design system.
 - [`AGENTS.md`](AGENTS.md): working notes for AI coding agents in this repo.
 
 ## License

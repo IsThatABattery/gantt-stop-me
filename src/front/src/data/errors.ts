@@ -1,5 +1,5 @@
-// Errors the data layer rejects with. The API client and the mock store both
-// use them, so pages can check `instanceof` without knowing where data came from.
+// Errors the API client rejects with, so pages can check `instanceof` and read
+// the API's code.
 
 /** A request the API answered with an error: `{ "error": { "code", "message" } }`. */
 export class ApiError extends Error {

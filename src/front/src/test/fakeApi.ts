@@ -1,5 +1,5 @@
 // A small in-memory stand-in for the Go API, served to tests through MSW.
-// It follows the status codes and error codes in docs/*.md closely enough for
+// It follows the status codes and error codes in docs/api/*.md closely enough for
 // the pages to behave as they would against the real thing. Tests read
 // `fake` to check what was saved, and `fake.requests` to check what was sent.
 
@@ -13,7 +13,7 @@ interface Account {
   password: string
 }
 
-export interface SentRequest {
+interface SentRequest {
   method: string
   path: string
   body: unknown

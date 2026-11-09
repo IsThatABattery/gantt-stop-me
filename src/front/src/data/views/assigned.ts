@@ -1,4 +1,4 @@
-// The open tasks assigned to the user, by project (GET /api/me/tasks, docs/board.md).
+// The open tasks assigned to the user, by project (GET /api/me/tasks, docs/api/board.md).
 
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'

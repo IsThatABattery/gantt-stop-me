@@ -1,5 +1,6 @@
-// Package llm calls the automation owner's LLM providers, OpenAI-compatible endpoints at base URLs users enter:
-// the Decisions API that routes tests, and the Responses tool-calling loop that the planning agents and LLM checks run.
+// Package llm calls users' LLM providers, OpenAI-compatible endpoints at base URLs they enter: the Decisions API that
+// routes tests and the Responses tool-calling loop that LLM checks run, both with the automation owner's providers,
+// and the same loop the planning agents run with the plan creator's.
 package llm
 
 import (

@@ -8,7 +8,7 @@ interface DrawerProps {
   /** What the ink tab shows, when it differs from label (e.g. a task's issue number) */
   title?: ReactNode
   onClose: () => void
-  /** Pinned below the scrolling body, e.g. the approval bar */
+  /** Pinned below the scrolling body, e.g. the approval band */
   footer?: ReactNode
   children: ReactNode
 }

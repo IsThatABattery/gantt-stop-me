@@ -1,13 +1,13 @@
 // One task: its detail for the drawer and edit page, and creating and editing
 // it. A task is a GitHub issue; title and body write through to it
-// (docs/board.md).
+// (docs/api/board.md).
 
 import { useQuery } from '@tanstack/react-query'
 import { api, useApiMutation } from '../api/client'
 import type { GitHubUser, Task, TaskDetail } from '../api/types'
 import { keys } from '../keys'
 
-export const getTask = (projectId: string, taskId: string) =>
+const getTask = (projectId: string, taskId: string) =>
   api<TaskDetail>('GET', `/projects/${projectId}/tasks/${taskId}`)
 
 export const useTask = (projectId: string, taskId: string) =>
@@ -18,10 +18,10 @@ export interface TaskInput {
   body: string
 }
 
-export const createTask = (projectId: string, input: TaskInput) => api<Task>('POST', `/projects/${projectId}/tasks`, input)
+const createTask = (projectId: string, input: TaskInput) => api<Task>('POST', `/projects/${projectId}/tasks`, input)
 
 /** Send only what changed; the API wants at least one of the two. */
-export const editTask = (projectId: string, taskId: string, edit: Partial<TaskInput>) =>
+const editTask = (projectId: string, taskId: string, edit: Partial<TaskInput>) =>
   api<Task>('PATCH', `/projects/${projectId}/tasks/${taskId}`, edit)
 
 export const useCreateTask = (projectId: string) =>
@@ -46,7 +46,7 @@ export const useAssign = (projectId: string, taskId: string) =>
   )
 
 /** Longest title the API takes, after trimming. */
-export const MAX_TITLE = 256
+const MAX_TITLE = 256
 
 /** A problem the API would refuse, caught before sending. */
 export function titleProblem(title: string) {

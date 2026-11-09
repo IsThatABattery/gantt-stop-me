@@ -1,18 +1,17 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { Chip } from '../../components/Chip'
-import { Button, Field, TextInput } from '../../components/controls'
+import { Button, Field, FieldError, TextInput } from '../../components/controls'
 import { ModelCombobox } from '../../components/ModelCombobox'
 import { Icon } from '../../components/Icon'
 import type { Provider } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
 import { updateProvider, useCreateProvider, useDeleteProvider, useProviders, useUpdateProvider } from '../../data/views/settings'
 import { actionLabels, settingsLabels } from '../../labels/labels'
-import { FieldError } from '../forms/ItemForm'
 import { Card, Confirm, Problem, Section } from './Section'
 import { sectionIds } from './sections'
 
-// The user's LLM providers (docs/providers.md). Adding one checks the
+// The user's LLM providers (docs/api/providers.md). Adding one checks the
 // endpoint and lists its models, so models are picked after it's saved.
 
 type FieldName = 'name' | 'baseUrl' | 'apiKey' | 'models'

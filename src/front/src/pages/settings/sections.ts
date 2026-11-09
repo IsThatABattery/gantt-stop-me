@@ -1,8 +1,6 @@
 import { settingsLabels } from '../../labels/labels'
 
 // In-page sections, reached by hash (e.g. /settings#github) so the router doesn't change.
-// Autonomy, approval rules, roles and notifications wait on the API
-// (docs/implementation/api-gaps.md).
 export const sectionIds = {
   account: 'account',
   appearance: 'appearance',

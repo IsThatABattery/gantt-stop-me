@@ -6,16 +6,12 @@ import { cx } from '../lib/cx'
  * ghost: no fill or edge until hovered, for quiet actions in toolbars and lists.
  * danger: a signal fill, for an action that throws work away (Leave without saving, Delete).
  * link: a text link at button height.
- * accent: kept so older call sites compile; it draws as secondary.
  */
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link' | 'accent'
-
-const secondary = 'border-ink bg-paper font-semibold text-ink hover:bg-ink/8 hover:text-ink active:bg-ink/15'
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link'
 
 const variants: Record<ButtonVariant, string> = {
   primary: 'border-ink bg-ink font-bold text-on-ink hover:border-ink-hover hover:bg-ink-hover hover:text-on-ink active:border-ink active:bg-ink',
-  secondary,
-  accent: secondary,
+  secondary: 'border-ink bg-paper font-semibold text-ink hover:bg-ink/8 hover:text-ink active:bg-ink/15',
   ghost: 'border-transparent bg-transparent font-semibold text-ink hover:bg-ink/8 hover:text-ink active:bg-ink/15',
   danger: 'border-signal bg-signal font-bold text-on-signal hover:border-signal-ink hover:bg-signal-ink hover:text-on-signal active:bg-signal',
   link: 'border-transparent bg-transparent font-semibold text-accent underline decoration-1 underline-offset-[3px] hover:text-ink hover:decoration-2',

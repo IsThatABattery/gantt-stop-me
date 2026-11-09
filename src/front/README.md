@@ -1,8 +1,8 @@
 # GanttStopMe frontend
 
-React + TypeScript (Vite), React Router, TanStack Query and Tailwind CSS v4. The design it follows is in [`docs/ganttstopme-plan/`](../../docs/ganttstopme-plan/README.md).
+React + TypeScript (Vite), React Router, TanStack Query and Tailwind CSS v4. Its product context is [`PRODUCT.md`](PRODUCT.md) and its design system is [`DESIGN.md`](DESIGN.md), both beside this file.
 
-The app runs on the Go API in `src/back/api`. Sign-in, sign-up, adding a project by repository URL, the board, the payload drawer, creating and editing payloads, and Settings (password, GitHub link, LLM providers) all call `/api`. Screens the API can't serve yet stay in the code on mock data but aren't routed; [docs/implementation/api-gaps.md](../../docs/implementation/api-gaps.md) lists them and what each needs.
+Every screen runs on the Go API in `src/back/api` through `/api`: sign-in and sign-up, recent and all projects, adding a project by repository URL, the board, the Backlog list, the task drawer with its test runs, creating and editing tasks, planning a feature, a project's automation, and Settings (password, theme, GitHub link, LLM providers, planning agents). Features not built yet are in [`docs/gaps.md`](../../docs/gaps.md).
 
 ## Run
 
@@ -14,9 +14,9 @@ npm run lint
 npm test         # Vitest + Testing Library against a fake API (npm run test:watch to keep it running)
 ```
 
-From the repo root, `docker compose run --rm web-test` runs the tests in Docker, and `docker compose run --rm web-test npm run lint` runs the linter, so the host needs no Node.
+From the repo root, `docker compose run --rm web-test` runs the tests in Docker, `docker compose run --rm web-test npm run lint` runs the linter, and `docker compose build web` typechecks and builds, so the host needs no Node.
 
-`npm run dev` needs the API on `localhost:8080`: the compose stack (`docker compose up --build` from the repo root) or the dev container's **API** launch entry. The Vite proxy presents the API's own origin, so saves pass its `Origin` check.
+`npm run dev` needs something answering on `localhost:8080`: the compose stack (`docker compose up --build` from the repo root, where nginx forwards `/api` to the API) or the dev container's **API** launch entry. The Vite proxy sends `Origin: http://localhost:8080` on proxied writes, so they pass the API's Origin check while `PUBLIC_URL` is `http://localhost:8080`, its default.
 
 In Docker, `docker compose up --build web` serves the production build at http://localhost:8080, with nginx proxying `/api`.
 
@@ -27,50 +27,60 @@ To use the board you need an account (sign up at `/signup`) and a linked GitHub 
 | Path | What |
 | --- | --- |
 | `src/data/api/client.ts` | `api(method, path, body)`, the one place that calls `/api`, and `useApiMutation` |
-| `src/data/api/types.ts` | What the API sends, field for field (see `docs/*.md`) |
+| `src/data/api/types.ts` | What the API sends, field for field (see [`docs/api/`](../../docs/api/README.md)) |
+| `src/data/types.ts` | `ID`, `ColumnKey` and `COLUMN_ORDER`, shared by the API types and the views |
 | `src/data/errors.ts` | `ApiError`, `NotFoundError` (404), `ConflictError` (409); `errorCode(e)` reads the API's code |
-| `src/data/queryClient.ts` | The query client. Any 401 clears the signed-in user, which sends them to login |
+| `src/data/queryClient.ts` | The query client. Any 401 clears the signed-in user, and a dialog asks them to sign in again over the page |
 | `src/data/session.ts` | `useMe()` from `GET /api/me`, sign in, sign up, sign out |
-| `src/data/views/board.ts` | Board and optimistic moves |
-| `src/data/views/tasks.ts` | One task: detail, create, edit |
-| `src/data/views/addProject.ts` | Add a project by repository URL |
-| `src/data/views/settings.ts` | Password, GitHub link, providers |
+| `src/data/keys.ts` | The query keys views share, so a write in one view refreshes another |
+| `src/data/views/addProject.ts` | Add a project by repository URL, and the projects the user has opened |
+| `src/data/views/board.ts` | The project (`useProject`), its board, and optimistic moves |
+| `src/data/views/tasks.ts` | One task: detail, create, edit, assignees |
+| `src/data/views/assigned.ts` | The open tasks assigned to the user, for the nav rail |
+| `src/data/views/runs.ts` | A task's test runs, approve and merge, retest, request changes |
+| `src/data/views/workflows.ts` | A project's workflows file, `.gantt/workflows.yml` |
+| `src/data/views/plans.ts` | Planning a feature: plans, the interview, the doc and the proposed tasks |
+| `src/data/views/settings.ts` | Password, GitHub link, LLM providers |
 | `src/data/views/agentSettings.ts` | Planning agents (`/api/me/planning`) and a project's automation agents |
-| `src/data/keys.ts` | All TanStack Query keys |
 
 Pages call hooks from these modules, never `api()` directly. API errors arrive as `ApiError` with the API's `code`, so a form can put each refusal on its field.
 
-### Mock data, for the hidden screens
-
-The agents, activity, planner, objective, and project-list screens still read the in-memory mock (`src/data/mock/`) through their own modules in `src/data/views/` (`agents.ts`, `activity.ts`, `plannerDoc.ts`, `plannerTasks.ts`, `forms.ts`, `projects.ts`, `taskDrawer.ts`). They use `useMockSession`, `useMockProject` and `useMockProjectContext`. When a screen's API lands: wire its module to `api()`, route it in `src/app/router.tsx`, add it back to the nav rail, and unskip its tests.
-
 ## Tests
 
-Tests render the real routes against a fake API served by MSW: `src/test/fakeApi.ts` holds its data and handlers, which follow the docs' status and error codes. `renderApp(path)` signs in as `ada@example.com` with GitHub linked. Tests read `fake` to check what was saved, `fake.requests` to check what was sent, and `failNext(route, error)` to make one request fail. Any `/api` request without a handler fails the test.
+Most tests render the real routes against a fake API served by MSW: `src/test/fakeApi.ts` holds its data and handlers, which follow the docs' status and error codes. `renderApp(path)` signs in as `ada@example.com` with GitHub linked. Tests read `fake` to check what was saved, `fake.requests` to check what was sent, and `failNext(route, error)` to make one request fail. An `/api` request without a handler errors rather than reaching the network. Every test starts signed out, on fresh fake data.
 
-Tests for the hidden screens are `describe.skip`ped with a pointer to `api-gaps.md`.
+The rest test one module on its own: the board's shape and optimistic moves (`src/data/views/board.test.ts`), the model picker (`src/components/ModelCombobox.test.tsx`) and the themes (`src/theme/`).
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `src/styles/index.css` | Tailwind setup: the theme contract, fonts, radii, starfield, reduced motion |
-| `src/styles/themes/` | One stylesheet per color theme (see [Themes](#themes)) |
-| `src/theme/` | The list of themes, and `useTheme()` to read and set the one in use |
-| `src/labels/labels.ts` | Every word the UI shows, plain by default (Project, Task, Backlog…), so another label set can swap in |
-| `src/data/` | See [Data](#data) |
-| `src/components/` | Shared pieces: nav rail, user menu, chips, avatars, form controls, drawer, dialog, tabs, and more |
+| `PRODUCT.md` | Product context for design work: users, purpose, principles. The impeccable skill reads it |
+| `DESIGN.md` | The design system, generated by impeccable |
+| `.impeccable/` | DESIGN.md's sidecar (`design.json`) and the surface briefs (`surfaces/`) |
+| `index.html` | The page. It applies the saved theme before first paint |
+| `vite.config.ts` | The dev server, its `/api` proxy, and the test setup |
+| `Dockerfile`, `nginx.conf` | Build with Node, then serve with nginx, which proxies `/api` to the API |
+| `public/` | The favicon |
+| `src/main.tsx` | Entry: fonts, styles, the theme, the router |
 | `src/app/` | Router, session guard, app shell, project layout |
 | `src/pages/` | One folder per view, plus login, sign-up and not-found |
-| `src/test/` | Test setup, the fake API and render helpers (`renderApp`, `renderWithProviders`) |
+| `src/components/` | Shared pieces: nav rail, user menu, chips, avatars, form controls, drawer, dialog, tabs, and more |
+| `src/data/` | See [Data](#data) |
+| `src/labels/labels.ts` | Every word the UI shows, plain by default (Project, Task, Backlog…), so another label set can swap in |
+| `src/styles/index.css` | Tailwind setup: the theme contract, fonts, radii, the `tile` and `stars` utilities, reduced motion |
+| `src/styles/themes/` | One stylesheet per color theme (see [Themes](#themes)) |
+| `src/theme/` | The list of themes, and `useTheme()` to read and set the one in use |
+| `src/lib/cx.ts` | Joins a component's classes with the caller's overrides |
+| `src/test/` | Test setup, the fake API and its MSW server, `renderApp`, and the board page's tests |
 
 ## Themes
 
-The app has one design, a process flow: stepped gray stage tiles under solid ink tabs, white keylined cards, and colour only where a person is needed. `PRODUCT.md` and `DESIGN.md` at the repo root hold its product context and its system. The themes repaint that one structure.
+The app has one design, a process flow: stepped gray stage tiles under solid ink tabs, white keylined cards, and colour only where a person is needed. [`PRODUCT.md`](PRODUCT.md) and [`DESIGN.md`](DESIGN.md), beside this file, hold its product context and its system. The themes repaint that one structure.
 
 Settings → Appearance picks the theme: Light (the default), Dark, Space light or Space dark. It applies at once and is saved in this browser under the `gsm.theme` key. `index.html` applies it before first paint.
 
-- **One stylesheet per theme.** `src/styles/themes/<id>.css` sets every theme variable (`--ground`, `--paper`, `--ink`, `--accent`, `--signal`…), plus `--stars` (the starfield, or `none`) and `color-scheme`, for `[data-theme='<id>']`.
+- **One stylesheet per theme.** `src/styles/themes/<id>.css` sets every theme variable (`--ground`, `--paper`, `--ink`, `--accent`, `--signal`…), plus `--stars` (the starfield, or `none`) and `color-scheme`, for `[data-theme='<id>']`. Light also matches a root with no `data-theme`.
 - **One contract.** `src/styles/index.css` maps each Tailwind color onto a theme variable with `@theme inline`, so `bg-paper` reads `var(--paper)`. The comments there say what each one is for. Stage tiles use the `tile` utility, which mixes `tile-first` into `tile-last` by `--tile-step` (0 for the first column, 1 for the last), so the board steps darker across any number of columns.
 - **Classes first.** Components use those classes. Where a class can't go, such as an SVG attribute, read the theme variable itself (`var(--accent)`), not Tailwind's `--color-*` name. Tailwind sets that only on `:root`, where it resolves once, so a `data-theme` lower down doesn't reach it.
 - **Fonts are self-hosted** from `@fontsource-variable` packages, imported in `src/main.tsx`: Big Shoulders Display (`font-display`, caps, for page titles and stage tabs), Public Sans (`font-ui`, everything else) and Red Hat Mono (`font-mono`, issue numbers and branches).
@@ -83,19 +93,26 @@ To add a theme:
 2. Import it in `src/styles/index.css` beside the others.
 3. Add `{ id, name, description }` to `themes` in `src/theme/themes.ts`.
 
-`src/theme/themes.test.ts` fails when a theme misses a variable or a step, or when a class uses a colour outside the contract. `src/theme/contrast.test.ts` fails when text or control edges fall below WCAG AA (4.5:1 for text, 3:1 for edges and the focus ring) on the pairs the components use. To add a variable, set it in every theme and map it in `@theme inline`.
+`src/theme/themes.test.ts` fails when a theme misses a variable or isn't imported, when code reads a variable no theme sets, or when a class uses a colour outside the contract. `src/theme/contrast.test.ts` fails when text or control edges fall below WCAG AA (4.5:1 for text, 3:1 for edges and the focus ring) on the pairs the components use. To add a variable, set it in every theme and map it in `@theme inline`.
 
 ## Routes
 
 | Path | View |
 | --- | --- |
 | `/login`, `/signup` | Sign in, create an account |
-| `/` | Add a project by repository URL |
-| `/settings` | Settings: account, appearance, GitHub, LLM providers, planning agents |
+| `/` | Recent projects (the 6 opened last), or Add a project when GitHub isn't linked or none have been opened |
+| `/projects` | Every project the user has opened and can still see |
+| `/projects/new` | Add a project by repository URL |
+| `/settings` | Settings: account, appearance, GitHub, LLM providers, agents (planning agents and plan-doc review) |
 | `/projects/:projectId` | Board |
-| `/projects/:projectId/tasks/:taskId` | Payload drawer over the board |
-| `/projects/:projectId/new/task` | New payload dialog over the board |
-| `/projects/:projectId/tasks/:taskId/edit` | Edit payload |
-| `/projects/:projectId/automation` | Automation: on or off, and its two agents |
+| `/projects/:projectId/tasks/:taskId` | Task drawer over the board |
+| `/projects/:projectId/new/task` | New task dialog over the board |
+| `/projects/:projectId/plans` | Plan a feature over the board: start a plan, and the project's plans |
+| `/projects/:projectId/plans/:planId` | One plan over the board: answer the interviewer, approve the doc, then the proposed tasks |
+| `/projects/:projectId/tasks/:taskId/edit` | Edit a task's title and description |
+| `/projects/:projectId/automation` | Automation: on or off, its two agents (decision and check), and the workflows file |
+| `/projects/:projectId/backlog` | The Backlog column as a list |
+| `/projects/:projectId/backlog/tasks/:taskId` | Task drawer over the Backlog list |
+| `*` | Not found |
 
 Project and task ids are the API's numeric ids.

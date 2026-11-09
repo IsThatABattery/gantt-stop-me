@@ -1,5 +1,5 @@
-// Mission control board: the project's five columns and their tasks, from
-// GET /api/projects/{id}/board, and optimistic moves (docs/board.md).
+// The board: the project's columns and their tasks, from
+// GET /api/projects/{id}/board, and optimistic moves (docs/api/board.md).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
@@ -28,11 +28,15 @@ export function toBoard({ project, columns, tasks }: BoardResponse): Board {
   }
 }
 
-export const getBoard = (projectId: string) =>
+const getBoard = (projectId: string) =>
   api<BoardResponse>('GET', `/projects/${projectId}/board`).then(toBoard)
 
 export const useBoard = (projectId: string) =>
   useQuery({ queryKey: keys.board(projectId), queryFn: () => getBoard(projectId) })
+
+/** The project, read from its board so the two share one request and one cache entry. */
+export const useProject = (projectId: string) =>
+  useQuery({ queryKey: keys.board(projectId), queryFn: () => getBoard(projectId), select: (b) => b.project })
 
 export interface MoveTarget {
   columnId: number
@@ -46,7 +50,7 @@ export interface MoveVars extends MoveTarget {
   taskId: number
 }
 
-export const moveTask = (projectId: string, taskId: number, target: MoveTarget) =>
+const moveTask = (projectId: string, taskId: number, target: MoveTarget) =>
   api<Task>('POST', `/projects/${projectId}/tasks/${taskId}/move`, target)
 
 /** The board with `task` taken out and put in `columnId` above `beforeTaskId`. */

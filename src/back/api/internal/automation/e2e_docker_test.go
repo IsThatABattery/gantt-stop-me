@@ -17,8 +17,8 @@ import (
 	"gantt-stop-me/api/internal/tasktests"
 )
 
-// TestRunOnDocker carries one test run of the card's tests from a ready pull request to its merge across every
-// slice, with the real runner on real Docker in place of the fake, from the runner-test container:
+// TestRunOnDocker carries one test run of the card's tests from a ready pull request to its merge, with the real
+// runner on real Docker in place of the fake, from the runner-test container:
 // docker compose --profile test run --rm runner-test
 func TestRunOnDocker(t *testing.T) {
 	ctx := context.Background()

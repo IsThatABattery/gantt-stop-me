@@ -18,7 +18,7 @@ import (
 	"gantt-stop-me/api/internal/projects"
 )
 
-// Board serves the board and task routes under /api/projects/{id}.
+// Board serves the board and task routes under /api/projects/{id}, and the user's assigned tasks at GET /api/me/tasks.
 type Board struct {
 	DB       *pgxpool.Pool
 	Accounts *accounts.Accounts // guards every route
@@ -29,7 +29,7 @@ type Board struct {
 	Rules Rules
 }
 
-// Rules add Moves while automated, in AUTOMATION.md, to the moves of a project whose automation is on.
+// Rules add Moves while automated, in docs/api/automation.md, to the moves of a project whose automation is on.
 type Rules interface {
 	// Moving runs in tx, holding projects.Lock, before task taskID moves from the column with key from to another
 	// column with key to, and before GitHub hears of it, which it may ask with token, the mover's. byHand is false for

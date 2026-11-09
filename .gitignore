@@ -1,5 +1,5 @@
 .env
-# Delve build output from the API debug entry.
+# Delve build output from the API and Runner debug entries.
 __debug_bin*
 
 # Design doc kept local, out of the repo.
@@ -7,3 +7,7 @@ __debug_bin*
 
 # The live LLM test's screenshots and videos.
 /src/back/api/live-artifacts/
+
+# Impeccable's local state in any .impeccable folder. Its runtime folders ignore themselves.
+**/.impeccable/hook.cache.json
+**/.impeccable/config.local.json

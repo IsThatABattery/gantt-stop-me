@@ -25,7 +25,7 @@ const (
 	minPasswordLen = 8
 )
 
-// Accounts serves the auth and /api/me endpoints and guards every other signed-in route.
+// Accounts serves the auth endpoints, /api/me and /api/me/password, and guards every other signed-in route.
 type Accounts struct {
 	db     *pgxpool.Pool
 	secure bool // set Secure on cookies; browsers drop Secure cookies on plain http

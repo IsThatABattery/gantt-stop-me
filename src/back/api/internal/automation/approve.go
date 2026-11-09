@@ -48,7 +48,7 @@ type gitHubError struct{ error }
 func (e gitHubError) Unwrap() error { return e.error }
 
 // approve merges a task's linked pull request once a write member has checked its manual tests by hand, then moves
-// the task to Closed, as Approve and merge says, and answers the approved test run.
+// the task to Closed, as Approve and merge in docs/api/automation.md says, and answers the approved test run.
 func (a *Automation) approve(w http.ResponseWriter, r *http.Request) {
 	p, _, ok := a.Projects.Check(w, r, projects.Write)
 	if !ok {
