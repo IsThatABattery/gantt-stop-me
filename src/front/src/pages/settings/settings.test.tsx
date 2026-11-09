@@ -1,8 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { fake } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
+import { setTheme } from '../../theme/theme'
+import { themes } from '../../theme/themes'
 
 async function openSettings(path = '/settings') {
   const utils = renderApp(path)
@@ -18,7 +20,7 @@ describe('account', () => {
     await openSettings()
     expect(within(section('Account')).getByText('ada@example.com')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Account', 'GitHub', 'LLM providers', 'Agents'])
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Account', 'Appearance', 'GitHub', 'LLM providers', 'Agents'])
   })
 
   it('checks the password change here, then with the API, and confirms it', async () => {
@@ -40,6 +42,45 @@ describe('account', () => {
     expect(await s.findByText('Password changed')).toBeInTheDocument()
     expect(fake.accounts[0].password).toBe('a new password')
     expect(fake.requests.filter((r) => r.method === 'PATCH').at(-1)?.body).toEqual({ currentPassword: 'correct horse', newPassword: 'a new password' })
+  })
+})
+
+describe('appearance', () => {
+  const reset = () => {
+    localStorage.clear()
+    delete document.documentElement.dataset.theme
+  }
+  beforeEach(reset)
+  afterEach(reset)
+
+  it('lists every theme, with the default picked when none is chosen', async () => {
+    await openSettings()
+    const s = within(section('Appearance'))
+    const group = s.getByRole('group', { name: 'Theme' })
+    expect(within(group).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(themes.map((t) => t.id))
+    expect(s.getByRole('radio', { name: /^Space dark/ })).toBeChecked()
+  })
+
+  it('picks the theme in use, and follows a change made elsewhere', async () => {
+    document.documentElement.dataset.theme = 'dark'
+    await openSettings()
+    const s = within(section('Appearance'))
+    expect(s.getByRole('radio', { name: /^Dark/ })).toBeChecked()
+
+    // A change made outside this section, such as one from another tab, reaches it through the store.
+    act(() => setTheme('space-light'))
+    expect(s.getByRole('radio', { name: /^Space light/ })).toBeChecked()
+    expect(s.getByRole('radio', { name: /^Dark/ })).not.toBeChecked()
+  })
+
+  it('applies a picked theme at once and saves it in this browser', async () => {
+    await openSettings()
+    const s = within(section('Appearance'))
+    await userEvent.click(s.getByRole('radio', { name: /^Light/ }))
+    expect(document.documentElement.dataset.theme).toBe('light')
+    expect(localStorage.getItem('gsm.theme')).toBe('light')
+    expect(s.getByRole('radio', { name: /^Light/ })).toBeChecked()
+    expect(s.getByRole('radio', { name: /^Space dark/ })).not.toBeChecked()
   })
 })
 

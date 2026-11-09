@@ -29,6 +29,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    css: false,
+    // Stylesheets stay unprocessed, except ?raw imports: the theme tests read them as text.
+    css: { include: [/\.css\?raw$/] },
   },
 })

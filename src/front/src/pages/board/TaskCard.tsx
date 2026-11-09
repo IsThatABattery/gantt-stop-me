@@ -29,11 +29,12 @@ export function TaskCard({ task, to, overlay = false }: TaskCardProps) {
       // The board's own drag replaces the browser's native link drag.
       draggable={false}
       aria-label={`#${task.issueNumber}: ${task.title}${status ? `. ${status}` : ''}${task.assignees.length ? `. Assigned to ${task.assignees.map((a) => a.login).join(', ')}` : ''}`}
-      className={`relative block overflow-hidden rounded-control border bg-surface text-text no-underline outline-none hover:text-text ${
-        task.needsAttention ? 'border-critical' : 'border-line'
-      } ${overlay ? 'shadow-xl shadow-black/40' : ''} ${
+      // A closed card recedes into its column through color, not opacity, so its text and focus border keep their contrast in every theme.
+      className={`relative block overflow-hidden rounded-control border text-text no-underline outline-none hover:text-text ${
+        task.needsAttention ? 'border-critical' : closed ? 'border-line-soft' : 'border-line'
+      } ${closed && !overlay ? 'bg-transparent' : 'bg-surface'} ${overlay ? 'shadow-xl shadow-black/40' : ''} ${
         closed
-          ? 'opacity-60 hover:border-ion focus-visible:border-ion'
+          ? 'hover:border-ion focus-visible:border-ion'
           : 'transition-[border-color,translate] hover:-translate-y-px hover:border-ion focus-visible:-translate-y-px focus-visible:border-ion'
       }`}
     >
@@ -48,7 +49,7 @@ export function TaskCard({ task, to, overlay = false }: TaskCardProps) {
             </span>
           )}
         </div>
-        <div className="line-clamp-2 text-sm leading-[1.4] font-medium">{task.title}</div>
+        <div className={`line-clamp-2 text-sm leading-[1.4] font-medium ${closed ? 'text-text-muted-strong' : ''}`}>{task.title}</div>
         {/* Landed says it all on the card; the drawer keeps the last run. */}
         {closed ? (
           <div className="flex">

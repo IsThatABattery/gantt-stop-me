@@ -8,7 +8,6 @@ import { runLook } from './runLook'
 import { Chip, type Tone } from './Chip'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
-import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 
 interface Item {
@@ -193,7 +192,6 @@ export function NavRail({ projectId }: { projectId?: string }) {
       )}
       <div className="mt-auto flex items-center gap-2 pt-4">
         <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1" />
-        <ThemeToggle />
         <UserMenu placement="above" />
       </div>
     </nav>

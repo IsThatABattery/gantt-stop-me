@@ -11,6 +11,13 @@
       rel="stylesheet"
     />
     <title>GanttStopMe</title>
+    <script>
+      // The saved theme, set before first paint so a light one doesn't flash dark. Same key as src/theme/theme.ts.
+      try {
+        var theme = localStorage.getItem('gsm.theme')
+        if (theme) document.documentElement.dataset.theme = theme
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

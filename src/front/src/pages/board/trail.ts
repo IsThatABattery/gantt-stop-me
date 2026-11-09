@@ -32,8 +32,8 @@ export function drawTrail(from: DOMRect, to: DOMRect) {
     pointerEvents: 'none',
     zIndex: '50',
     transformOrigin: '0 50%',
-    background: 'linear-gradient(90deg, transparent, var(--color-ion))',
-    boxShadow: '0 0 12px var(--color-ion)',
+    background: 'linear-gradient(90deg, transparent, var(--ion))',
+    boxShadow: '0 0 12px var(--ion)',
   })
   document.body.append(el)
 

@@ -1,0 +1,35 @@
+/* Space light: the space console on daylight surfaces. Accents are darkened to stay readable on white. */
+[data-theme='space-light'] {
+  color-scheme: light;
+
+  --background: #f6f8fc;
+  --surface: #ffffff;
+  --surface-sunken: #eef2f8;
+  --rail: rgba(255, 255, 255, 0.85);
+  --header: rgba(255, 255, 255, 0.7);
+  --nav-active: #e1e9f6;
+
+  --line: #d5dce8;
+  --line-soft: #e3e8f0;
+  --line-strong: #b8c3d6;
+
+  --text: #0f1626;
+  --text-soft: #2a3550;
+  --text-muted: #5b6780;
+  --text-muted-strong: #4a5670;
+
+  --ion: #0b6680;
+  --ion-hover: #0a5468;
+  --on-ion: #ffffff;
+  --astronaut: #6d2fd6;
+  --astronaut-text: #5b21b6;
+
+  --good: #146c36;
+  --warning: #964306;
+  --critical: #b31b1b;
+
+  --stars:
+    radial-gradient(1px 1px at 20px 30px, rgba(15, 22, 38, 0.12) 50%, transparent 51%),
+    radial-gradient(1px 1px at 140px 90px, rgba(15, 22, 38, 0.08) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 260px 20px, rgba(15, 22, 38, 0.1) 50%, transparent 51%);
+}

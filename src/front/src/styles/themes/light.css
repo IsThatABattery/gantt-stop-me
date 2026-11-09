@@ -1,0 +1,32 @@
+/* Light: a standard light theme. Neutral grays, a blue accent, no starfield. */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-sunken: #f0f1f4;
+  --rail: rgba(255, 255, 255, 0.85);
+  --header: rgba(255, 255, 255, 0.75);
+  --nav-active: #e8eaee;
+
+  --line: #dcdfe5;
+  --line-soft: #e9ebef;
+  --line-strong: #c2c6cf;
+
+  --text: #18191c;
+  --text-soft: #34363c;
+  --text-muted: #5e616a;
+  --text-muted-strong: #4a4d55;
+
+  --ion: #1b52c8;
+  --ion-hover: #1e40af;
+  --on-ion: #ffffff;
+  --astronaut: #6d2fd6;
+  --astronaut-text: #5b21b6;
+
+  --good: #146c36;
+  --warning: #964306;
+  --critical: #b31b1b;
+
+  --stars: none;
+}

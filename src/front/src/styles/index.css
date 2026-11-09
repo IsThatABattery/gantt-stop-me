@@ -1,34 +1,50 @@
 @import 'tailwindcss';
 
-/* Tokens from docs/ganttstopme-plan/design/tokens.json. Dark by default; a light palette follows. */
+/* Color themes. Each sets every theme variable below for [data-theme='<id>'] and is listed in src/theme/themes.ts.
+   To add one, see "Themes" in src/front/README.md. */
+@import './themes/space-dark.css';
+@import './themes/space-light.css';
+@import './themes/dark.css';
+@import './themes/light.css';
+
+/* The theme contract: one Tailwind color per theme variable, so bg-surface reads var(--surface).
+   inline makes each utility read the variable where it's used, so data-theme on any element themes that subtree.
+   Every theme sets each of these, plus --stars (the starfield, or none) and color-scheme. */
+@theme inline {
+  /* Surfaces, back to front: the page, cards, wells inside cards, the nav rail and headers (translucent), the active nav item */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-rail: var(--rail);
+  --color-header: var(--header);
+  --color-nav-active: var(--nav-active);
+
+  /* Lines and borders */
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+
+  /* Text, strongest first. src/theme/contrast.test.ts checks each against WCAG AA on every surface. */
+  --color-text: var(--text);
+  --color-text-soft: var(--text-soft);
+  --color-text-muted-strong: var(--text-muted-strong);
+  --color-text-muted: var(--text-muted);
+
+  /* ion: focus, selection and primary actions, with on-ion for text on it. astronaut: an AI agent is involved. */
+  --color-ion: var(--ion);
+  --color-ion-hover: var(--ion-hover);
+  --color-on-ion: var(--on-ion);
+  --color-astronaut: var(--astronaut);
+  --color-astronaut-text: var(--astronaut-text);
+
+  /* State: done or approved, waiting on a human, blocked or failed. Tints are these at 6 to 25 percent. */
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-critical: var(--critical);
+}
+
+/* The same in every theme */
 @theme {
-  --color-background: #070b16;
-  --color-surface: #0f1626;
-  --color-surface-sunken: #0b1120;
-  --color-rail: rgba(10, 15, 28, 0.85);
-  --color-header: rgba(10, 15, 28, 0.7);
-  --color-line: #24304a;
-  --color-line-soft: #1c2640;
-  --color-line-strong: #36456a;
-  --color-nav-active: #13203a;
-  --color-text: #e6ecf7;
-  --color-text-soft: #c2ccdd;
-  --color-text-muted: #9aa7bf;
-  --color-text-muted-strong: #aab6cc;
-  --color-ion: #3fd5e8;
-  --color-ion-hover: #8be9f4;
-  --color-on-ion: #062029;
-  --color-astronaut: #a78bfa;
-  --color-astronaut-text: #c4b5fd;
-  --color-good: #4ade80;
-  --color-warning: #fbbf24;
-  --color-critical: #f87171;
-
-  /* Mission phase bands */
-  --color-phase-core: #3fd5e8;
-  --color-phase-telemetry: #a78bfa;
-  --color-phase-comms: #fbbf24;
-
   --font-ui: Inter, system-ui, sans-serif;
   --font-heading: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -53,37 +69,19 @@
   @keyframes orbit-pulse {
     0%,
     100% {
-      box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.45);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--astronaut) 45%, transparent);
     }
     50% {
-      box-shadow: 0 0 0 4px rgba(167, 139, 250, 0);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--astronaut) 0%, transparent);
     }
   }
-}
-
-/* Light palette: the same semantic tokens, swapped when the root has data-theme="light". Dark stays the default. */
-:root[data-theme='light'] {
-  --color-background: #f6f8fc;
-  --color-surface: #ffffff;
-  --color-surface-sunken: #eef2f8;
-  --color-line: #d5dce8;
-  --color-line-soft: #e3e8f0;
-  --color-line-strong: #b8c3d6;
-  --color-text: #0f1626;
-  --color-text-soft: #2a3550;
-  --color-text-muted: #5b6780;
-  --color-text-muted-strong: #4a5670;
 }
 
 @layer base {
-  html {
-    color-scheme: dark;
-  }
-
   body {
     margin: 0;
-    background-color: var(--color-background);
-    color: var(--color-text);
+    background-color: var(--background);
+    color: var(--text);
     font-family: var(--font-ui);
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
@@ -94,25 +92,22 @@
   }
 
   a {
-    color: var(--color-ion);
+    color: var(--ion);
   }
 
   a:hover {
-    color: var(--color-ion-hover);
+    color: var(--ion-hover);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-ion);
+    outline: 2px solid var(--ion);
     outline-offset: 2px;
   }
 }
 
-/* Static starfield: three tiny dots tiled at 300x120. No animation. */
+/* The theme's static starfield, tiled at 300x120. No animation. */
 @utility stars {
-  background-image:
-    radial-gradient(1px 1px at 20px 30px, rgba(230, 236, 247, 0.2) 50%, transparent 51%),
-    radial-gradient(1px 1px at 140px 90px, rgba(230, 236, 247, 0.14) 50%, transparent 51%),
-    radial-gradient(1.5px 1.5px at 260px 20px, rgba(230, 236, 247, 0.18) 50%, transparent 51%);
+  background-image: var(--stars);
   background-size: 300px 120px;
 }
 
@@ -122,7 +117,7 @@
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
