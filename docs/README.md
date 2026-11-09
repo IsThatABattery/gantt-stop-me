@@ -5,7 +5,7 @@ Every doc in the repository, and what it covers.
 ## Start here
 
 - [README.md](../README.md): running the app, the dev container, tests, configuration, the repository layout and troubleshooting.
-- [AGENTS.md](../AGENTS.md): working notes for AI coding agents: starting the stack, the dev container, tests, the API-docs rule and where design files go.
+- [AGENTS.md](../AGENTS.md): working notes for AI coding agents: starting the stack, the dev container, branch names, tests, the API-docs rule and where design files go.
 
 ## System
 
