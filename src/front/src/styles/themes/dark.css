@@ -1,0 +1,37 @@
+/* Dark: the process-flow board inverted. Light ink tabs over stepped charcoal tiles, slate cards. */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ground: #111316;
+  --rail: #181b1f;
+  --block: #262b31;
+  --block-hover: #30363d;
+  --tile-first: #1b1e23;
+  --tile-last: #262c33;
+  --tile-keyline: rgba(255, 255, 255, 0.07);
+  --paper: #2d3239;
+
+  --keyline: #3a4048;
+  --rule: #353b43;
+  --line: #858f9b;
+
+  --ink: #eef1f4;
+  --ink-hover: #d3d9e0;
+  --ink-2: #aab3be;
+  --on-ink: #14171b;
+  --on-ink-2: #48515b;
+
+  --accent: #eef1f4;
+  --on-accent: #14171b;
+
+  --signal: #f0603f;
+  --signal-ink: #ff8f74;
+  --on-signal: #14171b;
+  --signal-wash: #3d2420;
+  --approve: #ffd02a;
+  --on-approve: #14171b;
+  --approve-ink: #ffd02a;
+  --good: #6fd391;
+
+  --stars: none;
+}

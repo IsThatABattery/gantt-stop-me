@@ -30,7 +30,6 @@ describe('sign in', () => {
     await signIn('ada@example.com', 'nope')
     expect(await screen.findByRole('alert')).toHaveTextContent('Wrong email or password.')
   })
-
 })
 
 describe('session ends mid-use', () => {
@@ -68,13 +67,13 @@ describe('session ends mid-use', () => {
 
   it('keeps the drawer under it on Esc', async () => {
     const { router, client } = renderApp('/projects/1/tasks/7')
-    await screen.findByRole('dialog', { name: 'Payload' })
+    await screen.findByRole('dialog', { name: 'Task' })
     fake.signedInId = null
     await client.invalidateQueries({ queryKey: ['task'] })
     await screen.findByRole('dialog', { name: 'Session ended' })
 
     await userEvent.keyboard('{Escape}')
-    expect(screen.getByRole('dialog', { name: 'Payload' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Task' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/projects/1/tasks/7')
   })
 
@@ -91,12 +90,12 @@ describe('session ends mid-use', () => {
 
   it('keeps the page when a background /api/me refetch fails', async () => {
     const { client } = renderApp('/projects')
-    await screen.findByRole('heading', { name: 'All missions' })
+    await screen.findByRole('heading', { name: 'All projects' })
     server.use(http.get('/api/me', () => HttpResponse.json({ error: { code: 'bad_gateway', message: 'Bad gateway' } }, { status: 502 }), { once: true }))
     await client.refetchQueries({ queryKey: keys.me })
     await new Promise((r) => setTimeout(r, 50))
 
-    expect(screen.getByRole('heading', { name: 'All missions' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'All projects' })).toBeInTheDocument()
     expect(screen.queryByText('Bad gateway')).not.toBeInTheDocument()
   })
 })
@@ -125,7 +124,7 @@ describe('sign out', () => {
 describe('sign up', () => {
   it('creates an account and lands on adding a project, asking to link GitHub', async () => {
     const { router } = renderApp('/login', { signedIn: false })
-    await userEvent.click(await screen.findByRole('link', { name: 'Request access' }))
+    await userEvent.click(await screen.findByRole('link', { name: 'Create an account' }))
     expect(router.state.location.pathname).toBe('/signup')
 
     await userEvent.type(screen.getByLabelText('Email'), 'grace@example.com')
@@ -153,12 +152,12 @@ describe('sign up', () => {
 })
 
 describe('project routes', () => {
-  it('opens the payload drawer from a card', async () => {
+  it('opens the task drawer from a card', async () => {
     const { router } = renderApp('/projects/1')
     await userEvent.click(await screen.findByRole('link', { name: /^#12:/ }))
 
     expect(router.state.location.pathname).toBe('/projects/1/tasks/7')
-    expect(await screen.findByRole('dialog', { name: 'Payload' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Task' })).toBeInTheDocument()
   })
 
   it('asks to link GitHub when no account is linked', async () => {
@@ -170,8 +169,8 @@ describe('project routes', () => {
 
   it('says a project the user cannot see is not found, with no pages for it in the rail', async () => {
     const { client } = renderApp('/projects/2')
-    expect(await screen.findByRole('heading', { name: 'Mission not found' })).toBeInTheDocument()
-    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Add a mission' })).toHaveAttribute('href', '/projects/new')
+    expect(await screen.findByRole('heading', { name: 'Project not found' })).toBeInTheDocument()
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Add a project' })).toHaveAttribute('href', '/projects/new')
     await waitFor(() => expect(client.getQueryState(keys.projects)?.status).toBe('success'))
     expect(screen.queryByRole('link', { name: 'Automation' })).not.toBeInTheDocument()
   })
@@ -198,11 +197,11 @@ describe('project routes', () => {
     }
   })
 
-  it('offers the board, the Hangar, planning and automation in the rail', async () => {
+  it('offers the board, the Backlog, planning and automation in the rail', async () => {
     renderApp('/projects/1')
     const rail = await screen.findByRole('navigation', { name: 'Primary' })
-    // The project's pages show once the missions list answered, so they don't jump into it.
+    // The project's pages show once the projects list answered, so they don't jump into it.
     await within(rail).findByRole('link', { name: 'Automation' })
-    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Add a mission', 'All missions', 'Mission control', 'Hangar', 'Plan a feature', 'Automation', 'Settings'])
+    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Board', 'Backlog', 'Plan a feature', 'Automation', 'All projects', 'Add a project', 'Settings'])
   })
 })

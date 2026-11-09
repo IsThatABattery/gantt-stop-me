@@ -15,7 +15,7 @@ import { BasicsFields } from './ItemForm'
 /** Sample draft the planner opens on until drafts can be created. */
 const SAMPLE_BRIEFING = 'realtime-briefing'
 
-/** Create dialog over the board (NewObjective / NewPayload mockups). */
+/** Create dialog over the board for a feature (mock data, not routed). */
 export function NewItemDialog({ kind }: { kind: Kind }) {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
@@ -74,25 +74,25 @@ function NewItemForm({ kind, project, options, onCancel }: NewItemFormProps) {
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-[18px] p-7">
       <div className="pr-10">
-        <h2 className="m-0 font-heading text-2xl font-semibold">{t.titleNew}</h2>
-        <p className="mt-2 mb-0 leading-normal text-text-muted-strong">{t.intro}</p>
+        <h2 className="m-0 text-2xl font-semibold">{t.titleNew}</h2>
+        <p className="mt-2 mb-0 leading-normal text-ink-2">{t.intro}</p>
       </div>
 
       <BasicsFields kind={kind} value={value} onChange={setValue} options={options} errors={errors} variant="dialog" idPrefix={`new-${kind}`} />
 
       {mutation.error && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] text-signal-ink">
           {mutation.error.message}
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap justify-end gap-2.5 border-t border-line-soft pt-4">
+      <div className="mt-2 flex flex-wrap justify-end gap-2.5 border-t border-keyline pt-4">
         {kind === 'feature' && (
           <Link
             to={`/projects/${project.id}/plan/${SAMPLE_BRIEFING}/briefing`}
-            className={buttonClass('secondary', 'mr-auto border-astronaut bg-astronaut/10 hover:border-astronaut')}
+            className={buttonClass('secondary', 'mr-auto')}
           >
-            <Icon name="helmet" className="text-astronaut" />
+            <Icon name="agent" />
             {actionLabels.planWithAgent}
           </Link>
         )}

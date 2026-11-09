@@ -1,6 +1,7 @@
 import { useEffect, useId } from 'react'
 import { useBlocker } from 'react-router'
 import { Button } from './controls'
+import { Icon } from './Icon'
 
 /**
  * Asks before leaving the page, or closing the tab, while `when` holds. Hash
@@ -26,14 +27,21 @@ export function UnsavedChangesGuard({ when }: { when: boolean }) {
 
   if (blocker.state !== 'blocked') return null
   return (
-    <div role="alertdialog" aria-labelledby={id} className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
+    <div role="alertdialog" aria-labelledby={id} className="flex flex-wrap items-center gap-3 rounded-card border-[1.5px] border-ink bg-paper p-3">
       {/* min-w-fit and one group for the buttons: where they don't fit beside the text, they go under it together. */}
-      <p id={id} className="m-0 min-w-fit flex-1 text-[13px]">
-        You have unsaved changes. Leave without saving?
-      </p>
+      <div className="flex min-w-fit flex-1 items-center gap-3">
+        <span aria-hidden="true" className="grid size-9 flex-none place-items-center rounded-[2px] bg-approve text-on-approve">
+          <Icon name="alert" size={18} />
+        </span>
+        <p id={id} className="m-0 text-sm font-semibold">
+          You have unsaved changes. Leave without saving?
+        </p>
+      </div>
       <div className="flex flex-wrap gap-3">
-        <Button id={`${id}-stay`} onClick={() => blocker.reset()}>Stay</Button>
-        <Button onClick={() => blocker.proceed()} className="border-warning text-warning hover:border-warning hover:text-warning">
+        <Button id={`${id}-stay`} onClick={() => blocker.reset()}>
+          Stay
+        </Button>
+        <Button variant="danger" onClick={() => blocker.proceed()}>
           Leave without saving
         </Button>
       </div>

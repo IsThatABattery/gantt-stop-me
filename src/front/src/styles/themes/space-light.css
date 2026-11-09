@@ -1,0 +1,40 @@
+/* Space light: the process-flow board in navy-tinted daylight, with a teal accent for what is live. */
+[data-theme='space-light'] {
+  color-scheme: light;
+
+  --ground: #eef2f8;
+  --rail: #e1e8f2;
+  --block: #cfd8e5;
+  --block-hover: #c2ccdc;
+  --tile-first: #e0e7f1;
+  --tile-last: #c3cfdf;
+  --tile-keyline: rgba(255, 255, 255, 0.85);
+  --paper: #ffffff;
+
+  --keyline: #dce3ed;
+  --rule: #c2ccdc;
+  --line: #5a6983;
+
+  --ink: #0f1626;
+  --ink-hover: #24304a;
+  --ink-2: #435069;
+  --on-ink: #ffffff;
+  --on-ink-2: #b8c3d6;
+
+  --accent: #095a71;
+  --on-accent: #ffffff;
+
+  --signal: #c8341a;
+  --signal-ink: #9c2811;
+  --on-signal: #ffffff;
+  --signal-wash: #fcebe7;
+  --approve: #ffd02a;
+  --on-approve: #0f1626;
+  --approve-ink: #6b4c00;
+  --good: #115a2d;
+
+  --stars:
+    radial-gradient(1px 1px at 20px 30px, rgba(15, 22, 38, 0.12) 50%, transparent 51%),
+    radial-gradient(1px 1px at 140px 90px, rgba(15, 22, 38, 0.08) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 260px 20px, rgba(15, 22, 38, 0.1) 50%, transparent 51%);
+}

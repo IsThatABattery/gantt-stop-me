@@ -6,14 +6,15 @@ import { renderApp } from '../../test/render'
 
 async function submit(url: string) {
   await userEvent.type(await screen.findByLabelText('Repository URL'), url)
-  await userEvent.click(screen.getByRole('button', { name: 'Open mission' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Open project' }))
 }
 
-describe('flight deck', () => {
+describe('home', () => {
   it('lists the projects opened before, and opens one', async () => {
     fake.opened = [fake.project]
     const { router } = renderApp('/')
-    await userEvent.click(await screen.findByRole('link', { name: /ada\/gantt/ }))
+    // The rail lists it too; this is the home page's own list.
+    await userEvent.click(await within(await screen.findByRole('main')).findByRole('link', { name: /ada\/gantt/ }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1'))
   })
 
@@ -22,7 +23,7 @@ describe('flight deck', () => {
     expect(await screen.findByLabelText('Repository URL')).toBeInTheDocument()
   })
 
-  it('says when the missions could not load, instead of offering to add one', async () => {
+  it('says when the projects could not load, instead of offering to add one', async () => {
     fake.opened = [fake.project]
     failNext('GET /api/projects', { status: 500, code: 'internal', message: 'Database is restarting.' })
     renderApp('/')
@@ -30,10 +31,11 @@ describe('flight deck', () => {
     expect(screen.queryByLabelText('Repository URL')).not.toBeInTheDocument()
 
     await userEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('link', { name: /ada\/gantt/ })).toBeInTheDocument()
+    // The rail lists it too; this is the home page's own list.
+    expect(await within(screen.getByRole('main')).findByRole('link', { name: /ada\/gantt/ })).toBeInTheDocument()
   })
 
-  it('asks to link GitHub on All missions too', async () => {
+  it('asks to link GitHub on All projects too', async () => {
     fake.github = null
     renderApp('/projects')
     expect(await screen.findByRole('heading', { name: 'Link GitHub first' })).toBeInTheDocument()

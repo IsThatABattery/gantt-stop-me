@@ -45,11 +45,11 @@ export function PasswordForm() {
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-labelledby={`${base}-heading`} className="flex flex-col gap-4 border-t border-line-soft pt-5">
-      <h3 id={`${base}-heading`} className="m-0 font-heading text-base font-semibold">
+    <form onSubmit={submit} noValidate aria-labelledby={`${base}-heading`} className="flex flex-col gap-4">
+      <h3 id={`${base}-heading`} className="m-0 text-base font-bold">
         {settingsLabels.changePassword}
       </h3>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,200px),1fr))] gap-4">
         {fields.map((f) => {
           const id = `${base}-${f.key}`
           const error = shown[f.key]
@@ -69,12 +69,12 @@ export function PasswordForm() {
                 }}
               />
               {f.hint && !error && (
-                <span id={`${id}-hint`} className="text-xs text-text-muted">
+                <span id={`${id}-hint`} className="text-xs text-ink-2">
                   {f.hint}
                 </span>
               )}
               {error && (
-                <span id={`${id}-error`} className="text-xs text-critical">
+                <span id={`${id}-error`} className="text-xs font-semibold text-signal-ink">
                   {error}
                 </span>
               )}
@@ -83,17 +83,22 @@ export function PasswordForm() {
         })}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={change.isPending}>
+        <Button type="submit" busy={change.isPending}>
           {settingsLabels.changePassword}
         </Button>
-        <div role="status" className="text-[13px]">
+        <div role="status" className="text-[13px] font-semibold">
           {done && (
-            <span className="inline-flex items-center gap-1.5 text-good">
-              <Icon name="check" size={16} />
+            <span className="inline-flex items-center gap-1.5 text-ink">
+              <Icon name="check" size={16} className="text-good" />
               Password changed
             </span>
           )}
-          {change.error && !apiField && <span className="text-critical">{change.error.message}</span>}
+          {change.error && !apiField && (
+            <span className="inline-flex items-center gap-1.5 text-signal-ink">
+              <Icon name="alert" size={16} />
+              {change.error.message}
+            </span>
+          )}
         </div>
       </div>
     </form>

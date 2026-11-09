@@ -1,4 +1,6 @@
 import { NotBuilt } from '../components/NotBuilt'
+import { PageTitle } from '../components/PageTitle'
+import { Notice } from './projects/Notice'
 
 interface PlaceholderPageProps {
   title: string
@@ -7,23 +9,19 @@ interface PlaceholderPageProps {
   doc?: string
 }
 
-/** Stand-in for screens not built yet. Lives inside the app shell. */
+/** Stand-in for screens not built yet. Lives inside the app shell, with the page header every screen has. */
 export function PlaceholderPage({ title, branch, doc }: PlaceholderPageProps) {
   return (
-    <div className="flex flex-col gap-6 px-8 py-7">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 px-4 pt-5 pb-10 md:px-7">
       <header>
-        <h1 className="m-0 font-heading text-[26px] font-semibold">{title}</h1>
+        <PageTitle>{title}</PageTitle>
       </header>
       {branch && doc ? (
         <NotBuilt branch={branch} doc={doc} />
       ) : (
-        <div
-          role="status"
-          className="max-w-xl rounded-[14px] border border-dashed border-line-strong bg-surface/60 p-6 leading-normal text-text-muted-strong"
-        >
-          <div className="mb-1 font-medium text-text">Not built yet</div>
+        <Notice role="status" title="Not built yet">
           This screen needs a design before it gets a branch.
-        </div>
+        </Notice>
       )}
     </div>
   )

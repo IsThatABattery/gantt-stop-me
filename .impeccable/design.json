@@ -1,0 +1,847 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T18:15:54+00:00",
+  "title": "Design System: GanttStopMe",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#f2f4f6",
+        "cssVar": "var(--ground)",
+        "themes": {
+          "light": "#f2f4f6",
+          "dark": "#111316",
+          "space-light": "#eef2f8",
+          "space-dark": "#070b16"
+        },
+        "oklch": "oklch(96.6% 0.003 247.9)",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242526",
+          "#414243",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9ca",
+          "#edeeef"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Rail",
+        "canonical": "#e6e9ed",
+        "cssVar": "var(--rail)",
+        "themes": {
+          "light": "#e6e9ed",
+          "dark": "#181b1f",
+          "space-light": "#e1e8f2",
+          "space-dark": "#0b1120"
+        },
+        "oklch": "oklch(93.3% 0.006 255.5)",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#242527",
+          "#404245",
+          "#5f6165",
+          "#808286",
+          "#a3a5a8",
+          "#c7c9cc",
+          "#edeef0"
+        ]
+      },
+      "block": {
+        "role": "neutral",
+        "displayName": "Block",
+        "canonical": "#d5dae0",
+        "cssVar": "var(--block)",
+        "themes": {
+          "light": "#d5dae0",
+          "dark": "#262b31",
+          "space-light": "#cfd8e5",
+          "space-dark": "#18223a"
+        },
+        "oklch": "oklch(88.6% 0.010 252.8)",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4246",
+          "#5e6266",
+          "#7f8388",
+          "#a2a5aa",
+          "#c6c9cd",
+          "#eceff2"
+        ]
+      },
+      "block-hover": {
+        "role": "neutral",
+        "displayName": "Block Hover",
+        "canonical": "#c9cfd6",
+        "cssVar": "var(--block-hover)",
+        "themes": {
+          "light": "#c9cfd6",
+          "dark": "#30363d",
+          "space-light": "#c2ccdc",
+          "space-dark": "#212d4a"
+        },
+        "oklch": "oklch(85.2% 0.012 252.1)",
+        "tonalRamp": [
+          "#090b0e",
+          "#222529",
+          "#3f4247",
+          "#5d6267",
+          "#7e8389",
+          "#a1a5ab",
+          "#c6c9ce",
+          "#eceff2"
+        ]
+      },
+      "tile-first": {
+        "role": "neutral",
+        "displayName": "First Stage Tile",
+        "canonical": "#e4e8ec",
+        "cssVar": "var(--tile-first)",
+        "themes": {
+          "light": "#e4e8ec",
+          "dark": "#1b1e23",
+          "space-light": "#e0e7f1",
+          "space-dark": "#0f1626"
+        },
+        "oklch": "oklch(92.9% 0.007 247.9)",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232527",
+          "#404245",
+          "#5e6265",
+          "#7f8386",
+          "#a2a5a8",
+          "#c7c9cc",
+          "#edeff1"
+        ]
+      },
+      "tile-last": {
+        "role": "neutral",
+        "displayName": "Last Stage Tile",
+        "canonical": "#c8d0d8",
+        "cssVar": "var(--tile-last)",
+        "themes": {
+          "light": "#c8d0d8",
+          "dark": "#262c33",
+          "space-light": "#c3cfdf",
+          "space-dark": "#1a2540"
+        },
+        "oklch": "oklch(85.4% 0.014 248.0)",
+        "tonalRamp": [
+          "#090b0e",
+          "#222629",
+          "#3d4348",
+          "#5c6268",
+          "#7c838a",
+          "#a0a6ac",
+          "#c5cacf",
+          "#ebeff3"
+        ]
+      },
+      "tile-keyline": {
+        "role": "neutral",
+        "displayName": "Tile Keyline",
+        "canonical": "rgba(255, 255, 255, 0.85)",
+        "cssVar": "var(--tile-keyline)",
+        "themes": {
+          "light": "rgba(255, 255, 255, 0.85)",
+          "dark": "rgba(255, 255, 255, 0.07)",
+          "space-light": "rgba(255, 255, 255, 0.85)",
+          "space-dark": "rgba(230, 236, 247, 0.07)"
+        }
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#ffffff",
+        "cssVar": "var(--paper)",
+        "themes": {
+          "light": "#ffffff",
+          "dark": "#2d3239",
+          "space-light": "#ffffff",
+          "space-dark": "#1f2a47"
+        },
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "keyline": {
+        "role": "neutral",
+        "displayName": "Card Keyline",
+        "canonical": "#e1e5ea",
+        "cssVar": "var(--keyline)",
+        "themes": {
+          "light": "#e1e5ea",
+          "dark": "#3a4048",
+          "space-light": "#dce3ed",
+          "space-dark": "#2b3858"
+        },
+        "oklch": "oklch(92.0% 0.008 253.9)",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#404245",
+          "#5e6165",
+          "#7f8387",
+          "#a2a5a9",
+          "#c7c9cc",
+          "#edeff1"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#c9cfd6",
+        "cssVar": "var(--rule)",
+        "themes": {
+          "light": "#c9cfd6",
+          "dark": "#353b43",
+          "space-light": "#c2ccdc",
+          "space-dark": "#24304a"
+        },
+        "oklch": "oklch(85.2% 0.012 252.1)",
+        "tonalRamp": [
+          "#090b0e",
+          "#222529",
+          "#3f4247",
+          "#5d6267",
+          "#7e8389",
+          "#a1a5ab",
+          "#c6c9ce",
+          "#eceff2"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#646e79",
+        "cssVar": "var(--line)",
+        "themes": {
+          "light": "#646e79",
+          "dark": "#858f9b",
+          "space-light": "#5a6983",
+          "space-dark": "#7584a3"
+        },
+        "oklch": "oklch(53.4% 0.021 250.8)",
+        "tonalRamp": [
+          "#080c0f",
+          "#20262c",
+          "#3c434b",
+          "#59626c",
+          "#7a838e",
+          "#9ea6af",
+          "#c3cad2",
+          "#e9eff5"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Sheet Ink",
+        "canonical": "#14171b",
+        "cssVar": "var(--ink)",
+        "themes": {
+          "light": "#14171b",
+          "dark": "#eef1f4",
+          "space-light": "#0f1626",
+          "space-dark": "#e6ecf7"
+        },
+        "oklch": "oklch(20.3% 0.009 255.6)",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4246",
+          "#5e6166",
+          "#7f8387",
+          "#a2a5aa",
+          "#c7c9cd",
+          "#eceff1"
+        ]
+      },
+      "ink-hover": {
+        "role": "primary",
+        "displayName": "Sheet Ink Hover",
+        "canonical": "#2b3138",
+        "cssVar": "var(--ink-hover)",
+        "themes": {
+          "light": "#2b3138",
+          "dark": "#d3d9e0",
+          "space-light": "#24304a",
+          "space-dark": "#c9d4e6"
+        },
+        "oklch": "oklch(31.0% 0.015 252.3)",
+        "tonalRamp": [
+          "#090b0e",
+          "#22252a",
+          "#3e4348",
+          "#5c6269",
+          "#7c838b",
+          "#a0a6ac",
+          "#c5cacf",
+          "#ebeff3"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Secondary Ink",
+        "canonical": "#48515b",
+        "cssVar": "var(--ink-2)",
+        "themes": {
+          "light": "#48515b",
+          "dark": "#aab3be",
+          "space-light": "#435069",
+          "space-dark": "#a6b2c8"
+        },
+        "oklch": "oklch(43.1% 0.020 251.1)",
+        "tonalRamp": [
+          "#080b0f",
+          "#21262b",
+          "#3c434a",
+          "#5a626c",
+          "#7a838d",
+          "#9ea6af",
+          "#c3cad1",
+          "#eaeff5"
+        ]
+      },
+      "on-ink": {
+        "role": "primary",
+        "displayName": "On Ink",
+        "canonical": "#ffffff",
+        "cssVar": "var(--on-ink)",
+        "themes": {
+          "light": "#ffffff",
+          "dark": "#14171b",
+          "space-light": "#ffffff",
+          "space-dark": "#070b16"
+        },
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "on-ink-2": {
+        "role": "primary",
+        "displayName": "On Ink Secondary",
+        "canonical": "#b6bec8",
+        "cssVar": "var(--on-ink-2)",
+        "themes": {
+          "light": "#b6bec8",
+          "dark": "#48515b",
+          "space-light": "#b8c3d6",
+          "space-dark": "#435069"
+        },
+        "oklch": "oklch(79.8% 0.017 253.9)",
+        "tonalRamp": [
+          "#090b0f",
+          "#22252a",
+          "#3d4249",
+          "#5b626a",
+          "#7c838c",
+          "#a0a6ad",
+          "#c4cad0",
+          "#ebeff4"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Live Accent",
+        "canonical": "#14171b",
+        "cssVar": "var(--accent)",
+        "themes": {
+          "light": "#14171b",
+          "dark": "#eef1f4",
+          "space-light": "#095a71",
+          "space-dark": "#3fd5e8"
+        },
+        "oklch": "oklch(20.3% 0.009 255.6)",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4246",
+          "#5e6166",
+          "#7f8387",
+          "#a2a5aa",
+          "#c7c9cd",
+          "#eceff1"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "On Accent",
+        "canonical": "#ffffff",
+        "cssVar": "var(--on-accent)",
+        "themes": {
+          "light": "#ffffff",
+          "dark": "#14171b",
+          "space-light": "#ffffff",
+          "space-dark": "#062029"
+        },
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "signal": {
+        "role": "secondary",
+        "displayName": "Signal Vermilion",
+        "canonical": "#c8341a",
+        "cssVar": "var(--signal)",
+        "themes": {
+          "light": "#c8341a",
+          "dark": "#f0603f",
+          "space-light": "#c8341a",
+          "space-dark": "#f6674b"
+        },
+        "oklch": "oklch(55.1% 0.189 32.3)",
+        "tonalRamp": [
+          "#270000",
+          "#510000",
+          "#7e0d00",
+          "#ae270f",
+          "#d64f37",
+          "#f37f68",
+          "#ffab97",
+          "#ffd8c8"
+        ]
+      },
+      "signal-ink": {
+        "role": "secondary",
+        "displayName": "Signal Text",
+        "canonical": "#a72a13",
+        "cssVar": "var(--signal-ink)",
+        "themes": {
+          "light": "#a72a13",
+          "dark": "#ff8f74",
+          "space-light": "#9c2811",
+          "space-dark": "#ff9580"
+        },
+        "oklch": "oklch(48.2% 0.165 32.5)",
+        "tonalRamp": [
+          "#240000",
+          "#4c0300",
+          "#781c0b",
+          "#a63520",
+          "#cd5943",
+          "#ea8570",
+          "#ffb09e",
+          "#ffdbcc"
+        ]
+      },
+      "on-signal": {
+        "role": "secondary",
+        "displayName": "On Signal",
+        "canonical": "#ffffff",
+        "cssVar": "var(--on-signal)",
+        "themes": {
+          "light": "#ffffff",
+          "dark": "#14171b",
+          "space-light": "#ffffff",
+          "space-dark": "#070b16"
+        },
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "signal-wash": {
+        "role": "secondary",
+        "displayName": "Signal Wash",
+        "canonical": "#fcebe7",
+        "cssVar": "var(--signal-wash)",
+        "themes": {
+          "light": "#fcebe7",
+          "dark": "#3d2420",
+          "space-light": "#fcebe7",
+          "space-dark": "#3a1d24"
+        },
+        "oklch": "oklch(95.2% 0.019 33.4)",
+        "tonalRamp": [
+          "#0f0a09",
+          "#2b2321",
+          "#4a3f3d",
+          "#6b5e5b",
+          "#8d7f7b",
+          "#aea29f",
+          "#d1c6c4",
+          "#f5ecea"
+        ]
+      },
+      "approve": {
+        "role": "tertiary",
+        "displayName": "Approve Yellow",
+        "canonical": "#ffd02a",
+        "cssVar": "var(--approve)",
+        "themes": {
+          "light": "#ffd02a",
+          "dark": "#ffd02a",
+          "space-light": "#ffd02a",
+          "space-dark": "#ffd02a"
+        },
+        "oklch": "oklch(87.4% 0.170 91.2)",
+        "tonalRamp": [
+          "#180600",
+          "#381f00",
+          "#5c3c00",
+          "#825a00",
+          "#a57c00",
+          "#c4a12e",
+          "#e3c773",
+          "#ffedae"
+        ]
+      },
+      "on-approve": {
+        "role": "tertiary",
+        "displayName": "On Approve",
+        "canonical": "#14171b",
+        "cssVar": "var(--on-approve)",
+        "themes": {
+          "light": "#14171b",
+          "dark": "#14171b",
+          "space-light": "#0f1626",
+          "space-dark": "#070b16"
+        },
+        "oklch": "oklch(20.3% 0.009 255.6)",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4246",
+          "#5e6166",
+          "#7f8387",
+          "#a2a5aa",
+          "#c7c9cd",
+          "#eceff1"
+        ]
+      },
+      "approve-ink": {
+        "role": "tertiary",
+        "displayName": "Approve Text",
+        "canonical": "#6b4c00",
+        "cssVar": "var(--approve-ink)",
+        "themes": {
+          "light": "#6b4c00",
+          "dark": "#ffd02a",
+          "space-light": "#6b4c00",
+          "space-dark": "#ffd02a"
+        },
+        "oklch": "oklch(43.9% 0.090 81.6)",
+        "tonalRamp": [
+          "#140800",
+          "#332100",
+          "#553e0c",
+          "#795c22",
+          "#9c7d44",
+          "#bca172",
+          "#dcc69f",
+          "#feecce"
+        ]
+      },
+      "good": {
+        "role": "tertiary",
+        "displayName": "Good Green",
+        "canonical": "#175c31",
+        "cssVar": "var(--good)",
+        "themes": {
+          "light": "#175c31",
+          "dark": "#6fd391",
+          "space-light": "#115a2d",
+          "space-dark": "#4ade80"
+        },
+        "oklch": "oklch(42.1% 0.098 151.8)",
+        "tonalRamp": [
+          "#001003",
+          "#062d15",
+          "#1d4d2d",
+          "#347047",
+          "#569267",
+          "#81b38d",
+          "#acd5b5",
+          "#d8f8df"
+        ]
+      }
+    },
+    "themes": {
+      "default": "light",
+      "source": "src/front/src/styles/themes/*.css",
+      "selector": "[data-theme='<id>'] (light also applies on :root with no data-theme)",
+      "ids": [
+        "light",
+        "dark",
+        "space-light",
+        "space-dark"
+      ],
+      "starfield": {
+        "light": "none",
+        "dark": "none",
+        "space-light": "three radial-gradient dots of rgba(15,22,38,0.08-0.12), tiled 300x120",
+        "space-dark": "three radial-gradient dots of rgba(230,236,247,0.14-0.2), tiled 300x120"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The board page title (project name), uppercase; 44px on phones, 58px from 768px."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Every other page title, uppercase; 36px on phones, 44px from 768px."
+      },
+      "title": {
+        "displayName": "Ink Tab Title",
+        "purpose": "Stage names on ink tabs, uppercase; dialog and drawer header bars at 22px/0.04em."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "A task or plan title inside the drawer or plan view."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All running UI text, tabular numerals."
+      },
+      "body-strong": {
+        "displayName": "Body Strong",
+        "purpose": "Card titles, button and nav labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, stage purpose lines, rail section headings."
+      },
+      "chip": {
+        "displayName": "Chip",
+        "purpose": "Chip words."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Issue numbers and branches only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+        "purpose": "Dialogs and the task drawer only."
+      },
+      {
+        "name": "menu",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        "purpose": "The user menu and combobox listboxes only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-quint",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Colour and edge transitions on controls and cards, 150ms."
+      },
+      {
+        "name": "duration-state",
+        "value": "150ms",
+        "purpose": "Every hover, press and selection colour change."
+      },
+      {
+        "name": "live",
+        "value": "1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite, translateX(-3px to 3px)",
+        "purpose": "The live mark while tests run; the only loop."
+      },
+      {
+        "name": "drag-lift",
+        "value": "rotate(1.5deg)",
+        "purpose": "The lifted copy of a task card while dragging."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none; transition: none",
+        "purpose": "prefers-reduced-motion turns every animation and transition off."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "md",
+        "value": "768px",
+        "purpose": "Nav rail becomes a 224px sticky sidebar; page padding 28px; board columns min 220px (272px below)."
+      },
+      {
+        "name": "lg",
+        "value": "1024px",
+        "purpose": "Board header splits counters from actions with a rule."
+      },
+      {
+        "name": "board-header-row",
+        "value": "1400px",
+        "purpose": "Counters and actions move up beside the board title."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The solid ink action, one per view (New task, Save, Approve), led on the board by a paper icon square.",
+      "html": "<button class=\"ds-btn-primary\"><span class=\"ds-btn-mark\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg></span>New task</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border-radius:4px; border:1.5px solid; font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; font-size:14px; line-height:1.25; cursor:pointer; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); min-height:52px; padding:0 18px 0 8px; background:var(--ink); border-color:var(--ink); color:var(--on-ink); font-weight:700; } .ds-btn-primary:hover { background:var(--ink-hover); border-color:var(--ink-hover); } .ds-btn-primary:active { background:var(--ink); } .ds-btn-primary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; } .ds-btn-mark { display:grid; place-items:center; width:36px; height:36px; border-radius:2px; background:var(--paper); color:var(--ink); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Paper with a 1.5px ink edge, for every action that is not the primary one.",
+      "html": "<button class=\"ds-btn-secondary\">Plan a feature</button>",
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border-radius:4px; border:1.5px solid; font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; font-size:14px; line-height:1.25; cursor:pointer; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); background:var(--paper); border-color:var(--ink); color:var(--ink); font-weight:600; } .ds-btn-secondary:hover { background:color-mix(in oklab, var(--ink) 8%, var(--paper)); } .ds-btn-secondary:active { background:color-mix(in oklab, var(--ink) 15%, var(--paper)); } .ds-btn-secondary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "A signal fill for an action that throws work away.",
+      "html": "<button class=\"ds-btn-danger\">Leave without saving</button>",
+      "css": ".ds-btn-danger { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border-radius:4px; border:1.5px solid; font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; font-size:14px; line-height:1.25; cursor:pointer; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); background:var(--signal); border-color:var(--signal); color:var(--on-signal); font-weight:700; } .ds-btn-danger:hover { background:var(--signal-ink); border-color:var(--signal-ink); } .ds-btn-danger:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }"
+    },
+    {
+      "name": "Counter",
+      "kind": "button",
+      "refersTo": "counter",
+      "description": "A count block plus its plain word; a board filter that fills ink when pressed and goes hollow at zero.",
+      "html": "<div class=\"ds-counter-row\"><button class=\"ds-counter\" aria-pressed=\"false\"><span class=\"ds-count ds-count-approve\">2</span>Awaiting approval</button><button class=\"ds-counter\" aria-pressed=\"true\"><span class=\"ds-count ds-count-signal\">2</span>Needs attention</button><button class=\"ds-counter\" aria-pressed=\"false\"><span class=\"ds-count ds-count-empty\">0</span>Tests running</button></div>",
+      "css": ".ds-counter-row { display:flex; gap:8px; flex-wrap:wrap; } .ds-counter { display:inline-flex; align-items:center; gap:10px; min-height:52px; padding:6px 14px 6px 7px; border-radius:4px; border:1.5px solid var(--ink); background:var(--paper); color:var(--ink); font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; font-size:14px; font-weight:600; white-space:nowrap; cursor:pointer; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); } .ds-counter:hover { background:color-mix(in oklab, var(--ink) 8%, var(--paper)); } .ds-counter:focus-visible { outline:2px solid var(--accent); outline-offset:2px; } .ds-counter[aria-pressed=\"true\"] { background:var(--ink); color:var(--on-ink); } .ds-count { display:grid; place-items:center; height:36px; min-width:36px; padding:0 6px; box-sizing:border-box; border-radius:2px; border:1.5px solid var(--ink); font-size:17px; font-weight:700; } .ds-counter[aria-pressed=\"true\"] .ds-count { border-color:var(--on-ink); } .ds-count-approve { background:var(--approve); color:var(--on-approve); } .ds-count-signal { background:var(--signal); color:var(--on-signal); } .ds-count-empty { border-color:var(--ink-2); color:var(--ink-2); }"
+    },
+    {
+      "name": "Stage Tile with Ink Tab and Task Cards",
+      "kind": "custom",
+      "refersTo": "stage-tile",
+      "description": "The signature: a stepped neutral tile under a solid ink tab, holding white keylined task cards inside an inset frame.",
+      "html": "<section class=\"ds-tile\" style=\"--step:0.5\"><div class=\"ds-inktab\"><h2>Testing</h2><span class=\"ds-inktab-end\"><span class=\"ds-inktab-mark\" role=\"img\" aria-label=\"1 needs attention\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M12 3 2 21h20L12 3zM12 10v5M12 18v.01\"/></svg></span><span class=\"ds-inktab-count\">4</span></span></div><div class=\"ds-tile-frame\"><p class=\"ds-purpose\">Tests run on the linked PR</p><a class=\"ds-card\" href=\"#\"><div class=\"ds-card-in\"><span class=\"ds-num\">#33</span><p class=\"ds-card-title\">Retry failed webhook deliveries with backoff</p><span class=\"ds-chip ds-chip-live\">Tests running</span></div></a><a class=\"ds-card ds-card-signal\" href=\"#\"><div class=\"ds-card-in\"><span class=\"ds-num\">#36</span><p class=\"ds-card-title\">Flaky login test on Safari</p><span class=\"ds-chip ds-chip-signal\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M12 3 2 21h20L12 3zM12 10v5M12 18v.01\"/></svg>Needs attention</span><p class=\"ds-reason\">The runner could not start the container.</p></div></a></div></section>",
+      "css": ".ds-tile { width:240px; display:flex; flex-direction:column; gap:6px; padding:6px; border-radius:4px; background:color-mix(in oklab, var(--tile-first), var(--tile-last) calc(var(--step,0) * 100%)); font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; color:var(--ink); } .ds-inktab { display:flex; align-items:center; justify-content:space-between; gap:8px; height:40px; padding:0 10px 0 12px; border-radius:3px; background:var(--ink); color:var(--on-ink); } .ds-inktab h2 { margin:0; font-family: 'Big Shoulders Display Variable', 'Arial Narrow', sans-serif; font-size:21px; font-weight:800; line-height:1; letter-spacing:0.045em; text-transform:uppercase; } .ds-inktab-end { display:flex; align-items:center; gap:6px; } .ds-inktab-mark { display:grid; place-items:center; width:24px; height:24px; border-radius:2px; background:var(--signal); color:var(--on-signal); } .ds-inktab-count { min-width:24px; box-sizing:border-box; padding:0 6px; border-radius:2px; border:1px solid color-mix(in oklab, var(--on-ink) 50%, transparent); text-align:center; font-size:13px; line-height:18px; font-weight:600; } .ds-tile-frame { display:flex; flex-direction:column; gap:8px; padding:8px; border-radius:3px; border:1px solid var(--tile-keyline); } .ds-purpose { margin:0; min-height:26px; font-size:13px; line-height:1.3; color:var(--ink-2); } .ds-card { display:block; padding:3px; border-radius:4px; border:1px solid var(--line); background:var(--paper); color:var(--ink); text-decoration:none; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); } .ds-card-in { display:flex; flex-direction:column; gap:6px; padding:8px; border-radius:2px; border:1px solid var(--keyline); transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); } .ds-card:hover, .ds-card:focus-visible { border-color:var(--ink); outline:none; } .ds-card:hover .ds-card-in, .ds-card:focus-visible .ds-card-in { border-color:var(--ink); } .ds-card-signal, .ds-card-signal .ds-card-in { border-color:var(--signal); } .ds-card-signal:hover .ds-card-in { border-color:var(--signal-ink); } .ds-num { font-family: 'Red Hat Mono Variable', ui-monospace, monospace; font-size:12.5px; font-weight:600; color:var(--ink-2); } .ds-card-title { margin:0; font-size:14px; line-height:1.3; font-weight:600; } .ds-reason { margin:0; padding:6px 8px; border-radius:2px; background:var(--signal-wash); color:var(--signal-ink); font-size:12.5px; line-height:1.4; } .ds-chip { display:inline-flex; align-items:center; gap:5px; align-self:flex-start; height:24px; padding:0 8px; border-radius:2px; font-size:12px; font-weight:600; line-height:1; white-space:nowrap; } .ds-chip-live { background:var(--accent); color:var(--on-accent); } .ds-chip-signal { background:var(--signal); color:var(--on-signal); }"
+    },
+    {
+      "name": "Chips",
+      "kind": "chip",
+      "refersTo": "chip-neutral",
+      "description": "24px blocks with an icon slot and a word, filled by tone; soft variants outline or wash.",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip2 ds-c-neutral\">In Progress</span><span class=\"ds-chip2 ds-c-live\">Tests running</span><span class=\"ds-chip2 ds-c-signal\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M12 3 2 21h20L12 3zM12 10v5M12 18v.01\"/></svg>Tests failed</span><span class=\"ds-chip2 ds-c-approve\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1\"/></svg>Awaiting approval</span><span class=\"ds-chip2 ds-c-good\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"m5 12 5 5 9-10\"/></svg>Tests passed</span><span class=\"ds-chip2 ds-c-soft\">Queued</span></div>",
+      "css": ".ds-chips { display:flex; flex-wrap:wrap; gap:5px; font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; } .ds-chip2 { display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 8px; border-radius:2px; border:1px solid transparent; font-size:12px; font-weight:600; line-height:1; white-space:nowrap; } .ds-c-neutral { background:var(--block); color:var(--ink); } .ds-c-live { background:var(--accent); color:var(--on-accent); } .ds-c-signal { background:var(--signal); color:var(--on-signal); } .ds-c-approve { background:var(--approve); color:var(--on-approve); } .ds-c-good { background:var(--block); color:var(--ink); } .ds-c-good svg { color:var(--good); } .ds-c-soft { background:transparent; border-color:var(--line); color:var(--ink-2); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Paper field with a 1px line edge, a label above in secondary ink, accent on focus, signal when invalid.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\" for=\"ds-repo\">Repository URL</label><input id=\"ds-repo\" class=\"ds-input\" placeholder=\"https://github.com/owner/name\"></div>",
+      "css": ".ds-field { display:flex; flex-direction:column; gap:6px; width:320px; font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; } .ds-label { font-size:13px; font-weight:600; color:var(--ink-2); } .ds-input { min-height:46px; box-sizing:border-box; padding:0 14px; border-radius:4px; border:1px solid var(--line); background:var(--paper); color:var(--ink); font:inherit; font-size:14px; transition:border-color .15s; } .ds-input::placeholder { color:var(--ink-2); } .ds-input:hover { border-color:var(--ink); } .ds-input:focus { border-color:var(--accent); outline:1px solid var(--accent); outline-offset:0; } .ds-input[aria-invalid=\"true\"] { border-color:var(--signal); outline-color:var(--signal); }"
+    },
+    {
+      "name": "Nav Rail",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Projects as blocks with the open one filled ink and its pages attached in a paper panel; rail links ink when current.",
+      "html": "<nav class=\"ds-rail\"><p class=\"ds-rail-h\">Projects</p><a class=\"ds-proj ds-proj-open\" href=\"#\"><span>ada</span><b>tidepool</b></a><div class=\"ds-pages\"><a class=\"ds-page ds-page-on\" href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M4 4h16v16H4zM9 4v16M15 4v10\"/></svg>Board</a><a class=\"ds-page\" href=\"#\">Backlog</a></div><a class=\"ds-proj\" href=\"#\"><span>kelp-co</span><b>billing-service</b></a><a class=\"ds-raillink ds-raillink-on\" href=\"#\">Settings</a></nav>",
+      "css": ".ds-rail { width:224px; box-sizing:border-box; padding:12px; display:flex; flex-direction:column; gap:6px; background:var(--rail); border-right:1px solid var(--rule); font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; color:var(--ink); } .ds-rail-h { margin:0 4px; font-size:13px; font-weight:700; color:var(--ink-2); } .ds-proj { display:flex; flex-direction:column; justify-content:center; min-height:52px; box-sizing:border-box; padding:7px 12px; border-radius:3px; background:var(--block); color:var(--ink); text-decoration:none; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); } .ds-proj span { font-size:12px; font-weight:500; color:var(--ink-2); } .ds-proj b { font-size:14px; } .ds-proj:hover { background:var(--block-hover); } .ds-proj-open { background:var(--ink); color:var(--on-ink); border-radius:3px 3px 0 0; margin-bottom:-6px; } .ds-proj-open span { color:var(--on-ink-2); } .ds-proj-open:hover { background:var(--ink-hover); } .ds-pages { display:flex; flex-direction:column; gap:2px; padding:4px; background:var(--paper); border-radius:0 0 3px 3px; } .ds-page { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border-radius:2px; font-size:14px; font-weight:600; color:var(--ink-2); text-decoration:none; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); } .ds-page:hover { background:color-mix(in oklab, var(--ink) 8%, var(--paper)); color:var(--ink); } .ds-page-on { background:var(--block); color:var(--ink); font-weight:700; } .ds-raillink { display:flex; align-items:center; min-height:44px; padding:0 10px; border-radius:3px; font-weight:600; color:var(--ink); text-decoration:none; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); } .ds-raillink:hover { background:var(--block); } .ds-raillink-on { background:var(--ink); color:var(--on-ink); } .ds-rail a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "44px tabs on a 2px ink base line; the active tab is an ink block rounded at the top.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">Account</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">GitHub</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Appearance</button></div>",
+      "css": ".ds-tabs { display:flex; gap:4px; border-bottom:2px solid var(--ink); font-family: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif; } .ds-tab { min-height:44px; padding:0 16px; border:0; border-radius:3px 3px 0 0; background:transparent; color:var(--ink-2); font:inherit; font-size:14px; font-weight:600; cursor:pointer; transition: background-color .15s cubic-bezier(0.22,1,0.36,1), border-color .15s cubic-bezier(0.22,1,0.36,1), color .15s cubic-bezier(0.22,1,0.36,1); } .ds-tab:hover { background:color-mix(in oklab, var(--ink) 8%, transparent); color:var(--ink); } .ds-tab[aria-selected=\"true\"] { background:var(--ink); color:var(--on-ink); } .ds-tab:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Process-Flow Sheet",
+    "overview": "The board reads like a printed process-flow infographic: a row of stepped neutral tiles, each topped by a solid ink label tab, with tasks as white keylined cards stacked inside. Everything else in the app (the rail, settings, automation, the task drawer, dialogs, sign-in) is cut from the same sheet: ink blocks for what is current or primary, gray blocks for what is not, paper for what you read and type into. It is dense, blocky and flat, built for a team that keeps it open all day.\n\nThe palette is one cool neutral family stepped in value, and colour is spent only where a person is needed: vermilion signal when something failed or needs attention, a yellow approve fill when work waits on a person's approval. Each always comes with an icon and a word. Type is three voices with fixed jobs: condensed display caps for page titles and ink tabs, a sturdy UI sans for everything people read and click, a mono for issue numbers and branches.\n\nFour themes (Light, the default; Dark; Space light; Space dark) repaint one structure. They change values, never roles, shapes or layout. The Space themes add a cool navy cast, a live accent (teal or cyan) and a faint static starfield behind the shell. The build refuses the category default of borderless pastel columns, floating rounded cards and a rainbow of status pills.",
+    "keyCharacteristics": [
+      "Stepped neutral stage tiles under solid ink tabs; the step spreads across however many columns exist.",
+      "White paper cards with a 1px line edge and an inset keyline frame.",
+      "Small radii (2 to 6px) everywhere; controls carry 1.5px ink edges.",
+      "Flat at rest: depth comes from value steps and edges, not shadows.",
+      "Colour only for a person-needed state, always paired with an icon and a word.",
+      "Three type voices with fixed jobs; display caps never set body text."
+    ],
+    "rules": [
+      {
+        "name": "The Person-Needed Rule",
+        "body": "Colour appears only where a person is needed: signal for needs attention, failed and errors; approve for awaiting approval. Every coloured state carries an icon and a word, never colour alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Structure Rule",
+        "body": "A theme is one stylesheet that sets every role variable and nothing else. A new theme repaints values; it never adds a role, a radius or a layout change, and every text pairing must pass WCAG AA on every surface it sits on.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Places Rule",
+        "body": "The display face sets only page titles and ink tab bars (stage tabs, dialog and drawer headers), always in caps. Anything a person reads as a sentence is Public Sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Identifier Rule",
+        "body": "Issue numbers and branches are mono; nothing else is.",
+        "section": "typography"
+      },
+      {
+        "name": "The Any-Number-of-Columns Rule",
+        "body": "Nothing may depend on there being five columns: tile fills come from each tile's place in the row (0 for the first, 1 for the last), widths come from the grid's minimum, and extra columns scroll.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Sheet Rule",
+        "body": "Nothing on the page casts a shadow. A shadow means the layer floats above the page and will close.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Keyline Rule",
+        "body": "A container that holds content gets an inset keyline frame, as in the reference infographic. The frame, not a shadow or a fill change, is what turns: an ink edge on hover and focus, a signal edge on a card that needs attention, a 2px approve frame on a card awaiting approval.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** set every surface, line and text colour through the theme roles (`ground`, `tile-first`, `paper`, `line`, `ink`, `signal`, `approve`…) so all four themes repaint it.",
+      "**Do** give every coloured state an icon and a word: signal with the alert icon, approve with the person icon.",
+      "**Do** use one ink primary action per view; everything else is a secondary outline or ghost.",
+      "**Do** top a stage or panel tile with an ink tab and hold its content in an inset keyline frame.",
+      "**Do** step tile fills by each tile's place in the row, so the board works for any number of columns.",
+      "**Do** keep controls at least 44px tall, with a 1.5px ink edge and a 2px accent focus outline.",
+      "**Do** make a closed or inactive item recede through colour (paper at 55%, secondary ink), not opacity on its text."
+    ],
+    "donts": [
+      "**Don't** use colour for decoration or status that needs no person: no rainbow of status fills, no tinted columns.",
+      "**Don't** put a shadow on anything that sits on the page; shadows belong to dialogs, the drawer and menus only.",
+      "**Don't** round past 6px: no pill chips, no circular avatars or buttons on routed screens.",
+      "**Don't** set sentences, buttons or labels in the display face, or set display caps in anything but the display face.",
+      "**Don't** hard-code a theme's hex in a component, or add a role a theme would have to invent a value for.",
+      "**Don't** hard-code five columns or a fixed board width."
+    ]
+  }
+}

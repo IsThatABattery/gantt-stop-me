@@ -14,81 +14,82 @@ import type {
   UserRole,
 } from '../data/types'
 
-// Display labels for the Space theme. Code, data and URLs use plain names;
-// every themed word the user sees comes from here, so another theme can be
-// added later by swapping this object. Shared by every view: change it only
-// through a small PR into feature/frontend.
+// Display labels. Plain words are the default voice (PRODUCT.md, GLOSSARY.md):
+// Project, Task, Backlog, Testing, Agent. Code, data and URLs use the same plain
+// names; every word the user sees comes from here, so a themed label set (the
+// old space-mission one, say) can be swapped in later without touching a view.
+// Keep the keys and shapes stable: every view reads them.
 export const labels = {
   appName: 'GanttStopMe',
 
-  workspace: 'Space agency',
-  project: 'Mission',
-  projects: 'Missions',
-  epic: 'Mission phase',
-  feature: 'Objective',
-  features: 'Objectives',
-  task: 'Payload',
-  tasks: 'Payloads',
-  subtask: 'Module',
-  backlog: 'Hangar',
-  sprint: 'Launch window',
-  sprints: 'Launch windows',
-  user: 'Operator',
-  users: 'Operators',
-  agent: 'Astronaut',
-  agents: 'Astronauts',
-  board: 'Mission control',
-  activity: 'Mission log',
-  retro: 'Debrief',
+  workspace: 'Workspace',
+  project: 'Project',
+  projects: 'Projects',
+  epic: 'Epic',
+  feature: 'Feature',
+  features: 'Features',
+  task: 'Task',
+  tasks: 'Tasks',
+  subtask: 'Subtask',
+  backlog: 'Backlog',
+  sprint: 'Sprint',
+  sprints: 'Sprints',
+  user: 'Person',
+  users: 'People',
+  agent: 'Agent',
+  agents: 'Agents',
+  board: 'Board',
+  activity: 'Activity',
+  retro: 'Retro',
   settings: 'Settings',
   automation: 'Automation',
   plans: 'Plan a feature',
 
-  allProjects: 'All missions',
-  addProject: 'Add a mission',
-  newProject: 'New mission',
-  testsRunning: 'Flight checks running',
+  allProjects: 'All projects',
+  addProject: 'Add a project',
+  newProject: 'New project',
+  testsRunning: 'Tests running',
   linkGitHub: 'Link GitHub',
   newProjectHint: 'Start from scratch or import a backlog',
-  selectProject: 'Select a mission',
-  searchProjects: 'Search missions',
-  newUser: 'New operator?',
-  requestAccess: 'Request access',
+  selectProject: 'Select a project',
+  searchProjects: 'Search projects',
+  newUser: 'New here?',
+  requestAccess: 'Create an account',
   needsYou: 'Needs you',
   reviewNow: 'Review now',
-  tasksLanded: 'Payloads landed',
-  newFeature: 'New objective',
-  newTask: 'New payload',
-  manageFeatures: 'Manage objectives',
-  allFeatures: 'All objectives',
-  tMinus: 'T-minus',
+  tasksLanded: 'Tasks closed',
+  newFeature: 'New feature',
+  newTask: 'New task',
+  manageFeatures: 'Manage features',
+  allFeatures: 'All features',
+  tMinus: 'Ends in',
   awaitingApproval: 'Awaiting approval',
-  blocked: 'Comms down',
-  agentsActive: 'Astronauts active',
-  hail: 'Hail',
-  hails: 'Hails',
-  sprintName: (n: number) => `Launch window ${n}`,
-  inSprint: (n: number) => `In launch window ${n}`,
+  blocked: 'Needs attention',
+  agentsActive: 'Agents active',
+  hail: 'Question',
+  hails: 'Questions',
+  sprintName: (n: number) => `Sprint ${n}`,
+  inSprint: (n: number) => `In sprint ${n}`,
   nextSprint: (date: string) => `Next: ${date}`,
-  betweenSprints: 'Between launch windows',
-  lead: 'Flight director',
-  operatorsOnly: 'Operators only',
-  agentsOnly: 'Astronauts only',
+  betweenSprints: 'Between sprints',
+  lead: 'Lead',
+  operatorsOnly: 'People only',
+  agentsOnly: 'Agents only',
   needsAction: 'Needs action',
-  docking: 'Mission review',
+  docking: 'User Check',
   awaitingReview: 'Awaiting review',
   assignedToYou: 'Assigned to you',
   needsAttention: 'Needs attention',
   waitingOnYou: 'Waiting on you',
   unassigned: 'Unassigned',
   notScheduled: 'Not scheduled',
-  inheritProject: 'Inherit mission default',
-  inheritFeature: 'Inherit from objective',
+  inheritProject: 'Inherit project default',
+  inheritFeature: 'Inherit from feature',
 } as const
 
-/** Approval bar and astronaut console actions (AGENT_BRIEF §5, §6). */
+/** Approval bar and agent console actions (AGENT_BRIEF §5, §6). */
 export const actionLabels = {
-  approveLand: 'Approve & land',
+  approveLand: 'Approve and merge',
   requestChanges: 'Request changes',
   takeOver: 'Take over',
   shortcuts: 'A approve · R request changes · T take over',
@@ -96,67 +97,67 @@ export const actionLabels = {
   resume: 'Resume',
   redirect: 'Redirect',
   changeAutonomy: 'Autonomy',
-  recall: 'Recall to Hangar',
+  recall: 'Recall to Backlog',
   reply: 'Send',
-  editTask: 'Edit payload',
-  editFeature: 'Edit objective',
+  editTask: 'Edit task',
+  editFeature: 'Edit feature',
   archive: 'Archive',
   cancel: 'Cancel',
   save: 'Save changes',
-  createFeature: 'Create objective',
-  createTask: 'Create payload',
-  planWithAgent: 'Plan with an astronaut',
+  createFeature: 'Create feature',
+  createTask: 'Create task',
+  planWithAgent: 'Plan with an agent',
   addCriterion: 'Add criterion',
-  addSubtask: 'Add module',
+  addSubtask: 'Add subtask',
   linkPr: 'Link PR',
   addExisting: 'Add existing',
   backToBoard: 'Back to board',
 } as const
 
-/** Payload drawer tabs (PayloadDetail.dc.html). */
+/** Task drawer tabs (PayloadDetail.dc.html). */
 export const taskTabLabels = {
   brief: 'Brief',
-  subtasks: 'Modules',
-  log: 'Flight log',
-  cargo: 'Cargo',
-  trace: 'Astronaut trace',
+  subtasks: 'Subtasks',
+  log: 'Log',
+  cargo: 'Files',
+  trace: 'Agent trace',
 } as const
 
 /** Shared create/edit form text (NewObjective, ObjectiveEditor mockups). */
 export const formLabels = {
   feature: {
-    titleNew: 'New objective',
-    titleEdit: 'Edit objective',
-    intro: 'An objective groups the payloads that deliver one outcome. You can add payloads and success criteria after creating it.',
+    titleNew: 'New feature',
+    titleEdit: 'Edit feature',
+    intro: 'A feature groups the tasks that deliver one outcome. You can add tasks and success criteria after creating it.',
     nameLabel: 'Name',
     namePlaceholder: 'e.g. Realtime sync',
-    descPlaceholder: 'What does landing this objective achieve?',
-    parentLabel: 'Mission phase',
+    descPlaceholder: 'What does finishing this feature achieve?',
+    parentLabel: 'Epic',
     peopleLabel: 'Owner',
     criteriaHeading: 'Success criteria',
-    criteriaHelp: 'The objective lands when every criterion is met and every payload has landed.',
-    autonomyLegend: 'Autonomy for new payloads in this objective',
-    sideHeading: 'Payloads',
-    progressLabel: 'Landed',
+    criteriaHelp: 'The feature is done when every criterion is met and every task is closed.',
+    autonomyLegend: 'Autonomy for new tasks in this feature',
+    sideHeading: 'Tasks',
+    progressLabel: 'Closed',
   },
   task: {
-    titleNew: 'New payload',
-    titleEdit: 'Edit payload',
-    intro: 'A payload is one piece of work. It waits in the Hangar until it is scheduled into a launch window.',
+    titleNew: 'New task',
+    titleEdit: 'Edit task',
+    intro: 'A task is one piece of work. It waits in the Backlog until it is scheduled into a sprint.',
     nameLabel: 'Title',
     namePlaceholder: 'e.g. Retry cap for reconnects',
     descPlaceholder: 'What needs to be done, and how will we know it is done?',
-    parentLabel: 'Objective',
+    parentLabel: 'Feature',
     peopleLabel: 'Assignee',
     criteriaHeading: 'Acceptance criteria',
-    criteriaHelp: 'The payload docks for review when every criterion is met.',
-    autonomyLegend: 'Autonomy for this payload',
-    sideHeading: 'Modules',
+    criteriaHelp: 'The task moves to User Check when every criterion is met.',
+    autonomyLegend: 'Autonomy for this task',
+    sideHeading: 'Subtasks',
     progressLabel: 'Done',
   },
   description: 'Description',
   descriptionOptional: 'Description (optional)',
-  sprint: 'Target launch window',
+  sprint: 'Target sprint',
   estimate: 'Estimate (points)',
   priority: 'Priority',
   tags: 'Tags',
@@ -165,58 +166,61 @@ export const formLabels = {
 
 /** Planner steps and screens (AGENT_BRIEF §8). */
 export const plannerLabels = {
-  steps: ['Briefing', 'Review doc', 'Review payloads', 'Done'],
+  steps: ['Interview', 'Review doc', 'Review tasks', 'Done'],
   stepsLabel: 'Planning steps',
   saveAndExit: 'Save draft and exit',
-  briefingAgent: 'Briefing astronaut',
-  planningAgent: 'Planning astronaut',
-  newFeature: 'New objective',
+  briefingAgent: 'Interviewer agent',
+  planningAgent: 'Planning agent',
+  newFeature: 'New feature',
   draftSuffix: '(draft)',
   skipQuestion: 'Skip question',
   draftNow: 'Draft the doc now',
   sendAnswer: 'Send answer',
   yourAnswer: 'Your answer',
-  approveDoc: 'Approve and plan payloads',
+  approveDoc: 'Approve and plan tasks',
   denyDoc: 'Deny with feedback',
   editDoc: 'Edit the doc myself',
-  approveTask: 'Approve and add to Hangar',
+  approveTask: 'Approve and add to Backlog',
   editTask: 'Edit before approving',
   denyTask: 'Deny with feedback',
   finishReview: 'Finish review',
   openBoard: 'Open the board',
-  keepReviewing: 'Keep reviewing payloads',
-  viewFeature: 'View the objective',
+  keepReviewing: 'Keep reviewing tasks',
+  viewFeature: 'View the feature',
   docReasons: ['Too broad', 'Missing detail', 'Wrong scope', 'Wrong approach', 'Other'],
-  taskReasons: ['Too big', 'Unclear criteria', 'Duplicate', 'Wrong objective', 'Other'],
+  taskReasons: ['Too big', 'Unclear criteria', 'Duplicate', 'Wrong feature', 'Other'],
   docOutcomes: {
-    revise: { label: 'Send back for revision', description: 'The astronaut may ask a few follow-up questions, then redraft.' },
-    discard: { label: 'Discard this objective', description: 'Nothing is created and the draft is archived.' },
+    revise: { label: 'Send back for revision', description: 'The agent may ask a few follow-up questions, then redraft.' },
+    discard: { label: 'Discard this feature', description: 'Nothing is created and the draft is archived.' },
   },
   taskOutcomes: {
-    revise: { label: 'Revise this payload', description: 'It returns to the queue marked "Revised" with a note on what changed.' },
-    discard: { label: 'Drop this payload', description: 'It is removed from the plan and nothing is added to the board.' },
+    revise: { label: 'Revise this task', description: 'It returns to the queue marked "Revised" with a note on what changed.' },
+    discard: { label: 'Drop this task', description: 'It is removed from the plan and nothing is added to the board.' },
   },
 } as const
 
 /** Settings section names (Settings.dc.html). */
 export const settingsLabels = {
   account: 'Account',
+  appearance: 'Appearance',
+  appearanceHelp: 'Applies right away, and is saved in this browser.',
+  theme: 'Theme',
   github: 'GitHub',
   providers: 'LLM providers',
-  providersHelp: 'OpenAI-compatible endpoints your astronauts and test runs can use. Keys are stored encrypted and never shown again.',
+  providersHelp: 'OpenAI-compatible endpoints your agents and test runs can use. Keys are stored encrypted and never shown again.',
   profile: 'Profile',
-  autonomy: 'Astronauts and autonomy',
-  roles: 'Operators and roles',
+  autonomy: 'Agents and autonomy',
+  roles: 'People and roles',
   notifications: 'Notifications',
   integrations: 'Integrations',
   defaultAutonomy: 'Default autonomy',
-  defaultAutonomyHelp: 'Applies to new astronauts. You can override it per astronaut or per payload.',
-  freeFlightGrantedBy: 'Who can grant Free flight',
-  grantLead: 'Flight director only',
-  grantAny: 'Any operator member',
-  agentTaskCap: 'Concurrent astronaut payloads',
+  defaultAutonomyHelp: 'Applies to new agents. You can override it per agent or per task.',
+  freeFlightGrantedBy: 'Who can make an agent Autonomous',
+  grantLead: 'The lead only',
+  grantAny: 'Any member',
+  agentTaskCap: 'Concurrent agent tasks',
   approvalRules: 'Approval rules',
-  integrationsHelp: 'The AI company that powers your astronauts. Applies to every payload unless overridden.',
+  integrationsHelp: 'The AI company that powers your agents. Applies to every task unless overridden.',
   apiKey: 'API key',
   changePassword: 'Change password',
   agents: 'Agents',
@@ -237,7 +241,7 @@ export const llmAgentLabels = {
 export const autonomyDescriptions: Record<Autonomy, string> = {
   0: 'Approve the plan and the output.',
   1: 'Acts freely, output waits for approval.',
-  2: 'Lands low-risk payloads on its own.',
+  2: 'Merges low-risk tasks on its own.',
 }
 
 export const priorityLabels: Record<Priority, string> = {
@@ -250,7 +254,7 @@ export const priorityLabels: Record<Priority, string> = {
 export const featureStatusLabels: Record<FeatureStatus, string> = {
   planned: 'Planned',
   active: 'Active',
-  landed: 'Landed',
+  landed: 'Done',
   archived: 'Archived',
 }
 
@@ -260,22 +264,22 @@ export const traceKindLabels: Record<TraceKind, string> = {
   edit: 'Tool call · edit',
   run: 'Tool call · run',
   result: 'Result',
-  hail: 'Hail',
-  docking: 'Mission review',
+  hail: 'Question',
+  docking: 'Review',
 }
 
 export const activityVerbLabels: Record<ActivityVerb, string> = {
   moved: 'moved',
   created: 'created',
   commented: 'commented on',
-  hailed: 'hailed on',
-  answered: 'answered a hail on',
+  hailed: 'asked a question on',
+  answered: 'answered a question on',
   'opened-pr': 'opened a PR for',
   approved: 'approved',
   'requested-changes': 'requested changes on',
   'took-over': 'took over',
   recalled: 'recalled',
-  blocked: 'lost comms on',
+  blocked: 'flagged for attention',
 }
 
 export const draftStatusLabels: Record<DraftStatus, string> = {
@@ -301,52 +305,69 @@ export const proposalStatusLabels: Record<ProposalStatus, string> = {
   revised: 'Revised',
 }
 
-// Each column shows its Space name with the plain status word beside it.
+// Each column's name. name and plain are the same plain word while plain words
+// are the default; a themed label set gives name its own word and keeps plain,
+// which is then shown beside it. Show name alone when the two are equal.
+/** What each column is for, in a few words, under its tab. Columns the dictionary doesn't know show no line. */
+export const columnPurposeLabels: Partial<Record<string, string>> = {
+  backlog: 'Waiting to start',
+  'in-progress': 'Being built',
+  testing: 'Tests run on the linked PR',
+  'user-check': 'A person checks and approves',
+  closed: 'Merged and closed',
+}
+
+/** A task with no test run yet */
+export const noTestRunLabel = 'No test run'
+
 export const columnLabels: Record<ColumnKey, { name: string; plain: string }> = {
-  backlog: { name: 'Hangar', plain: 'Backlog' },
-  'in-progress': { name: 'In orbit', plain: 'In Progress' },
-  testing: { name: 'Flight check', plain: 'Testing' },
-  'user-check': { name: 'Mission review', plain: 'User Check' },
-  closed: { name: 'Landed', plain: 'Closed' },
+  backlog: { name: 'Backlog', plain: 'Backlog' },
+  'in-progress': { name: 'In Progress', plain: 'In Progress' },
+  testing: { name: 'Testing', plain: 'Testing' },
+  'user-check': { name: 'User Check', plain: 'User Check' },
+  closed: { name: 'Closed', plain: 'Closed' },
 }
 
 export const taskStatusLabels: Record<TaskStatus, string> = {
   queued: 'Queued',
   ready: 'Ready',
   working: 'Working',
-  hail: 'Hail',
-  blocked: 'Comms down',
-  'awaiting-approval': 'Approve?',
+  hail: 'Question',
+  blocked: 'Needs attention',
+  'awaiting-approval': 'Awaiting approval',
   'in-review': 'In review',
-  landed: 'Landed',
+  landed: 'Closed',
 }
 
 export const autonomyLabels: Record<Autonomy, string> = {
-  0: 'Tethered',
+  0: 'Supervised',
   1: 'Guided',
-  2: 'Free flight',
+  2: 'Autonomous',
 }
 
 export const agentStateLabels: Record<AgentState, string> = {
   idle: 'Idle',
   planning: 'Planning',
-  working: 'In orbit',
-  hail: 'Hail',
-  docking: 'Mission review',
-  blocked: 'Comms down',
+  working: 'Working',
+  hail: 'Question',
+  docking: 'In review',
+  blocked: 'Needs attention',
 }
 
 export const roleLabels: Record<UserRole, string> = {
-  lead: 'Flight director',
-  member: 'Operator',
+  lead: 'Lead',
+  member: 'Member',
 }
 
-/** A task's latest test run, as the board card and drawer show it. */
+/**
+ * A task's latest test run, as the board card and drawer show it. A failed run
+ * found broken code; a runner error means the run itself broke (GLOSSARY.md).
+ */
 export const runStatusLabels: Record<RunStatus, string> = {
-  queued: 'Test queued',
-  running: 'Testing',
+  queued: 'Tests queued',
+  running: 'Tests running',
   passed: 'Tests passed',
   failed: 'Tests failed',
-  error: 'Test error',
-  cancelled: 'Test cancelled',
+  error: 'Runner error',
+  cancelled: 'Tests cancelled',
 }

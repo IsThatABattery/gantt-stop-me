@@ -10,7 +10,7 @@ import { actionLabels, autonomyDescriptions, autonomyLabels, labels } from '../.
 
 // Red outline button. Not Button: its default border and text colors would win over red.
 const danger = (extra = '') =>
-  cx('inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border border-critical bg-transparent px-4 font-[inherit] font-medium text-critical hover:bg-critical/10 disabled:cursor-not-allowed disabled:opacity-50', extra)
+  cx('inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border border-signal bg-transparent px-4 font-[inherit] font-medium text-signal-ink hover:bg-signal/10 disabled:cursor-not-allowed disabled:opacity-50', extra)
 
 interface ControlsProps {
   row: AgentRow
@@ -56,8 +56,8 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
   }
 
   return (
-    <div className="flex flex-[1_1_260px] flex-col gap-2.5 rounded-card border border-line bg-surface-sunken p-5">
-      <h3 className="m-0 mb-1 font-heading text-[15px] font-semibold">Controls</h3>
+    <div className="flex flex-[1_1_260px] flex-col gap-2.5 rounded-card border border-rule bg-ground p-5">
+      <h3 className="m-0 mb-1 text-[15px] font-semibold">Controls</h3>
 
       <Button
         aria-pressed={agent.paused}
@@ -69,8 +69,8 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
       </Button>
 
       {mode === 'redirect' ? (
-        <form onSubmit={sendRedirect} noValidate className="flex flex-col gap-2 rounded-control border border-line p-3">
-          <label htmlFor={`${id}-redirect`} className="text-[13px] text-text-soft">
+        <form onSubmit={sendRedirect} noValidate className="flex flex-col gap-2 rounded-control border border-rule p-3">
+          <label htmlFor={`${id}-redirect`} className="text-[13px] text-ink">
             New instruction for {agent.name}
           </label>
           <TextInput
@@ -84,7 +84,7 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
             }}
           />
           {problem && (
-            <p role="alert" className="m-0 text-[13px] text-critical">
+            <p role="alert" className="m-0 text-[13px] text-signal-ink">
               {problem}
             </p>
           )}
@@ -108,7 +108,7 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
       )}
 
       <fieldset className="m-0 mt-1.5 flex flex-col gap-2 border-0 p-0">
-        <legend className="pb-2 text-xs text-text-muted">{actionLabels.changeAutonomy}</legend>
+        <legend className="pb-2 text-xs text-ink-2">{actionLabels.changeAutonomy}</legend>
         {([0, 1, 2] as Autonomy[]).map((level) => {
           const locked = level === 2 && !canGrantFreeFlight
           return (
@@ -136,7 +136,7 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
       </fieldset>
 
       {mode === 'recall' && task ? (
-        <div role="alertdialog" aria-labelledby={`${id}-recall`} className="mt-auto flex flex-col gap-2.5 rounded-control border border-critical bg-critical/8 p-3">
+        <div role="alertdialog" aria-labelledby={`${id}-recall`} className="mt-auto flex flex-col gap-2.5 rounded-control border border-signal bg-signal/8 p-3">
           <p id={`${id}-recall`} className="m-0 text-[13px] leading-normal">
             Recall {agent.name}? {task.key} goes back to the {labels.backlog} and {agent.name} stops work on it.
           </p>
@@ -175,7 +175,7 @@ export function Controls({ row, projectId, me, freeFlightGrantedBy }: ControlsPr
 
       <div role="status" aria-live="polite" className="text-[13px]">
         {notice && !error && <span className="text-good">{notice}</span>}
-        {error && <span className="text-critical">{error.message}</span>}
+        {error && <span className="text-signal-ink">{error.message}</span>}
       </div>
     </div>
   )

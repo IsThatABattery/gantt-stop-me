@@ -20,16 +20,16 @@ export function PlanDonePage() {
 
   const tiles = [
     { n: summary.approved.length, text: `approved, now in the ${labels.backlog}`, tone: 'border-good bg-good/6' },
-    { n: summary.sentBack, text: `sent back, the ${agentWord} is revising`, tone: 'border-warning bg-warning/6' },
-    { n: summary.waiting, text: 'still waiting for your review', tone: 'border-line' },
-    ...(summary.dropped > 0 ? [{ n: summary.dropped, text: 'dropped from the plan', tone: 'border-line' }] : []),
+    { n: summary.sentBack, text: `sent back, the ${agentWord} is revising`, tone: 'border-approve bg-approve/6' },
+    { n: summary.waiting, text: 'still waiting for your review', tone: 'border-rule' },
+    ...(summary.dropped > 0 ? [{ n: summary.dropped, text: 'dropped from the plan', tone: 'border-rule' }] : []),
   ]
 
   return (
     <div className="mx-auto flex max-w-[920px] flex-col gap-6 pt-5">
       <div>
-        <h1 className="m-0 font-heading text-[28px] font-semibold">{draft.name} is ready</h1>
-        <p className="mt-2 mb-0 leading-normal text-text-muted-strong">
+        <h1 className="m-0 text-[28px] font-semibold">{draft.name} is ready</h1>
+        <p className="mt-2 mb-0 leading-normal text-ink-2">
           The {labels.feature.toLowerCase()} doc is approved and the reviewed {labels.tasks.toLowerCase()} are on the board.
         </p>
       </div>
@@ -38,23 +38,23 @@ export function PlanDonePage() {
         {tiles.map((t) => (
           <li key={t.text} className={`rounded-card border p-[18px] ${t.tone}`}>
             <div className="font-mono text-2xl">{t.n}</div>
-            <div className="mt-1 text-text-soft">{t.text}</div>
+            <div className="mt-1 text-ink">{t.text}</div>
           </li>
         ))}
       </ul>
 
-      <section aria-labelledby="added-h" className="rounded-[14px] border border-line bg-surface p-6">
-        <h2 id="added-h" className="mt-0 mb-1 font-heading text-lg font-semibold">
+      <section aria-labelledby="added-h" className="rounded-[14px] border border-rule bg-paper p-6">
+        <h2 id="added-h" className="mt-0 mb-1 text-lg font-semibold">
           Added to the board
         </h2>
         {summary.approved.length === 0 ? (
-          <p className="mt-2 mb-0 text-text-muted-strong">Nothing yet. Approve a proposal to add it to the {labels.backlog}.</p>
+          <p className="mt-2 mb-0 text-ink-2">Nothing yet. Approve a proposal to add it to the {labels.backlog}.</p>
         ) : (
           <ul className="m-0 list-none p-0">
             {summary.approved.map((a) => (
-              <li key={a.taskId} className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft py-3.5 first:border-t-0">
-                <Link to={`/projects/${projectId}/tasks/${a.taskId}`} className="text-text no-underline hover:text-text">
-                  <span className="font-mono text-xs text-text-muted">{a.key}</span>
+              <li key={a.taskId} className="flex flex-wrap items-center justify-between gap-3 border-t border-keyline py-3.5 first:border-t-0">
+                <Link to={`/projects/${projectId}/tasks/${a.taskId}`} className="text-ink no-underline hover:text-ink">
+                  <span className="font-mono text-xs text-ink-2">{a.key}</span>
                   <span className="mt-0.5 block hover:underline">{a.title}</span>
                 </Link>
                 <Chip tone="neutral">{a.column === 'backlog' ? `In the ${labels.backlog}` : columnLabels[a.column].name}</Chip>

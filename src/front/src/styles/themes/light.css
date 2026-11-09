@@ -1,0 +1,40 @@
+/* Light: the default. The process-flow board in one cool neutral family: stepped gray tiles,
+   solid ink tabs, white cards. Colour only where a person is needed.
+   It also applies when the root has no data-theme, or one no theme knows. */
+:where(:root),
+[data-theme='light'] {
+  color-scheme: light;
+
+  --ground: #f2f4f6;
+  --rail: #e6e9ed;
+  --block: #d5dae0;
+  --block-hover: #c9cfd6;
+  --tile-first: #e4e8ec;
+  --tile-last: #c8d0d8;
+  --tile-keyline: rgba(255, 255, 255, 0.85);
+  --paper: #ffffff;
+
+  --keyline: #e1e5ea;
+  --rule: #c9cfd6;
+  --line: #646e79;
+
+  --ink: #14171b;
+  --ink-hover: #2b3138;
+  --ink-2: #48515b;
+  --on-ink: #ffffff;
+  --on-ink-2: #b6bec8;
+
+  --accent: #14171b;
+  --on-accent: #ffffff;
+
+  --signal: #c8341a;
+  --signal-ink: #a72a13;
+  --on-signal: #ffffff;
+  --signal-wash: #fcebe7;
+  --approve: #ffd02a;
+  --on-approve: #14171b;
+  --approve-ink: #6b4c00;
+  --good: #175c31;
+
+  --stars: none;
+}

@@ -113,7 +113,15 @@ docker compose --profile test run --rm runner-test
 - `test-db` stays up between runs. `docker compose --profile test down` stops it.
 - Both commands are done when they exit 0.
 
-Frontend tests: `npm test` in `src/front`.
+Frontend tests run in a container too:
+
+```sh
+# Vitest. Run after every change to src/front.
+docker compose run --rm web-test
+
+# Any npm command, such as the linter
+docker compose run --rm web-test npm run lint
+```
 
 ## Configuration
 

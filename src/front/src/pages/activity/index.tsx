@@ -26,9 +26,9 @@ export function ActivityPage() {
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
       <header>
-        <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.activity}</h1>
+        <h1 className="m-0 text-[26px] font-semibold">{labels.activity}</h1>
         {events.data && events.data.length > 0 && (
-          <p className="m-0 mt-1.5 text-[13px] text-text-muted-strong">
+          <p className="m-0 mt-1.5 text-[13px] text-ink-2">
             {events.data.length} entries · {needsAction > 0 ? `${needsAction} need action` : 'nothing needs you'}
           </p>
         )}

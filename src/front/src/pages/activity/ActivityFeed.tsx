@@ -27,12 +27,12 @@ export function ActivityFilters({
             aria-pressed={on}
             onClick={() => onChange(f)}
             className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border px-3.5 font-[inherit] ${
-              on ? 'border-ion bg-ion/10 text-text' : 'border-line bg-transparent text-text-muted-strong hover:border-line-strong hover:text-text'
+              on ? 'border-accent bg-accent/10 text-ink' : 'border-rule bg-transparent text-ink-2 hover:border-line hover:text-ink'
             }`}
           >
-            {f === 'needs-action' && <Icon name="alert" size={14} className="text-warning" />}
+            {f === 'needs-action' && <Icon name="alert" size={14} className="text-approve-ink" />}
             {filterLabels[f]}
-            <span className="font-mono text-xs text-text-muted">{filterEvents(events, f).length}</span>
+            <span className="font-mono text-xs text-ink-2">{filterEvents(events, f).length}</span>
           </button>
         )
       })}
@@ -58,7 +58,7 @@ export function ActivityFeed({ events, users, agents, tasks, emptyText = 'No act
   const [today] = useState(() => now ?? Date.now())
   if (events.length === 0) {
     return (
-      <p role="status" className="m-0 rounded-card border border-dashed border-line px-4 py-10 text-center text-[13px] text-text-muted">
+      <p role="status" className="m-0 rounded-card border border-dashed border-rule px-4 py-10 text-center text-[13px] text-ink-2">
         {emptyText}
       </p>
     )
@@ -84,7 +84,7 @@ export function ActivityFeed({ events, users, agents, tasks, emptyText = 'No act
     <div className="flex flex-col gap-5">
       {groups.map((g) => (
         <section key={g.key} aria-label={g.label} className="flex flex-col gap-2">
-          <h2 className="eyebrow m-0">{g.label}</h2>
+          <h2 className="text-xs font-semibold text-ink-2 m-0">{g.label}</h2>
           {list(g.events)}
         </section>
       ))}
@@ -103,10 +103,10 @@ function Entry({ event: e, lookup }: { event: ActivityEvent; lookup: Lookup }) {
   return (
     <li
       className={`flex gap-3 rounded-control border px-3.5 py-3 text-[13px] leading-normal ${
-        e.needsAction ? 'border-warning/70 bg-warning/6' : 'border-line-soft bg-surface'
+        e.needsAction ? 'border-approve/70 bg-approve/6' : 'border-keyline bg-paper'
       }`}
     >
-      <time dateTime={e.at} className="w-11 flex-none pt-0.5 font-mono text-xs text-text-muted">
+      <time dateTime={e.at} className="w-11 flex-none pt-0.5 font-mono text-xs text-ink-2">
         {clockTime(e.at)}
       </time>
       <ActorMark actor={e.actor} lookup={lookup} />
@@ -118,10 +118,10 @@ function Entry({ event: e, lookup }: { event: ActivityEvent; lookup: Lookup }) {
               {task.key}
             </Link>
           ) : (
-            e.taskId && <span className="font-mono text-xs text-text-muted">{e.taskId}</span>
+            e.taskId && <span className="font-mono text-xs text-ink-2">{e.taskId}</span>
           )}
         </p>
-        {e.detail && <p className="m-0 break-words text-text-muted-strong">{e.detail}</p>}
+        {e.detail && <p className="m-0 break-words text-ink-2">{e.detail}</p>}
         {e.needsAction && (
           <Chip tone="warning" className="mt-0.5 self-start">
             <Icon name="alert" size={12} />
@@ -137,13 +137,13 @@ function Entry({ event: e, lookup }: { event: ActivityEvent; lookup: Lookup }) {
 function ActorMark({ actor, lookup }: { actor: Assignee; lookup: Lookup }) {
   if (actor.kind === 'agent') {
     return (
-      <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-lg border border-astronaut bg-astronaut/10 text-astronaut">
+      <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-lg border border-accent bg-accent/10 text-accent">
         <Icon name="helmet" size={16} />
       </span>
     )
   }
   return (
-    <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-full bg-line text-[11px] font-semibold text-text">
+    <span aria-hidden="true" className="inline-flex size-7 flex-none items-center justify-center rounded-full bg-rule text-[11px] font-semibold text-ink">
       {lookup.user.get(actor.id)?.initials ?? '?'}
     </span>
   )
@@ -153,14 +153,14 @@ function ActorMark({ actor, lookup }: { actor: Assignee; lookup: Lookup }) {
 function ActorName({ actor, lookup }: { actor: Assignee; lookup: Lookup }) {
   if (actor.kind === 'agent') {
     return (
-      <span className="font-medium text-astronaut-text">
+      <span className="font-medium text-accent">
         <span className="sr-only">{labels.agent} </span>
         {lookup.agent.get(actor.id)?.name ?? labels.agent}
       </span>
     )
   }
   return (
-    <span className="font-medium text-ion">
+    <span className="font-medium text-accent">
       <span className="sr-only">{labels.user} </span>
       {lookup.user.get(actor.id)?.name ?? labels.user}
     </span>

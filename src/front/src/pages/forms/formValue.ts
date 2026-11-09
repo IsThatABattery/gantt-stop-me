@@ -15,7 +15,7 @@ export const toInput = (v: BasicsValue): ItemInput => ({ ...v, estimate: v.estim
 /** Client-side checks, so errors show before anything is sent. */
 export function basicsErrors(kind: Kind, v: BasicsValue): Partial<Record<'name' | 'estimate', string>> {
   const errors: Partial<Record<'name' | 'estimate', string>> = {}
-  if (!v.name.trim()) errors.name = kind === 'feature' ? 'Give the objective a name.' : 'Give the payload a title.'
+  if (!v.name.trim()) errors.name = kind === 'feature' ? 'Give the feature a name.' : 'Give the task a title.'
   const est = toInput(v).estimate
   if (kind === 'task' && (!Number.isFinite(est) || est < 0)) errors.estimate = 'Estimate must be 0 or more.'
   return errors
