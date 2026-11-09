@@ -44,3 +44,14 @@ Run it after every change to `src/back/api`. Done when it exits 0.
 - `test-db` stays up between runs. `docker compose --profile test down` stops it.
 - The Docker tests run only in `runner-test`, which has the Docker socket: `docker compose --profile test run --rm runner-test`. They are the runner's and `TestRunOnDocker`, one test run from a ready PR to its merge through `internal/automation` on the real runner. Run it after every change to `internal/runner`, `cmd/runner` or how `internal/automation` drives a run. Done when it exits 0.
 - `TestLiveLLMOnDocker` routes and runs two LLM checks against a real provider, so it skips without a key: `LLM_LIVE_KEY=… docker compose --profile test run --rm -e LLM_LIVE_KEY -e LLM_LIVE_DECISION_MODEL=… -e LLM_LIVE_CHAT_MODEL=… runner-test go test -count=1 -v -run TestLiveLLMOnDocker ./internal/automation`. `LLM_LIVE_BASE_URL` defaults to OpenAI; `-e LLM_LIVE_ARTIFACTS=/src/live-artifacts` saves the checks' screenshots and videos to `src/back/api/live-artifacts`, which git ignores.
+
+Frontend tests:
+
+```sh
+docker compose run --rm web-test
+```
+
+Run it after every change to `src/front`. Done when it exits 0.
+
+- Append an npm command to run something else: `docker compose run --rm web-test npm run lint`. `docker compose build web` typechecks and builds.
+- `node_modules` lives in the `web-node-modules` volume, so the host needs none.

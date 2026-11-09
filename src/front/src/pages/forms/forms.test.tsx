@@ -4,12 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 
-describe('new payload', () => {
-  it('creates an issue in the Hangar and opens it', async () => {
+describe('new task', () => {
+  it('creates an issue in the Backlog and opens it', async () => {
     const { router } = renderApp('/projects/1/new/task')
     await userEvent.type(await screen.findByLabelText('Title'), '  Print the chart  ')
     await userEvent.type(screen.getByLabelText('Description (optional)'), 'A4, landscape.')
-    await userEvent.click(screen.getByRole('button', { name: 'Create payload' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create task' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1/tasks/13'))
     expect(fake.requests.find((r) => r.method === 'POST' && r.path === '/api/projects/1/tasks')?.body).toEqual({
@@ -22,7 +22,7 @@ describe('new payload', () => {
 
   it('blocks an empty title without asking the API', async () => {
     renderApp('/projects/1/new/task')
-    await userEvent.click(await screen.findByRole('button', { name: 'Create payload' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Create task' }))
     expect(screen.getByText('Give it a title.')).toBeInTheDocument()
     expect(screen.getByLabelText('Title')).toHaveAttribute('aria-invalid', 'true')
     expect(fake.requests.some((r) => r.method === 'POST')).toBe(false)
@@ -32,7 +32,7 @@ describe('new payload', () => {
     failNext('POST /api/projects/1/tasks', { status: 400, code: 'invalid_body', message: 'Keep the description to 65536 characters.' })
     renderApp('/projects/1/new/task')
     await userEvent.type(await screen.findByLabelText('Title'), 'Too long')
-    await userEvent.click(screen.getByRole('button', { name: 'Create payload' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create task' }))
     expect(await screen.findByText('Keep the description to 65536 characters.')).toBeInTheDocument()
     expect(screen.getByLabelText('Description (optional)')).toHaveAttribute('aria-invalid', 'true')
   })
@@ -56,7 +56,7 @@ describe('new payload', () => {
   })
 })
 
-describe('edit payload', () => {
+describe('edit task', () => {
   it('saves only what changed and writes it to the issue', async () => {
     renderApp('/projects/1/tasks/7/edit')
     const title = await screen.findByLabelText('Title')
@@ -86,8 +86,8 @@ describe('edit payload', () => {
     expect(router.state.location.pathname).toBe('/projects/1/tasks/7/edit')
   })
 
-  it('shows not found for a missing payload', async () => {
+  it('shows not found for a missing task', async () => {
     renderApp('/projects/1/tasks/999/edit')
-    expect(await screen.findByRole('heading', { name: 'Payload not found' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Task not found' })).toBeInTheDocument()
   })
 })

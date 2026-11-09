@@ -23,7 +23,7 @@ interface BasicsFieldsProps {
   idPrefix: string
 }
 
-/** The fields an objective and a payload share (AGENT_BRIEF §7). */
+/** The fields a feature and a task share (AGENT_BRIEF §7). */
 export function BasicsFields({ kind, value, onChange, options, errors = {}, variant, idPrefix }: BasicsFieldsProps) {
   const t = formLabels[kind]
   const id = (name: string) => `${idPrefix}-${name}`
@@ -66,7 +66,7 @@ export function BasicsFields({ kind, value, onChange, options, errors = {}, vari
         label={
           variant === 'dialog' ? (
             <>
-              {formLabels.description} <span className="text-text-muted">(optional)</span>
+              {formLabels.description} <span className="text-ink-2">(optional)</span>
             </>
           ) : (
             formLabels.description
@@ -159,7 +159,7 @@ export function BasicsFields({ kind, value, onChange, options, errors = {}, vari
 export function FieldError({ id, children }: { id: string; children?: ReactNode }) {
   if (!children) return null
   return (
-    <span id={id} className="text-[13px] text-critical">
+    <span id={id} className="text-[13px] text-signal-ink">
       {children}
     </span>
   )

@@ -29,7 +29,7 @@ describe.skip('astronaut console', () => {
     const tiles = within(screen.getByRole('group', { name: 'Astronauts roster' })).getAllByRole('button')
     expect(tiles).toHaveLength(4)
     expect(screen.getByText(/Astronauts · 4 active · 1 needs you/i)).toBeInTheDocument()
-    expect(tile('Astronaut-3')).toHaveClass('border-warning')
+    expect(tile('Astronaut-3')).toHaveClass('border-approve')
     expect(tile('Astronaut-3')).toHaveAttribute('aria-pressed', 'true')
     expect(within(panel()).getByText('Hail · Waiting on you')).toBeInTheDocument()
     expect(within(panel()).getAllByRole('listitem')).toHaveLength(4)

@@ -1,13 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { useParams } from 'react-router'
 import { useProjectContext } from '../../app/projectContext'
 import { AgentEditor, NoProviders } from '../../components/AgentEditor'
-import { Workflows } from './Workflows'
 import { Button } from '../../components/controls'
 import { Icon } from '../../components/Icon'
-import { StatusMessage } from '../../components/StatusMessage'
+import { PageTitle } from '../../components/PageTitle'
+import { InkTab, Tile } from '../../components/Tile'
 import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { AgentSettings, Automation, Me, Permission, Provider } from '../../data/api/types'
 import { errorCode, NotFoundError } from '../../data/errors'
@@ -25,6 +25,8 @@ import {
 } from '../../data/views/agentSettings'
 import { useProviders } from '../../data/views/settings'
 import { actionLabels, labels, llmAgentLabels } from '../../labels/labels'
+import { Card, Confirm } from '../settings/Section'
+import { Workflows } from './Workflows'
 
 type AutomationAgent = 'decision' | 'chat'
 type Agents = Record<AutomationAgent, AgentSettings>
@@ -41,33 +43,73 @@ export function AutomationPage() {
   const failed = [automation, providers, me].find((q) => !q.data && q.error)
 
   return (
-    <div className="flex flex-col gap-6 px-8 py-7">
-      <header>
-        <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.automation}</h1>
+    <div className="flex flex-col gap-6 px-4 pt-5 pb-12 md:px-7">
+      <header className="flex flex-col gap-2.5">
+        <PageTitle>{labels.automation}</PageTitle>
+        <p className="m-0 text-[15px] text-ink-2">
+          <span className="font-semibold text-ink">
+            {project.owner}/{project.name}
+          </span>{' '}
+          · Test runs check each {labels.task.toLowerCase()}'s linked pull request, then report back.
+        </p>
       </header>
-      {!automation.data && automation.error instanceof NotFoundError ? (
-        <StatusMessage
-          title="Automation isn't available for this project"
-          body="The server may have no test runner, or the project wasn't found."
-        />
-      ) : failed ? (
-        <StatusMessage title="Something went wrong" body={failed.error?.message}>
-          <Button onClick={() => failed.refetch()}>Try again</Button>
-        </StatusMessage>
-      ) : !automation.data || !providers.data || !me.data ? (
-        <StatusMessage title={`Loading ${labels.automation.toLowerCase()}…`} />
-      ) : (
-        <AutomationForm
-          key={projectId}
-          projectId={projectId}
-          permission={project.permission}
-          automation={automation.data}
-          providers={providers.data}
-          me={me.data}
-        />
-      )}
-      {automation.data && <Workflows projectId={projectId} readOnly={project.permission === 'read'} />}
+      <div className="flex max-w-[1160px] flex-col gap-6">
+        {!automation.data && automation.error instanceof NotFoundError ? (
+          <Notice
+            title="Automation isn't available for this project"
+            body="The server may have no test runner, or the project wasn't found."
+          />
+        ) : failed ? (
+          <Notice
+            tone="signal"
+            title="Something went wrong"
+            body={failed.error?.message}
+            action={
+              <Button variant="primary" onClick={() => failed.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        ) : !automation.data || !providers.data || !me.data ? (
+          <p role="status" className="m-0 text-sm text-ink-2">
+            Loading {labels.automation.toLowerCase()}…
+          </p>
+        ) : (
+          <AutomationForm
+            key={projectId}
+            projectId={projectId}
+            permission={project.permission}
+            automation={automation.data}
+            providers={providers.data}
+            me={me.data}
+          />
+        )}
+        {automation.data && <Workflows projectId={projectId} readOnly={project.permission === 'read'} />}
+      </div>
     </div>
+  )
+}
+
+/** In place of the form when there's none to show: a square mark, a heading, what to do and a way out if there is one. */
+function Notice({ title, body, tone = 'neutral', action }: { title: string; body?: string; tone?: 'neutral' | 'signal'; action?: ReactNode }) {
+  return (
+    <Card>
+      <div className="flex items-start gap-3.5">
+        <span
+          aria-hidden="true"
+          className={`grid size-10 flex-none place-items-center rounded-[2px] ${tone === 'signal' ? 'bg-signal text-on-signal' : 'border-[1.5px] border-ink text-ink'}`}
+        >
+          <Icon name={tone === 'signal' ? 'alert' : 'automation'} size={20} />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <div role="status" className="flex flex-col gap-1">
+            <h2 className="m-0 text-base font-bold">{title}</h2>
+            {body && <p className="m-0 max-w-[60ch] text-[13px] leading-normal wrap-anywhere text-ink-2">{body}</p>}
+          </div>
+          {action && <div className="mt-2 flex flex-wrap gap-2.5">{action}</div>}
+        </div>
+      </div>
+    </Card>
   )
 }
 
@@ -199,101 +241,145 @@ function AutomationForm({
     })
   }
 
+  // On, paused (it needs the owner, or someone taking over, to save again) or off: a mark with an icon and the words.
+  const state = !automation.enabled ? 'off' : automation.pausedReason ? 'paused' : 'on'
+  const mark = {
+    on: { look: 'bg-ink text-on-ink', icon: 'automation' },
+    paused: { look: 'bg-signal text-on-signal', icon: 'pause' },
+    off: { look: 'border-[1.5px] border-ink-2 text-ink-2', icon: 'automation' },
+  } as const
+
   return (
-    <form onSubmit={submit} noValidate aria-label={labels.automation} className="flex max-w-[820px] flex-col gap-5 rounded-[14px] border border-line bg-surface p-6">
-      <div className="flex flex-col gap-1.5">
-        <p id={`${id}-state`} tabIndex={-1} className="m-0 font-medium">
-          {automation.enabled ? (automation.pausedReason ? 'Automation is on, but paused.' : 'Automation is on.') : 'Automation is off.'}
-        </p>
-        <p className="m-0 text-[13px] leading-normal text-text-muted-strong">
-          {automation.enabled
-            ? `Owner: ${automation.owner.login ?? 'none, they unlinked GitHub'}. Test runs and merges use the owner's GitHub account and providers.`
-            : 'Choose both agents’ models to turn it on. You become its owner: test runs and merges use your GitHub account and providers.'}
-        </p>
-        {automation.enabled && (
-          // The editors below show only the caller's own providers, so this is what runs for everyone else.
-          <p className="m-0 text-[13px] leading-normal text-text-muted-strong">
-            {llmAgentLabels.decision.name}: {automation.decisionModel}. {llmAgentLabels.chat.name}: {automation.chatModel}.
-          </p>
-        )}
+    <form onSubmit={submit} noValidate aria-label={labels.automation} className="flex flex-col gap-6">
+      <Card gap="gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <span aria-hidden="true" className={`grid size-11 flex-none place-items-center rounded-[2px] ${mark[state].look}`}>
+            <Icon name={mark[state].icon} size={22} />
+          </span>
+          <div className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-1">
+            <p id={`${id}-state`} tabIndex={-1} className="m-0 text-base font-bold">
+              {automation.enabled ? (automation.pausedReason ? 'Automation is on, but paused.' : 'Automation is on.') : 'Automation is off.'}
+            </p>
+            <p className="m-0 max-w-[80ch] text-[13px] leading-normal text-ink-2">
+              {automation.enabled
+                ? `Owner: ${automation.owner.login ?? 'none, they unlinked GitHub'}. Test runs and merges use the owner's GitHub account and providers.`
+                : 'Choose both agents’ models to turn it on. You become its owner: test runs and merges use your GitHub account and providers.'}
+            </p>
+            {automation.enabled && (
+              // The editors below show only the caller's own providers, so this is what runs for everyone else.
+              <p className="m-0 text-[13px] leading-normal text-ink-2">
+                {llmAgentLabels.decision.name}: {automation.decisionModel}. {llmAgentLabels.chat.name}: {automation.chatModel}.
+              </p>
+            )}
+          </div>
+          {automation.enabled && !confirmOff && !readOnly && (
+            <Button id={`${id}-off-open`} onClick={() => openOff(true)} disabled={busy}>
+              Turn off automation
+            </Button>
+          )}
+        </div>
         {automation.enabled && automation.pausedReason && (
-          <p className="m-0 flex items-start gap-2 rounded-control border border-warning bg-warning/6 px-3 py-2 text-[13px]">
-            <Icon name="alert" size={16} className="mt-0.5 flex-none text-warning" />
+          <p className="m-0 flex items-start gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] font-semibold text-signal-ink">
+            <Icon name="alert" size={16} className="mt-px flex-none" />
             <span>Paused: {automation.pausedReason} Saving unpauses it.</span>
           </p>
         )}
-      </div>
+        {confirmOff && (
+          <Confirm id={`${id}-off`} question="Turn off automation? Queued and running test runs are cancelled.">
+            <Button id={`${id}-off-cancel`} onClick={() => openOff(false)} disabled={busy}>
+              {actionLabels.cancel}
+            </Button>
+            <Button variant="danger" onClick={off} disabled={busy} aria-busy={turnOff.isPending || undefined}>
+              Turn off
+            </Button>
+          </Confirm>
+        )}
+      </Card>
 
-      {providers.length === 0 && <NoProviders />}
-      <fieldset disabled={readOnly} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
-        {agentKeys.map((a) => (
-          <AgentEditor
-            key={a}
-            id={`${id}-${a}`}
-            {...llmAgentLabels[a]}
-            required
-            providers={providers}
-            value={agents[a]}
-            errors={errors[a]}
-            onChange={(v) => update({ ...agents, [a]: v })}
-          />
-        ))}
-      </fieldset>
-
-      {takesOver && (
-        <p id={`${id}-takeover`} className="m-0 flex items-start gap-2 rounded-control border border-warning bg-warning/6 px-3 py-2 text-[13px]">
-          <Icon name="alert" size={16} className="mt-0.5 flex-none text-warning" />
-          <span>
-            Saving makes you the owner{automation.enabled && automation.owner.login ? ` instead of ${automation.owner.login}` : ''}. Test runs and merges then use
-            your GitHub account and providers.
-          </span>
+      <Tile
+        as="section"
+        aria-labelledby={`${id}-agents`}
+        frameClassName="gap-3"
+        tab={
+          <InkTab id={`${id}-agents`} count={agentKeys.length} countLabel="agents">
+            Test agents
+          </InkTab>
+        }
+      >
+        <p className="m-0 max-w-[70ch] px-0.5 text-[13px] leading-[1.45] text-ink-2">
+          Every test run uses both, on the owner's providers. Choose each one's provider and model.
         </p>
-      )}
+        {providers.length === 0 && (
+          <Card>
+            <NoProviders />
+          </Card>
+        )}
+        <fieldset disabled={readOnly} className="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,400px),1fr))] gap-2 border-0 p-0">
+          {agentKeys.map((a) => (
+            // The editor draws a rule above itself for stacking in one panel; as its own card it needs none.
+            <Card key={a} frameClassName="[&>div]:border-t-0 [&>div]:pt-0">
+              <AgentEditor
+                id={`${id}-${a}`}
+                {...llmAgentLabels[a]}
+                required
+                providers={providers}
+                value={agents[a]}
+                errors={errors[a]}
+                onChange={(v) => update({ ...agents, [a]: v })}
+              />
+            </Card>
+          ))}
+        </fieldset>
 
-      {confirmOff && (
-        <div role="alertdialog" aria-labelledby={`${id}-off`} className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
-          <p id={`${id}-off`} className="m-0 flex-1 text-[13px]">
-            Turn off automation? Queued and running test runs are cancelled.
+        {takesOver && (
+          <p id={`${id}-takeover`} className="m-0 flex items-start gap-2 rounded-[2px] bg-approve/25 px-3 py-2.5 text-[13px] text-ink">
+            <Icon name="person" size={16} className="mt-px flex-none" />
+            <span>
+              Saving makes you the owner{automation.enabled && automation.owner.login ? ` instead of ${automation.owner.login}` : ''}. Test runs and merges then use
+              your GitHub account and providers.
+            </span>
           </p>
-          <Button id={`${id}-off-cancel`} onClick={() => openOff(false)} disabled={busy}>
-            {actionLabels.cancel}
-          </Button>
-          <Button onClick={off} disabled={busy} className="border-warning text-warning hover:border-warning hover:text-warning">
-            Turn off
-          </Button>
-        </div>
-      )}
-
-      <UnsavedChangesGuard when={dirty && !busy} />
-
-      <div className="flex flex-wrap items-center justify-end gap-2.5">
-        <div role="status" className="mr-auto text-[13px]">
-          {saved && (
-            <span className="inline-flex items-center gap-1.5 text-good">
-              <Icon name="check" size={16} />
-              Automation saved
-            </span>
-          )}
-          {readOnly ? (
-            <span id={`${id}-readonly`} tabIndex={-1} className="text-text-muted-strong">
-              You have read access only, so you can’t change automation here.
-            </span>
-          ) : (
-            formError && <span className="text-critical">{formError}</span>
-          )}
-          {!saved && !formError && dirty && <span className="text-text-muted">Unsaved changes</span>}
-        </div>
-        {automation.enabled && !confirmOff && !readOnly && (
-          <Button id={`${id}-off-open`} onClick={() => openOff(true)} disabled={busy}>
-            Turn off automation
-          </Button>
         )}
-        {providers.length > 0 && !readOnly && (
-          <Button id={`${id}-save`} type="submit" variant="primary" disabled={busy} aria-describedby={takesOver ? `${id}-takeover` : undefined}>
-            {automation.enabled ? actionLabels.save : 'Turn on automation'}
-          </Button>
-        )}
-      </div>
+
+        <UnsavedChangesGuard when={dirty && !busy} />
+
+        <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-tile-keyline pt-3">
+          <div role="status" className="mr-auto px-0.5 text-[13px] font-semibold">
+            {saved && (
+              <span className="inline-flex items-center gap-1.5 text-ink">
+                <Icon name="check" size={16} className="text-good" />
+                Automation saved
+              </span>
+            )}
+            {readOnly ? (
+              <span id={`${id}-readonly`} tabIndex={-1} className="inline-flex items-center gap-1.5 text-ink-2">
+                <Icon name="lock" size={16} className="flex-none" />
+                You have read access only, so you can’t change automation here.
+              </span>
+            ) : (
+              formError && (
+                <span className="inline-flex items-center gap-1.5 text-signal-ink">
+                  <Icon name="alert" size={16} className="flex-none" />
+                  {formError}
+                </span>
+              )
+            )}
+            {!saved && !formError && dirty && <span className="text-ink-2">Unsaved changes</span>}
+          </div>
+          {providers.length > 0 && !readOnly && (
+            <Button
+              id={`${id}-save`}
+              type="submit"
+              variant="primary"
+              disabled={busy}
+              aria-busy={save.isPending || undefined}
+              aria-describedby={takesOver ? `${id}-takeover` : undefined}
+            >
+              {automation.enabled ? actionLabels.save : 'Turn on automation'}
+            </Button>
+          )}
+        </div>
+      </Tile>
     </form>
   )
 }

@@ -108,7 +108,7 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
         <Chip tone={statusTone[p.status]} className="px-2.5">
           {proposalStatusLabels[p.status]}
         </Chip>
-        <span className="font-mono text-xs text-text-muted">
+        <span className="font-mono text-xs text-ink-2">
           Proposal {p.order} of {proposals.length} · proposed by the planning {agentWord}
         </span>
       </div>
@@ -141,12 +141,12 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
         </div>
       ) : (
         <>
-          <h2 className="m-0 font-heading text-2xl font-semibold">{p.title}</h2>
-          {p.description && <p className="m-0 leading-[1.65] text-text-soft">{p.description}</p>}
+          <h2 className="m-0 text-2xl font-semibold">{p.title}</h2>
+          {p.description && <p className="m-0 leading-[1.65] text-ink">{p.description}</p>}
           {p.acceptanceCriteria.length > 0 && (
             <div>
-              <h3 className="mt-0 mb-2 font-heading text-[15px] font-semibold">Acceptance criteria</h3>
-              <ul className="m-0 list-disc pl-5 leading-[1.7] text-text-soft">
+              <h3 className="mt-0 mb-2 text-[15px] font-semibold">Acceptance criteria</h3>
+              <ul className="m-0 list-disc pl-5 leading-[1.7] text-ink">
                 {p.acceptanceCriteria.map((c) => (
                   <li key={c}>{c}</li>
                 ))}
@@ -172,7 +172,7 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
                     key={id}
                     type="button"
                     onClick={() => onSelect(id)}
-                    className="cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit] text-ion hover:text-ion-hover"
+                    className="cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit] text-accent hover:text-ink"
                   >
                     {dep.title}
                   </button>
@@ -182,15 +182,15 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
       </dl>
 
       {(p.agentNote || p.source) && (
-        <div className="rounded-control border border-astronaut bg-astronaut/8 px-4 py-3.5 leading-normal">
-          <span className="text-astronaut-text">{plannerLabels.planningAgent}</span>
+        <div className="rounded-control border border-accent bg-accent/8 px-4 py-3.5 leading-normal">
+          <span className="text-accent">{plannerLabels.planningAgent}</span>
           {p.source && <> · Source: doc section {p.source}.</>} {p.agentNote}
-          {quote && <blockquote className="mx-0 mt-2.5 mb-0 border-l-2 border-astronaut pl-3 text-[13px] text-text-muted-strong">{quote}</blockquote>}
+          {quote && <blockquote className="mx-0 mt-2.5 mb-0 border-l-2 border-accent pl-3 text-[13px] text-ink-2">{quote}</blockquote>}
         </div>
       )}
 
       {(approve.error ?? deny.error) && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] text-signal-ink">
           {(approve.error ?? deny.error)?.message}
         </p>
       )}
@@ -217,7 +217,7 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
               </>
             )}
           </div>
-          <div className="text-xs text-text-muted">
+          <div className="text-xs text-ink-2">
             Approved {labels.tasks.toLowerCase()} land in the {labels.backlog}, tagged with this {labels.feature.toLowerCase()}.
           </div>
         </>
@@ -228,12 +228,12 @@ function Detail({ proposal: p, proposals, context, summary, onSelect }: Proposal
   )
 }
 
-const card = 'flex min-w-0 flex-[999_1_520px] flex-col gap-5 rounded-[14px] border border-line bg-surface p-7'
+const card = 'flex min-w-0 flex-[999_1_520px] flex-col gap-5 rounded-[14px] border border-rule bg-paper p-7'
 
 function Fact({ term, children }: { term: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="mb-1 text-xs text-text-muted">{term}</dt>
+      <dt className="mb-1 text-xs text-ink-2">{term}</dt>
       <dd className="m-0 flex flex-col items-start gap-1 leading-[1.4]">{children}</dd>
     </div>
   )
@@ -246,9 +246,9 @@ function ReviewedNote({ proposal: p, task, projectId }: { proposal: TaskProposal
       : p.status === 'dropped'
         ? 'Dropped from the plan. Nothing was added to the board.'
         : null
-  if (text) return <p className="m-0 text-[13px] text-text-muted-strong">{text}</p>
+  if (text) return <p className="m-0 text-[13px] text-ink-2">{text}</p>
   return (
-    <p className="m-0 text-[13px] text-text-muted-strong">
+    <p className="m-0 text-[13px] text-ink-2">
       In the {labels.backlog}
       {task && (
         <>

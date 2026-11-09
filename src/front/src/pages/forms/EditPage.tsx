@@ -33,7 +33,7 @@ import { BasicsFields } from './ItemForm'
 
 // Full edit page for an objective (ObjectiveEditor mockup). The form keeps a
 // local copy and Save sends it all. Mock data only: objectives are hidden until
-// the API has them (docs/implementation/api-gaps.md). Payloads are edited in
+// the API has them (docs/implementation/api-gaps.md). Tasks are edited in
 // TaskForm.tsx.
 
 export function FeatureEditPage() {
@@ -132,7 +132,7 @@ function FeatureTasks({ projectId, tasks, options }: { projectId: string; tasks?
       }
     >
       {tasks.length === 0 ? (
-        <p className="m-0 text-[13px] text-text-muted-strong">No {labels.tasks.toLowerCase()} yet.</p>
+        <p className="m-0 text-[13px] text-ink-2">No {labels.tasks.toLowerCase()} yet.</p>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {tasks.map((task) => {
@@ -141,14 +141,14 @@ function FeatureTasks({ projectId, tasks, options }: { projectId: string; tasks?
               <li key={task.id}>
                 <Link
                   to={`/projects/${projectId}/tasks/${task.id}/edit`}
-                  className="flex flex-col gap-1 rounded-control border border-line-soft bg-surface p-3 text-text no-underline hover:border-ion hover:text-text"
+                  className="flex flex-col gap-1 rounded-control border border-keyline bg-paper p-3 text-ink no-underline hover:border-accent hover:text-ink"
                 >
                   <span className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-text-muted">{task.key}</span>
+                    <span className="font-mono text-xs text-ink-2">{task.key}</span>
                     <Chip tone={state.tone}>{state.label}</Chip>
                   </span>
                   <span className="font-medium">{task.title}</span>
-                  <span className="text-xs text-text-muted">{ownerName(task.assignee, options)}</span>
+                  <span className="text-xs text-ink-2">{ownerName(task.assignee, options)}</span>
                 </Link>
               </li>
             )
@@ -164,7 +164,7 @@ function taskState(t: Task): { label: string; tone: Tone } {
   if (t.status === 'blocked') return { label: taskStatusLabels.blocked, tone: 'critical' }
   if (t.status === 'awaiting-approval' || t.status === 'in-review' || t.status === 'hail') return { label: taskStatusLabels[t.status], tone: 'warning' }
   if (t.column === 'backlog') return { label: columnLabels.backlog.name, tone: 'neutral' }
-  return { label: taskStatusLabels[t.status], tone: t.assignee?.kind === 'agent' ? 'astronaut' : 'ion' }
+  return { label: taskStatusLabels[t.status], tone: 'live' }
 }
 
 function ownerName(a: Assignee | null, options: FormOptions) {
@@ -227,7 +227,7 @@ function Editor({ kind, project, options, initial, crumbs, status, inherited, on
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-6 px-8 pt-7 pb-12">
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
+      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
         <Link to={`/projects/${project.id}`}>{project.name}</Link>
         {crumbs.map((c) => (
           <span key={c.label} className="contents">
@@ -239,7 +239,7 @@ function Editor({ kind, project, options, initial, crumbs, status, inherited, on
 
       <header className="flex flex-wrap items-end gap-4">
         <div className="mr-auto">
-          <h1 className="m-0 flex items-center gap-3 font-heading text-[28px] font-semibold">
+          <h1 className="m-0 flex items-center gap-3 text-[28px] font-semibold">
             {t.titleEdit}
             {status && <Chip tone="neutral">{status}</Chip>}
           </h1>
@@ -261,15 +261,15 @@ function Editor({ kind, project, options, initial, crumbs, status, inherited, on
       </header>
 
       {saveError && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] text-signal-ink">
           {saveError.message}
         </p>
       )}
 
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
-          <section aria-labelledby="basics-heading" className="flex flex-col gap-[18px] rounded-[14px] border border-line bg-surface p-6">
-            <h2 id="basics-heading" className="m-0 font-heading text-lg font-semibold">
+          <section aria-labelledby="basics-heading" className="flex flex-col gap-[18px] rounded-card border border-line bg-paper p-6">
+            <h2 id="basics-heading" className="m-0 text-lg font-semibold">
               Basics
             </h2>
             <BasicsFields
@@ -285,17 +285,16 @@ function Editor({ kind, project, options, initial, crumbs, status, inherited, on
 
           <CriteriaList heading={t.criteriaHeading} help={t.criteriaHelp} criteria={value.criteria} onChange={(criteria) => edit({ criteria })} />
 
-          <section aria-labelledby="autonomy-heading" className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-surface p-6">
-            <h2 id="autonomy-heading" className="m-0 font-heading text-lg font-semibold">
+          <section aria-labelledby="autonomy-heading" className="flex flex-col gap-3.5 rounded-card border border-line bg-paper p-6">
+            <h2 id="autonomy-heading" className="m-0 text-lg font-semibold">
               {labels.agents}
             </h2>
             <fieldset className="m-0 grid gap-3 border-0 p-0 sm:grid-cols-2">
-              <legend className="mb-3 p-0 text-[13px] text-text-soft">{t.autonomyLegend}</legend>
+              <legend className="mb-3 p-0 text-[13px] text-ink">{t.autonomyLegend}</legend>
               {autonomyChoices.map((c) => (
                 <RadioCard
                   key={c.level ?? 'inherit'}
                   name={`${kind}-autonomy`}
-                  tone="astronaut"
                   checked={value.autonomy === c.level}
                   onChange={() => edit({ autonomy: c.level })}
                   label={c.label}
@@ -323,10 +322,10 @@ interface SideCardProps {
 
 function SideCard({ heading, total, progress, chips, actions, children }: SideCardProps) {
   return (
-    <aside aria-label={heading} className="flex min-w-0 flex-[1_1_340px] flex-col gap-4 rounded-[14px] border border-line bg-surface-sunken p-6">
+    <aside aria-label={heading} className="flex min-w-0 flex-[1_1_340px] flex-col gap-4 rounded-card border border-line bg-ground p-6">
       <div className="flex items-baseline justify-between">
-        <h2 className="m-0 font-heading text-lg font-semibold">{heading}</h2>
-        {total !== undefined && <span className="text-[13px] text-text-muted">{total} total</span>}
+        <h2 className="m-0 text-lg font-semibold">{heading}</h2>
+        {total !== undefined && <span className="text-[13px] text-ink-2">{total} total</span>}
       </div>
       {progress && <ProgressBar {...progress} />}
       {chips && <div className="flex flex-wrap gap-2">{chips}</div>}

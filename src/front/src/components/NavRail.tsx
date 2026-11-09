@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
-import type { AssignedGroup, AssignedTask } from '../data/api/types'
+import type { AssignedGroup, AssignedTask, Project } from '../data/api/types'
 import { useMyProjects } from '../data/views/addProject'
 import { useAssignedTasks } from '../data/views/assigned'
 import { columnLabels, labels, runStatusLabels } from '../labels/labels'
@@ -9,7 +9,6 @@ import { Chip, type Tone } from './Chip'
 import { Button } from './controls'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
-import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 
 interface Item {
@@ -19,61 +18,54 @@ interface Item {
   end?: boolean
 }
 
-/** Missions listed before the rest wait behind All missions. */
-const MAX_MISSIONS = 8
+/** Projects listed before the rest wait behind All projects. */
+const MAX_PROJECTS = 8
 
-/** Below md the rail stacks above the page, so its long lists scroll in place instead of pushing the page down. */
-const stackedCap = 'max-md:max-h-60 max-md:overflow-y-auto'
-
-const itemBase = 'flex min-h-11 items-center rounded-lg no-underline'
-
-/** compact: tighter, for links nested under a mission */
-function RailLink({ item, className = '', labelClass, compact = false }: { item: Item; className?: string; labelClass?: string; compact?: boolean }) {
+/** A top-level rail link, 44px: a block on hover, solid ink while it is the current page. */
+function RailLink({ item }: { item: Item }) {
   return (
     <NavLink
       to={item.to}
       end={item.end}
       className={({ isActive }) =>
-        `${itemBase} ${compact ? 'gap-2 px-2' : 'gap-3 px-3'} ${className} ${
-          isActive ? 'bg-nav-active font-medium text-text hover:text-text' : 'text-text-muted-strong hover:text-text'
+        `flex min-h-11 items-center gap-2.5 rounded-[3px] px-2.5 font-semibold no-underline transition-colors duration-150 ${
+          isActive ? 'bg-ink text-on-ink hover:bg-ink-hover hover:text-on-ink' : 'text-ink hover:bg-block hover:text-ink'
         }`
       }
     >
-      {({ isActive }) => (
-        <>
-          <Icon name={item.icon} className={isActive ? 'text-ion' : ''} />
-          <span className={labelClass}>{item.label}</span>
-        </>
-      )}
+      <Icon name={item.icon} className="flex-none" />
+      <span className="min-w-0 truncate">{item.label}</span>
     </NavLink>
   )
 }
 
-function Section({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
-  const id = `rail-${title.toLowerCase().replaceAll(' ', '-')}`
+/** One of the open project's pages, in the paper panel under its block. The current one sits on a gray block. */
+function PageLink({ item }: { item: Item }) {
   return (
-    <section aria-labelledby={id} className="mt-4 flex flex-col gap-1">
-      <div className="flex items-center gap-2 px-3 pb-1">
-        <h2 id={id} className="m-0 text-[11px] font-semibold tracking-[0.08em] text-text-muted uppercase">
-          {title}
-        </h2>
-        {count !== undefined && (
-          <span className="rounded-full bg-nav-active px-1.5 text-[11px] leading-[18px] font-semibold text-text-soft">{count}</span>
-        )}
-      </div>
-      {children}
-    </section>
+    <NavLink
+      to={item.to}
+      end={item.end}
+      className={({ isActive }) =>
+        `flex min-h-11 items-center gap-2.5 rounded-[2px] px-2.5 text-sm no-underline transition-colors duration-150 ${
+          isActive ? 'bg-block font-bold text-ink hover:text-ink' : 'font-semibold text-ink-2 hover:bg-ink/8 hover:text-ink'
+        }`
+      }
+    >
+      <Icon name={item.icon} size={16} />
+      {item.label}
+    </NavLink>
   )
 }
 
-/** A rail list that failed to load, in its place. */
+/** A rail list that failed to load, in its place on the signal wash, with Try again: the section never just vanishes. */
 function LoadFailed({ what, retry }: { what: string; retry: () => void }) {
   return (
-    <div role="alert" className="mt-4 flex flex-wrap items-center gap-2 px-3 text-[13px] text-text-muted">
-      Couldn't load {what}.
-      <Button className="min-h-9 px-3 text-sm" onClick={retry}>
-        Try again
-      </Button>
+    <div role="alert" className="flex flex-col items-start gap-2 rounded-[3px] bg-signal-wash p-2.5 text-[13px] leading-snug font-medium text-signal-ink">
+      <span className="flex items-start gap-2">
+        <Icon name="alert" size={16} className="mt-px flex-none" />
+        Couldn't load {what}.
+      </span>
+      <Button onClick={retry}>Try again</Button>
     </div>
   )
 }
@@ -82,35 +74,82 @@ function LoadFailed({ what, retry }: { what: string; retry: () => void }) {
 function projectItems(projectId: string): Item[] {
   return [
     { label: labels.board, to: `/projects/${projectId}`, icon: 'board', end: true },
-    { label: labels.backlog, to: `/projects/${projectId}/backlog`, icon: 'hangar' },
-    { label: labels.plans, to: `/projects/${projectId}/plans`, icon: 'target' },
-    { label: labels.automation, to: `/projects/${projectId}/automation`, icon: 'orbit' },
+    { label: labels.backlog, to: `/projects/${projectId}/backlog`, icon: 'backlog' },
+    { label: labels.plans, to: `/projects/${projectId}/plans`, icon: 'plan' },
+    { label: labels.automation, to: `/projects/${projectId}/automation`, icon: 'automation' },
   ]
 }
 
-/** Where a task stands: a live test run first, then trouble, then a review it waits for, else its column. */
+function PagePanel({ projectId, attached }: { projectId: string; attached: boolean }) {
+  return (
+    <div className={`flex flex-col gap-0.5 bg-paper p-1 ${attached ? 'rounded-b-[3px]' : 'rounded-[3px]'}`}>
+      {projectItems(projectId).map((item) => (
+        <PageLink key={item.to} item={item} />
+      ))}
+    </div>
+  )
+}
+
+function Section({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
+  const id = `rail-${title.toLowerCase().replaceAll(' ', '-')}`
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <div className="mx-1 flex items-center gap-2">
+        <h2 id={id} className="m-0 text-[13px] font-bold text-ink-2">
+          {title}
+        </h2>
+        {count !== undefined && (
+          <span className="min-w-5 rounded-[2px] border border-ink-2 px-1 text-center text-[11px] leading-4 font-bold text-ink-2">{count}</span>
+        )}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** A project as a solid block: owner small, name bold. The open one is filled ink, with its pages attached below. */
+function ProjectBlock({ project, open }: { project: Project; open: boolean }) {
+  return (
+    <Link
+      to={`/projects/${project.id}`}
+      title={`${project.owner}/${project.name}`}
+      aria-current={open ? 'true' : undefined}
+      className={`flex min-h-[52px] flex-col justify-center px-3 py-[7px] no-underline transition-colors duration-150 ${
+        open ? 'rounded-t-[3px] bg-ink text-on-ink hover:bg-ink-hover hover:text-on-ink' : 'rounded-[3px] bg-block text-ink hover:bg-block-hover hover:text-ink'
+      }`}
+    >
+      <span className={`truncate text-xs font-medium ${open ? 'text-on-ink-2' : 'text-ink-2'}`}>
+        {project.owner}
+        <span className="sr-only">/</span>
+      </span>
+      <span className="truncate text-sm font-bold">{project.name}</span>
+    </Link>
+  )
+}
+
+/** Where a task stands: a live test run first, then trouble, then an approval it waits for, else its column. */
 function stage(task: AssignedTask): { label: string; tone: Tone; icon?: IconName; iconClass?: string } {
   if (task.runStatus === 'running' || task.runStatus === 'queued') {
     const { tone, icon, iconClass } = runLook[task.runStatus]
     return { label: runStatusLabels[task.runStatus], tone, icon, iconClass }
   }
-  if (task.needsAttention) return { label: labels.needsAttention, tone: 'critical', icon: 'alert' }
-  if (task.column.key === 'user-check') return { label: labels.awaitingReview, tone: 'astronaut', icon: 'helmet' }
-  // The plain column name: the rail is read at a glance, away from the board's themed headings.
-  return { label: columnLabels[task.column.key].plain, tone: 'neutral' }
+  if (task.needsAttention) return { label: labels.needsAttention, tone: 'signal', icon: 'alert' }
+  if (task.column.key === 'user-check') return { label: labels.awaitingApproval, tone: 'approve', icon: 'person' }
+  return { label: columnLabels[task.column.key].name, tone: 'neutral' }
 }
 
 function AssignedList({ groups }: { groups: AssignedGroup[] }) {
   return groups.map(({ project, tasks }) => (
-    <div key={project.id} className="flex flex-col gap-1.5 pb-2">
+    <div key={project.id} className="flex flex-col gap-1.5">
       <Link
         id={`rail-assigned-${project.id}`}
         to={`/projects/${project.id}`}
         title={`${project.owner}/${project.name}`}
-        className="flex min-h-8 items-center gap-2 px-3 text-[13px] font-medium text-text-soft no-underline hover:text-text"
+        // max-w-full: sized to its name, a long one truncates instead of running past the rail.
+        className="mx-1 flex min-h-8 max-w-full items-center gap-1.5 self-start text-xs font-bold text-ink no-underline hover:text-ink hover:underline"
       >
-        <Icon name="github" size={14} className="flex-none text-text-muted" />
-        <span className="truncate">{project.name}</span>
+        <Icon name="github" size={14} className="flex-none text-ink-2" />
+        <span className="min-w-0 truncate">{project.name}</span>
       </Link>
       <ul aria-labelledby={`rail-assigned-${project.id}`} className="m-0 flex list-none flex-col gap-1.5 p-0">
         {tasks.map((t) => {
@@ -121,19 +160,18 @@ function AssignedList({ groups }: { groups: AssignedGroup[] }) {
                 to={`/projects/${project.id}/tasks/${t.id}`}
                 aria-label={`#${t.issueNumber}: ${t.title}. ${s.label}`}
                 className={({ isActive }) =>
-                  `flex flex-col gap-2 rounded-control border bg-surface px-3 py-2.5 text-text no-underline hover:border-ion hover:text-text ${
-                    isActive ? 'border-ion' : 'border-line'
+                  `flex flex-col gap-1.5 rounded-[3px] bg-paper px-2.5 pb-2 text-ink no-underline transition-colors duration-150 hover:border-ink hover:text-ink ${
+                    isActive ? 'border border-t-[3px] border-ink pt-1.5' : 'border border-line pt-2'
                   }`
                 }
               >
-                <span className="flex flex-col gap-0.5">
-                  <span className="font-mono text-[11px] text-text-muted">#{t.issueNumber}</span>
-                  <span className="line-clamp-2 text-[13px] leading-[1.35]">{t.title}</span>
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-semibold text-ink-2">#{t.issueNumber}</span>
+                  <Chip tone={s.tone} icon={s.icon} iconClassName={s.iconClass} className="h-[22px] px-1.5 text-[11px]">
+                    {s.label}
+                  </Chip>
                 </span>
-                <Chip tone={s.tone} className="self-start">
-                  {s.icon && <Icon name={s.icon} size={14} className={s.iconClass} />}
-                  {s.label}
-                </Chip>
+                <span className="line-clamp-2 text-[13px] leading-[1.3] font-semibold wrap-anywhere">{t.title}</span>
               </NavLink>
             </li>
           )
@@ -144,101 +182,88 @@ function AssignedList({ groups }: { groups: AssignedGroup[] }) {
 }
 
 /**
- * Left rail: the missions the user opened, most recently visited first, with the open one's pages under it, then
- * their assigned tasks by mission with each one's stage.
+ * The blocky left rail: the product mark, the projects the user opened (most recently visited first) as blocks with
+ * the open one in ink and its pages under it, their assigned tasks by project with each one's stage, then Settings
+ * and the account at the foot. Below md it is a bar with a Menu button that opens the rest above the page.
  */
 export function NavRail({ projectId }: { projectId?: string }) {
   const myProjects = useMyProjects()
   const myTasks = useAssignedTasks()
   const projects = myProjects.data ?? []
   const assigned = myTasks.data ?? []
-  const assignedCount = assigned.reduce((n, g) => n + g.tasks.length, 0)
-  const missions = projects.filter((p, i) => i < MAX_MISSIONS || String(p.id) === projectId)
+  const { pathname } = useLocation()
+  // Open on one page only: following a link closes the menu.
+  const [openOn, setOpenOn] = useState<string | null>(null)
+  const menuOpen = openOn === pathname
+  const bodyId = useId()
+  const listed = projects.filter((p, i) => i < MAX_PROJECTS || String(p.id) === projectId)
   // Just added, before the list catches up: its pages still show.
   const unlisted = projectId && !myProjects.isPending && !projects.some((p) => String(p.id) === projectId)
-  // Below md the rail stacks above the page, so its lists fold behind one button; going to another page folds them again.
-  const { pathname } = useLocation()
-  const [unfoldedAt, setUnfoldedAt] = useState<string>()
-  const unfolded = unfoldedAt === pathname
-  const listsId = useId()
-  const hasLists = missions.length > 0 || assigned.length > 0 || !!myProjects.error || !!myTasks.error
 
   return (
     <nav
       aria-label="Primary"
-      className="box-border flex min-w-0 flex-[1_1_200px] flex-col gap-1 border-r border-line-soft bg-rail px-4 py-6 md:sticky md:top-0 md:h-screen md:self-start md:overflow-y-auto"
+      // min-w-0: a long project name truncates instead of widening the rail.
+      className="box-border flex min-w-0 flex-col border-rule bg-rail max-md:border-b md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-r"
     >
-      <Link to="/" className="px-2 pb-6 no-underline">
-        <Logo />
-      </Link>
-      <Link to="/projects/new" className={`${itemBase} mb-2 gap-3 px-3 border border-line text-text-muted-strong hover:text-text`}>
-        <Icon name="plus" />
-        {labels.addProject}
-      </Link>
-      <RailLink item={{ label: labels.allProjects, to: '/projects', icon: 'hangar', end: true }} />
-      {unlisted && projectItems(projectId).map((item) => <RailLink key={item.to} item={item} />)}
-      {hasLists && (
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2 md:pt-[18px] md:pb-0">
+        <Link to="/" className="flex min-h-11 items-center rounded-[3px] px-1 no-underline">
+          <Logo />
+        </Link>
         <button
           type="button"
-          aria-expanded={unfolded}
-          aria-controls={listsId}
-          onClick={() => setUnfoldedAt(unfolded ? undefined : pathname)}
-          className={`${itemBase} mt-2 cursor-pointer gap-3 border-0 bg-transparent px-3 text-left font-[inherit] text-text-muted-strong hover:text-text md:hidden`}
+          aria-expanded={menuOpen}
+          aria-controls={bodyId}
+          onClick={() => setOpenOn(menuOpen ? null : pathname)}
+          className="flex min-h-11 cursor-pointer items-center gap-2 rounded-control border-[1.5px] border-ink bg-paper px-3 font-[inherit] text-sm font-semibold text-ink hover:bg-ink/8 md:hidden"
         >
-          <Icon name="github" />
-          <span className="flex-1">{labels.projects}</span>
-          {assignedCount > 0 && <span className="text-[13px] text-text-muted">{assignedCount} {labels.assignedToYou.toLowerCase()}</span>}
-          <span aria-hidden="true" className="text-xs text-text-muted">
-            {unfolded ? '▴' : '▾'}
-          </span>
+          <Icon name={menuOpen ? 'close' : 'menu'} size={16} />
+          Menu
         </button>
-      )}
-      <div id={listsId} className={unfolded ? 'contents' : 'contents max-md:hidden'}>
-        {myProjects.error && !myProjects.data && <LoadFailed what={labels.projects.toLowerCase()} retry={() => myProjects.refetch()} />}
-        {missions.length > 0 && (
-          <Section title={labels.projects}>
-            <ul className={`m-0 flex list-none flex-col gap-1 p-0 ${stackedCap}`}>
-              {missions.map((p) => {
-                const open = String(p.id) === projectId
-                return (
-                  <li key={p.id}>
-                    <Link
-                      to={`/projects/${p.id}`}
-                      title={`${p.owner}/${p.name}`}
-                      aria-current={open ? 'true' : undefined}
-                      className={`${itemBase} gap-3 px-3 ${open ? 'font-medium text-text' : 'text-text-muted-strong'} hover:text-text`}
-                    >
-                      <Icon name="github" className={`flex-none ${open ? 'text-ion' : ''}`} />
-                      <span className="truncate">{p.name}</span>
-                    </Link>
-                    {open && (
-                      <div className="ml-3 flex flex-col gap-1 border-l border-line-soft pl-1">
-                        {projectItems(projectId).map((item) => (
-                          <RailLink key={item.to} item={item} compact />
-                        ))}
-                      </div>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          </Section>
-        )}
+      </div>
+
+      <div id={bodyId} className={`flex-1 flex-col gap-6 px-3.5 pt-4 pb-3.5 md:flex md:pt-6 md:pb-0 ${menuOpen ? 'flex' : 'hidden'}`}>
+        <div className="flex flex-col gap-2">
+          {myProjects.error && !myProjects.data && <LoadFailed what={labels.projects.toLowerCase()} retry={() => myProjects.refetch()} />}
+          {listed.length > 0 && (
+            <Section title={labels.projects}>
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                {listed.map((p) => {
+                  const open = String(p.id) === projectId
+                  return (
+                    <li key={p.id} className="flex flex-col">
+                      <ProjectBlock project={p} open={open} />
+                      {open && <PagePanel projectId={projectId} attached />}
+                    </li>
+                  )
+                })}
+              </ul>
+            </Section>
+          )}
+          {unlisted && <PagePanel projectId={projectId} attached={false} />}
+          <div className="flex flex-col">
+            <RailLink item={{ label: labels.allProjects, to: '/projects', icon: 'projects', end: true }} />
+            <RailLink item={{ label: labels.addProject, to: '/projects/new', icon: 'plus' }} />
+          </div>
+        </div>
+
         {assigned.length > 0 && (
-          <Section title={labels.assignedToYou} count={assignedCount}>
-            <div className={`flex flex-col gap-1 ${stackedCap}`}>
+          <Section title={labels.assignedToYou} count={assigned.reduce((n, g) => n + g.tasks.length, 0)}>
+            <div className="flex flex-col gap-3">
               <AssignedList groups={assigned} />
             </div>
           </Section>
         )}
-        {myTasks.error && !myTasks.data && <LoadFailed what={`${labels.tasks.toLowerCase()} ${labels.assignedToYou.toLowerCase()}`} retry={() => myTasks.refetch()} />}
-      </div>
-      {/* At md+ the rail scrolls, so the footer sticks over the padding with the rail's own colour on an opaque page
-          background. It also anchors the account menu, which then spans the rail instead of running past its edge. */}
-      <div className="relative mt-auto flex items-center gap-2 pt-4 md:sticky md:-bottom-6 md:-mb-6 md:bg-background md:bg-linear-to-b md:from-rail md:to-rail md:pb-6">
-        <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} className="flex-1 md:flex-none" labelClass="md:sr-only" />
-        <ThemeToggle />
-        <UserMenu placement="above" />
+        {myTasks.error && !myTasks.data && (
+          <LoadFailed what={`${labels.tasks.toLowerCase()} ${labels.assignedToYou.toLowerCase()}`} retry={() => myTasks.refetch()} />
+        )}
+
+        {/* At md+ the rail scrolls, so the foot sticks to its bottom on the rail's own colour: Settings and the account
+            stay in view however long the lists above run. */}
+        <div className="mt-auto flex flex-col gap-1 border-t border-rule bg-rail pt-3 md:sticky md:bottom-0 md:z-10 md:pb-3.5">
+          <RailLink item={{ label: labels.settings, to: '/settings', icon: 'settings' }} />
+          <UserMenu placement="above" showEmail />
+        </div>
       </div>
     </nav>
   )

@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from 'react'
+import { Icon } from '../../components/Icon'
 
 interface TagInputProps {
   id: string
@@ -7,7 +8,7 @@ interface TagInputProps {
   onChange: (tags: string[]) => void
 }
 
-/** Plain tag chips: type and press Enter to add, × to remove. Not themed. */
+/** Tag chips: type and press Enter to add, the cross on a chip to remove it. */
 export function TagInput({ id, label, tags, onChange }: TagInputProps) {
   const [draft, setDraft] = useState('')
 
@@ -28,20 +29,20 @@ export function TagInput({ id, label, tags, onChange }: TagInputProps) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] text-text-soft">
+      <label htmlFor={id} className="text-[13px] font-semibold text-ink-2">
         {label}
       </label>
-      <div className="flex min-h-[46px] flex-wrap items-center gap-2 rounded-control border border-line bg-surface-sunken px-2.5 py-1.5 focus-within:border-ion">
+      <div className="flex min-h-[46px] flex-wrap items-center gap-1.5 rounded-control border border-line bg-paper px-2 py-1.5 transition-colors duration-150 focus-within:border-accent focus-within:outline-1 focus-within:outline-accent hover:border-ink">
         {tags.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-lg border border-line-strong py-0.5 pr-0.5 pl-2.5 text-[13px]">
+          <span key={tag} className="inline-flex h-7 items-center gap-0.5 rounded-[2px] bg-block pl-2 text-xs font-semibold text-ink">
             {tag}
             <button
               type="button"
               aria-label={`Remove tag ${tag}`}
               onClick={() => onChange(tags.filter((t) => t !== tag))}
-              className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-text-muted-strong hover:text-text"
+              className="inline-flex size-7 cursor-pointer items-center justify-center rounded-[2px] border-0 bg-transparent text-ink-2 hover:bg-block-hover hover:text-ink"
             >
-              ×
+              <Icon name="close" size={14} />
             </button>
           </span>
         ))}
@@ -53,7 +54,7 @@ export function TagInput({ id, label, tags, onChange }: TagInputProps) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           onBlur={add}
-          className="min-h-9 min-w-[120px] flex-1 border-0 bg-transparent px-1 font-[inherit] text-text placeholder:text-text-muted focus:outline-none"
+          className="min-h-8 min-w-[120px] flex-1 border-0 bg-transparent px-1.5 font-[inherit] text-sm text-ink placeholder:text-ink-2 focus:outline-none"
         />
       </div>
     </div>

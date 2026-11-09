@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { Dialog } from '../components/Dialog'
+import { Icon } from '../components/Icon'
 import { StatusMessage } from '../components/StatusMessage'
 import { Button, Field, TextInput } from '../components/controls'
 import { forgetSession, signIn, useMe } from '../data/session'
@@ -19,12 +20,14 @@ export function RequireSession() {
   // A failed background refetch keeps the signed-in page.
   if (isPending || (error && me === undefined)) {
     return (
-      <div className="stars flex min-h-screen flex-col bg-background text-text">
+      <div className="stars flex min-h-screen flex-col bg-ground text-ink">
         {isPending ? (
           <StatusMessage title="Loading…" />
         ) : (
-          <StatusMessage title="Something went wrong" body={error?.message}>
-            <Button onClick={() => refetch()}>Try again</Button>
+          <StatusMessage tone="signal" title="Something went wrong" body={error?.message}>
+            <Button variant="primary" onClick={() => refetch()}>
+              Try again
+            </Button>
           </StatusMessage>
         )}
       </div>
@@ -58,14 +61,11 @@ function SessionEnded({ email }: { email: string }) {
 
   return (
     // No onClose: Esc or a click outside must not leave the page it promises to keep.
-    <Dialog label="Session ended">
-      <form onSubmit={onSubmit} className="flex flex-col gap-5 p-7">
-        <div>
-          <h2 className="m-0 font-heading text-2xl font-semibold">Your session ended</h2>
-          <p className="mt-2 mb-0 leading-normal wrap-anywhere text-text-muted-strong">
-            Sign in again as <span className="text-text">{email}</span> to carry on. This page keeps what you typed.
-          </p>
-        </div>
+    <Dialog label="Session ended" title="Session ended">
+      <form onSubmit={onSubmit} className="flex flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+        <p className="m-0 text-sm leading-normal wrap-anywhere text-ink-2">
+          Sign in again as <span className="font-semibold text-ink">{email}</span> to carry on. This page keeps what you typed.
+        </p>
         <Field id="session-password" label="Password">
           <TextInput
             id="session-password"
@@ -74,16 +74,22 @@ function SessionEnded({ email }: { email: string }) {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            aria-describedby={mutation.isError ? 'session-error' : undefined}
           />
         </Field>
         {mutation.error && (
-          <p role="alert" className="m-0 text-[13px] wrap-anywhere text-critical">
+          <p
+            id="session-error"
+            role="alert"
+            className="m-0 flex items-start gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] leading-snug font-medium wrap-anywhere text-signal-ink"
+          >
+            <Icon name="alert" size={16} className="mt-px flex-none" />
             {mutation.error.message}
           </p>
         )}
-        <div className="flex flex-wrap justify-end gap-2.5">
+        <div className="-mx-6 flex flex-wrap justify-end gap-2.5 border-t border-rule px-6 pt-5 max-sm:-mx-4 max-sm:px-4">
           <Button onClick={leave}>Use another account</Button>
-          <Button type="submit" variant="primary" disabled={mutation.isPending}>
+          <Button type="submit" variant="primary" busy={mutation.isPending} className="px-[22px]">
             {mutation.isPending ? 'Signing in…' : 'Sign in'}
           </Button>
         </div>

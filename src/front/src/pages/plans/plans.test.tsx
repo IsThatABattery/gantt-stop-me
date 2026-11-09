@@ -135,7 +135,7 @@ describe('plans', () => {
   it('opens a plan on its first link, not Close', async () => {
     server.use(http.get('/api/projects/1/plans/1', () => HttpResponse.json(plan('needs_review'))))
     renderApp('/projects/1/plans/1')
-    await waitFor(() => expect(screen.getByRole('link', { name: '← Plans in progress' })).toHaveFocus())
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Plans in progress' })).toHaveFocus())
   })
 
   it('offers read-only members no new plan, nor actions on one', async () => {

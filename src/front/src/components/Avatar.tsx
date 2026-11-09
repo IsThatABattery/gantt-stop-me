@@ -3,25 +3,26 @@ import { autonomyLabels, labels, roleLabels } from '../labels/labels'
 import { Icon } from './Icon'
 
 const userSizes = {
-  sm: 'size-[26px] text-[11px]',
-  md: 'size-7 text-[11px]',
-  lg: 'size-10 text-sm',
+  sm: 'size-[22px] text-[10px]',
+  md: 'size-[26px] text-[11px]',
+  lg: 'size-8 text-xs',
 }
 
 interface UserAvatarProps {
   user: Pick<User, 'initials' | 'role'>
   size?: keyof typeof userSizes
-  /** Ring that separates stacked avatars */
+  /** A paper gap that separates stacked avatars */
   stacked?: boolean
 }
 
+/** A person: their initials on a square ink-2 block with a 2px radius. */
 export function UserAvatar({ user, size = 'md', stacked }: UserAvatarProps) {
   return (
     <span
       role="img"
       aria-label={`${roleLabels[user.role]} ${user.initials}`}
-      className={`inline-flex flex-none items-center justify-center rounded-full bg-line font-semibold text-text ${userSizes[size]} ${
-        stacked ? '-mr-1.5 border-2 border-surface' : ''
+      className={`inline-flex flex-none items-center justify-center rounded-[2px] bg-ink-2 leading-none font-bold text-on-ink ${userSizes[size]} ${
+        stacked ? '-mr-1 outline-2 outline-paper' : ''
       }`}
     >
       {user.initials}
@@ -29,12 +30,21 @@ export function UserAvatar({ user, size = 'md', stacked }: UserAvatarProps) {
   )
 }
 
-/** 1, 2 or 3 orbit rings for Tethered, Guided, Free flight. */
+/** One to three small squares for Supervised, Guided and Autonomous. */
 export function AutonomyRings({ level, size = 14 }: { level: Autonomy; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="var(--color-astronaut)" strokeWidth="1.2" aria-hidden="true">
-      {[0, 1, 2].slice(0, level + 1).map((i) => (
-        <ellipse key={i} cx="8" cy="8" rx={3 + i * 2.2} ry={1.4 + i * 1.1} transform="rotate(-25 8 8)" />
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      {[0, 1, 2].map((i) => (
+        <rect
+          key={i}
+          x={1 + i * 5}
+          y={5}
+          width={4}
+          height={6}
+          fill={i <= level ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth={1}
+        />
       ))}
     </svg>
   )
@@ -42,28 +52,29 @@ export function AutonomyRings({ level, size = 14 }: { level: Autonomy; size?: nu
 
 interface AgentAvatarProps {
   agent: Pick<Agent, 'name' | 'autonomy'>
-  /** Slow orbit pulse while the agent is working */
+  /** Working right now */
   active?: boolean
-  /** Amber dot when the agent has raised a hail */
+  /** It has asked a person a question */
   hail?: boolean
   size?: 'md' | 'lg'
 }
 
+/** An agent: its mark on a paper square with a 1.5px ink edge, its autonomy as squares below. */
 export function AgentAvatar({ agent, active, hail, size = 'lg' }: AgentAvatarProps) {
-  const box = size === 'lg' ? 'size-10 rounded-[10px]' : 'size-7 rounded-lg'
+  const box = size === 'lg' ? 'size-10' : 'size-7'
   return (
     <span
       role="img"
       aria-label={`${labels.agent} ${agent.name}, ${autonomyLabels[agent.autonomy]}${hail ? `, ${labels.hail} raised` : ''}`}
-      className={`relative inline-flex flex-none items-center justify-center border border-astronaut bg-astronaut/10 text-astronaut ${box} ${
-        active ? 'animate-orbit-pulse' : ''
-      }`}
+      className={`relative inline-flex flex-none items-center justify-center rounded-[2px] border-[1.5px] border-ink ${
+        active ? 'bg-ink text-on-ink' : 'bg-paper text-ink'
+      } ${box}`}
     >
-      <Icon name="helmet" size={size === 'lg' ? 20 : 16} />
-      <span className="absolute -right-1.5 -bottom-1.5 rounded-full bg-background p-px">
+      <Icon name="agent" size={size === 'lg' ? 20 : 16} />
+      <span className="absolute -right-1.5 -bottom-1.5 rounded-[2px] bg-paper px-px text-ink">
         <AutonomyRings level={agent.autonomy} />
       </span>
-      {hail && <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-background bg-warning" />}
+      {hail && <span className="absolute -top-1 -right-1 size-2.5 rounded-[1px] border-2 border-paper bg-approve" />}
     </span>
   )
 }
@@ -74,21 +85,21 @@ interface AgentTagProps {
   hail?: boolean
 }
 
-/** Compact helmet + name chip, used as the owner on a card. */
+/** Compact agent mark + name block, used as the owner on a card. */
 export function AgentTag({ agent, active, hail }: AgentTagProps) {
   return (
     <span
-      className={`relative inline-flex h-[26px] items-center gap-1.5 rounded-lg border border-astronaut pr-2 pl-1 text-xs text-astronaut-text ${
-        active ? 'animate-orbit-pulse' : ''
+      className={`relative inline-flex h-6 items-center gap-1.5 rounded-[2px] border border-ink pr-2 pl-1 text-xs font-semibold ${
+        active ? 'bg-ink text-on-ink' : 'bg-paper text-ink'
       }`}
     >
-      <Icon name="helmet" size={16} className="text-astronaut" />
+      <Icon name="agent" size={14} />
       <span className="sr-only">{labels.agent} </span>
       {agent.name}
       <span className="sr-only">, {autonomyLabels[agent.autonomy]}</span>
       <AutonomyRings level={agent.autonomy} size={12} />
       {hail && (
-        <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-surface bg-warning">
+        <span className="absolute -top-1 -right-1 size-2.5 rounded-[1px] border-2 border-paper bg-approve">
           <span className="sr-only">, {labels.hail} raised</span>
         </span>
       )}

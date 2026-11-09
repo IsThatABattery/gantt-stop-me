@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button } from '../../components/controls'
+import { Icon } from '../../components/Icon'
 import type { Criterion } from '../../data/types'
 import { actionLabels } from '../../labels/labels'
 
@@ -25,26 +26,26 @@ export function CriteriaList({ heading, help, criteria, onChange }: CriteriaList
   }
 
   return (
-    <section aria-labelledby="criteria-heading" className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-surface p-6">
+    <section aria-labelledby="criteria-heading" className="flex flex-col gap-3.5 rounded-card border border-line bg-paper p-6">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id="criteria-heading" className="m-0 font-heading text-lg font-semibold">
+        <h2 id="criteria-heading" className="m-0 text-lg font-semibold">
           {heading}
         </h2>
-        <span className="font-mono text-xs text-text-muted">
+        <span className="font-mono text-xs text-ink-2">
           {met} / {criteria.length} met
         </span>
       </div>
-      <p className="m-0 text-[13px] leading-normal text-text-muted-strong">{help}</p>
+      <p className="m-0 text-[13px] leading-normal text-ink-2">{help}</p>
       {criteria.length > 0 && (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {criteria.map((c, i) => (
-            <li key={c.id} className="flex items-center gap-3 rounded-control border border-line-soft bg-surface-sunken px-3">
+            <li key={c.id} className="flex items-center gap-3 rounded-[2px] border border-keyline bg-paper px-3">
               <input
                 type="checkbox"
                 checked={c.met}
                 onChange={(e) => update(c.id, { met: e.target.checked })}
                 aria-label={`Met: ${c.text || `criterion ${i + 1}`}`}
-                className="size-[18px] flex-none accent-good"
+                className="size-[18px] flex-none accent-ink"
               />
               <input
                 type="text"
@@ -56,16 +57,16 @@ export function CriteriaList({ heading, help, criteria, onChange }: CriteriaList
                 autoFocus={c.id === added}
                 onChange={(e) => update(c.id, { text: e.target.value })}
                 className={`min-h-11 min-w-0 flex-1 border-0 bg-transparent font-[inherit] focus:outline-none ${
-                  c.met ? 'text-text-muted-strong line-through' : 'text-text'
+                  c.met ? 'text-ink-2 line-through' : 'text-ink'
                 }`}
               />
               <button
                 type="button"
                 aria-label={`Remove criterion ${i + 1}`}
                 onClick={() => onChange(criteria.filter((x) => x.id !== c.id))}
-                className="inline-flex size-9 flex-none cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-text-muted-strong hover:text-text"
+                className="inline-flex size-9 flex-none cursor-pointer items-center justify-center rounded-[2px] border-0 bg-transparent text-ink-2 hover:bg-ink/8 hover:text-ink"
               >
-                ×
+                <Icon name="close" size={16} />
               </button>
             </li>
           ))}

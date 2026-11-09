@@ -30,7 +30,7 @@ export function AgentsPage() {
     <div className="flex flex-col gap-6 px-8 py-7">
       <header className="flex flex-wrap items-end gap-4">
         <div className="flex-[1_1_320px]">
-          <h1 className="m-0 font-heading text-[26px] font-semibold">{labels.agent} console</h1>
+          <h1 className="m-0 text-[26px] font-semibold">{labels.agent} console</h1>
         </div>
         <Link to={board} className={buttonClass('secondary')}>
           {actionLabels.backToBoard}

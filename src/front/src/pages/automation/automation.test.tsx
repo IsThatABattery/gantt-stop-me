@@ -240,12 +240,12 @@ describe('project automation', () => {
     await screen.findByText('Automation is on.')
     await userEvent.type(agent('Check agent').getByLabelText(/^Your instructions/), ' Then log out.')
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))
+    await userEvent.click(screen.getByRole('link', { name: 'Add a project' }))
     const dialog = within(await screen.findByRole('alertdialog'))
     expect(dialog.getByText(/You have unsaved changes/)).toBeInTheDocument()
     expect(dialog.getByRole('button', { name: 'Stay' })).toHaveFocus()
     await userEvent.click(dialog.getByRole('button', { name: 'Leave without saving' }))
-    expect(await screen.findByRole('heading', { name: 'Add a mission', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Add a project', level: 1 })).toBeInTheDocument()
   })
 
   it('leaves without asking once the changes are saved', async () => {
@@ -254,8 +254,8 @@ describe('project automation', () => {
     await userEvent.type(agent('Check agent').getByLabelText(/^Your instructions/), ' Then log out.')
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByText('Automation saved')
-    await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))
-    expect(await screen.findByRole('heading', { name: 'Add a mission', level: 1 })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'Add a project' }))
+    expect(await screen.findByRole('heading', { name: 'Add a project', level: 1 })).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 

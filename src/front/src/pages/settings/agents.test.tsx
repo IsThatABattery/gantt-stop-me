@@ -147,7 +147,7 @@ describe('agent settings', () => {
     const { form, agent } = await openAgents()
     await userEvent.type(agent('Interviewer').getByLabelText(/^Your instructions/), 'Be brief.')
     expect(form.getByText('Unsaved changes')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('link', { name: 'Add a mission' }))
+    await userEvent.click(screen.getByRole('link', { name: 'Add a project' }))
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('You have unsaved changes')
   })
 

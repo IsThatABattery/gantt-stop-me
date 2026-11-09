@@ -15,7 +15,7 @@ interface TabsProps {
   onChange?: (id: string) => void
 }
 
-/** Tab list with arrow-key, Home and End navigation. */
+/** Blocky tabs: the selected one is a solid ink tab on a 2px ink rule. Arrow keys, Home and End move between them. */
 export function Tabs({ label, items, value, onChange }: TabsProps) {
   const [own, setOwn] = useState(items[0]?.id)
   const selected = value ?? own
@@ -38,7 +38,7 @@ export function Tabs({ label, items, value, onChange }: TabsProps) {
 
   return (
     <div>
-      <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b border-line px-1">
+      <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b-2 border-ink">
         {items.map((t, i) => {
           const active = t.id === selected
           return (
@@ -55,8 +55,8 @@ export function Tabs({ label, items, value, onChange }: TabsProps) {
               tabIndex={active ? 0 : -1}
               onClick={() => select(t.id)}
               onKeyDown={(e) => onKey(e, i)}
-              className={`-mb-px min-h-11 cursor-pointer border-0 border-b-2 bg-transparent px-3 font-[inherit] whitespace-nowrap ${
-                active ? 'border-ion font-medium text-text' : 'border-transparent text-text-muted-strong hover:text-text'
+              className={`min-h-11 cursor-pointer rounded-t-[3px] border-0 px-4 font-[inherit] text-sm font-semibold whitespace-nowrap transition-colors duration-150 ${
+                active ? 'bg-ink text-on-ink' : 'bg-transparent text-ink-2 hover:bg-ink/8 hover:text-ink active:bg-ink/15'
               }`}
             >
               {t.label}

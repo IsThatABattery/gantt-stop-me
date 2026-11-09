@@ -37,9 +37,9 @@ export function AgentPanel({ row, projectId }: { row: AgentRow; projectId: strin
   }
 
   return (
-    <div className="min-w-0 flex-[999_1_560px] rounded-card border border-line bg-surface-sunken p-5">
+    <div className="min-w-0 flex-[999_1_560px] rounded-card border border-rule bg-ground p-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="m-0 font-heading text-lg font-semibold">
+        <h2 className="m-0 text-lg font-semibold">
           {agent.name}
           {task && ` · ${task.title}`}
         </h2>
@@ -53,7 +53,7 @@ export function AgentPanel({ row, projectId }: { row: AgentRow; projectId: strin
           Open {task.key}
         </Link>
       ) : (
-        <p className="m-0 mt-2 text-[13px] text-text-muted">
+        <p className="m-0 mt-2 text-[13px] text-ink-2">
           No current {labels.task.toLowerCase()}. {agent.name} is waiting in the {labels.backlog}.
         </p>
       )}
@@ -68,8 +68,8 @@ export function AgentPanel({ row, projectId }: { row: AgentRow; projectId: strin
       </div>
 
       {openHail && (
-        <form onSubmit={send} noValidate className="mt-4 rounded-control border border-warning bg-warning/6 p-3.5">
-          <div className="text-[13px] font-medium text-warning">{agent.name} asks</div>
+        <form onSubmit={send} noValidate className="mt-4 rounded-control border border-approve bg-approve/6 p-3.5">
+          <div className="text-[13px] font-medium text-approve-ink">{agent.name} asks</div>
           <p className="m-0 mt-1.5 leading-normal">{openHail.question}</p>
           <div className="mt-3 flex flex-wrap gap-2.5">
             <label htmlFor={`${id}-reply`} className="sr-only">
@@ -85,28 +85,28 @@ export function AgentPanel({ row, projectId }: { row: AgentRow; projectId: strin
                 setReply(e.target.value)
                 setProblem(null)
               }}
-              className="flex-[1_1_260px] bg-surface"
+              className="flex-[1_1_260px] bg-paper"
             />
             <Button type="submit" variant="primary" disabled={answer.isPending} className="px-[18px]">
               {actionLabels.reply}
             </Button>
           </div>
           {(problem || answer.error) && (
-            <p id={`${id}-problem`} role="alert" className="m-0 mt-2 text-[13px] text-critical">
+            <p id={`${id}-problem`} role="alert" className="m-0 mt-2 text-[13px] text-signal-ink">
               {problem ?? answer.error?.message}
             </p>
           )}
         </form>
       )}
 
-      <h3 className="eyebrow m-0 mt-[18px]">Trace</h3>
+      <h3 className="text-xs font-semibold text-ink-2 m-0 mt-[18px]">Trace</h3>
       {trace.length === 0 ? (
-        <p className="m-0 mt-2 text-[13px] text-text-muted">No trace yet.</p>
+        <p className="m-0 mt-2 text-[13px] text-ink-2">No trace yet.</p>
       ) : (
-        <ol className="m-0 mt-2 list-none overflow-x-auto p-0 font-mono text-[13px] leading-[1.8] text-text-soft">
+        <ol className="m-0 mt-2 list-none overflow-x-auto p-0 font-mono text-[13px] leading-[1.8] text-ink">
           {trace.map((s) => (
             <li key={s.id} className="flex gap-4 whitespace-nowrap">
-              <time dateTime={s.at} className={s.kind === 'hail' ? 'text-warning' : 'text-text-muted'}>
+              <time dateTime={s.at} className={s.kind === 'hail' ? 'text-approve-ink' : 'text-ink-2'}>
                 {clockTime(s.at)}
               </time>
               <span className="w-16 flex-none">{traceWord[s.kind]}</span>

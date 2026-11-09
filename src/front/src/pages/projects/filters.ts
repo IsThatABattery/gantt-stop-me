@@ -13,7 +13,7 @@ export type Filter = (typeof FILTERS)[number]['key']
 export const SORTS = [
   { key: 'recent', label: 'Recent activity' },
   { key: 'name', label: 'Name' },
-  { key: 'window-end', label: 'Launch window end' },
+  { key: 'window-end', label: 'Sprint end' },
 ] as const
 export type Sort = (typeof SORTS)[number]['key']
 
@@ -41,7 +41,7 @@ function matchesQuery(p: ProjectSummary, query: string) {
 const compare: Record<Sort, (a: ProjectSummary, b: ProjectSummary) => number> = {
   recent: (a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt),
   name: (a, b) => a.name.localeCompare(b.name),
-  // Missions with no active launch window go last.
+  // Projects with no active sprint go last.
   'window-end': (a, b) => {
     if (!a.activeSprint || !b.activeSprint) return Number(!a.activeSprint) - Number(!b.activeSprint)
     return a.activeSprint.end.localeCompare(b.activeSprint.end)
@@ -52,7 +52,7 @@ export function visibleProjects(projects: ProjectSummary[], view: View) {
   return projects.filter((p) => matchesFilter(p, view) && matchesQuery(p, view.query)).sort(compare[view.sort])
 }
 
-/** Totals for the Needs you strip, and the mission that needs attention most. */
+/** Totals for the Needs you strip, and the project that needs attention most. */
 export function needsYou(projects: ProjectSummary[]) {
   const live = projects.filter((p) => !p.archived)
   const score = (p: ProjectSummary) => p.stats.awaitingApproval + p.stats.hails + p.stats.blocked

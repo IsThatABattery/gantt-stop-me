@@ -85,24 +85,23 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
         }}
         onKeyDown={onKeyDown}
         className={cx(
-          'box-border min-h-[46px] w-full rounded-control border bg-surface-sunken px-3.5 pr-9 font-[inherit] placeholder:text-text-muted focus:border-ion focus:outline-none disabled:cursor-not-allowed disabled:opacity-60',
-          quiet ? 'border-line-soft bg-transparent text-text-muted-strong' : 'border-line text-text',
+          'box-border min-h-[46px] w-full rounded-control border border-line px-3.5 pr-10 font-[inherit] text-sm placeholder:text-ink-2 transition-colors duration-150 hover:border-ink focus:border-accent focus:text-ink focus:outline-1 focus:outline-offset-0 focus:outline-accent aria-[invalid=true]:border-signal disabled:cursor-not-allowed disabled:border-rule disabled:bg-block disabled:text-ink-2',
+          quiet ? 'bg-transparent text-ink-2' : 'bg-paper text-ink',
         )}
         {...aria}
       />
-      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-text-muted" aria-hidden="true">
-        ▾
-      </span>
+      <Icon name="chevronDown" size={16} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-ink-2" />
       {open && !disabled && (
-        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-control border border-line bg-surface shadow-lg">
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-control border-[1.5px] border-ink bg-paper shadow-lg">
           {multiple && shown.length > 0 && (
-            <div className="flex items-center justify-between border-b border-line-soft px-3 py-1.5 text-xs text-text-muted">
+            <div className="flex items-center justify-between border-b border-rule px-3 py-1 text-xs text-ink-2">
               <span>
                 {selected.length} of {options.length} chosen{max !== undefined && options.length > max && `, up to ${max}`}
               </span>
               <button
                 type="button"
-                className="cursor-pointer border-0 bg-transparent p-1 font-[inherit] text-xs text-ion hover:text-ion-hover disabled:cursor-not-allowed disabled:text-text-muted"
+                className="min-h-8 cursor-pointer rounded-[2px] border-0 bg-transparent px-2 font-[inherit] text-xs font-semibold text-accent underline underline-offset-[3px] enabled:hover:text-ink disabled:cursor-not-allowed disabled:text-ink-2 disabled:no-underline"
+                // At the cap, with none of what's shown chosen, there is nothing to add or clear.
                 disabled={atCap && !allShownChosen}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onChange(allShownChosen ? selected.filter((m) => !shown.includes(m)) : [...selected, ...shown.filter((m) => !selected.includes(m))].slice(0, max))}
@@ -112,7 +111,8 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
             </div>
           )}
           <ul id={listId} role="listbox" aria-multiselectable={multiple || undefined} className="m-0 max-h-64 list-none overflow-auto p-1">
-            {shown.length === 0 && <li className="px-3 py-2 text-[13px] text-text-muted">No matches.</li>}
+            {/* Not "models": the assignee picker uses this list too. */}
+            {shown.length === 0 && <li className="px-3 py-2 text-[13px] text-ink-2">No matches.</li>}
             {shown.map((m, i) => {
               const chosen = selected.includes(m)
               return (
@@ -124,16 +124,16 @@ export function ModelCombobox({ id, options, selected, onChange, multiple, place
                   onMouseDown={(e) => e.preventDefault()} // keep focus in the box
                   onMouseEnter={() => setActive(i)}
                   onClick={() => pick(m)}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 font-mono text-[13px] ${i === active ? 'bg-surface-sunken text-text' : 'text-text-soft'}`}
+                  className={`flex min-h-10 cursor-pointer items-center gap-2.5 rounded-[2px] px-2.5 py-1.5 text-[13px] text-ink ${i === active ? 'bg-block' : ''} ${chosen ? 'font-semibold' : ''}`}
                 >
                   {multiple ? (
                     <span
-                      className={`flex size-4 flex-none items-center justify-center rounded border ${chosen ? 'border-ion bg-ion text-on-ion' : 'border-line-strong'}`}
+                      className={`flex size-4 flex-none items-center justify-center rounded-[2px] border-[1.5px] border-ink ${chosen ? 'bg-ink text-on-ink' : 'bg-paper'}`}
                     >
-                      {chosen && <Icon name="check" size={12} />}
+                      {chosen && <Icon name="check" size={12} strokeWidth={3} />}
                     </span>
                   ) : (
-                    <span className="flex w-4 flex-none justify-center text-ion">{chosen && <Icon name="check" size={14} />}</span>
+                    <span className="flex w-4 flex-none justify-center text-ink">{chosen && <Icon name="check" size={14} strokeWidth={2.5} />}</span>
                   )}
                   <span className="min-w-0 wrap-anywhere">{m}</span>
                 </li>
