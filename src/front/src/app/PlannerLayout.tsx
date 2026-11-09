@@ -11,7 +11,7 @@ const STEP_PATHS = ['briefing', 'doc', 'tasks', 'done']
 
 /**
  * Shell for the four planner steps (PlanBriefing … PlanDone): logo,
- * breadcrumb, stepper and "Save draft and exit". No nav rail, as in the mockups.
+ * breadcrumb, stepper and "Save draft and exit", on the rail colour. No nav rail, as in the mockups.
  */
 export function PlannerLayout() {
   const { projectId = '', draftId = '' } = useParams()
@@ -23,14 +23,14 @@ export function PlannerLayout() {
   const error = project.error ?? draft.error
 
   return (
-    <div className="stars min-h-screen bg-background text-text">
-      <header className="flex flex-wrap items-center gap-x-8 gap-y-4 border-b border-line-soft bg-rail px-8 py-3.5">
-        <Link to={`/projects/${projectId}`} className="no-underline">
+    <div className="stars min-h-screen bg-ground text-ink">
+      <header className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-rule bg-rail px-4 py-2.5 md:px-8">
+        <Link to={`/projects/${projectId}`} className="flex min-h-11 items-center no-underline">
           <Logo />
         </Link>
-        <div className="text-[13px] text-text-muted">
+        <div className="text-[13px] text-ink-2">
           {project.data?.name ?? '…'} / {plannerLabels.newFeature} /{' '}
-          <span className="text-text">
+          <span className="font-semibold text-ink">
             {draft.data?.name ?? '…'}
             {draft.data && draft.data.status !== 'approved' && ` ${plannerLabels.draftSuffix}`}
           </span>
@@ -46,9 +46,10 @@ export function PlannerLayout() {
           {plannerLabels.saveAndExit}
         </Link>
       </header>
-      <main className="mx-auto max-w-[1320px] px-8 pt-7 pb-12">
+      <main className="mx-auto max-w-[1320px] px-4 pt-7 pb-12 md:px-8">
         {error ? (
           <StatusMessage
+            tone="signal"
             title={error instanceof NotFoundError ? error.message : 'Something went wrong'}
             body="Check the link, or go back to the board."
           />

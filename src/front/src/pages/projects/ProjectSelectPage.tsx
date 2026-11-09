@@ -5,7 +5,8 @@ import { Logo } from '../../components/Logo'
 import { StatusMessage } from '../../components/StatusMessage'
 import { UserMenu } from '../../components/UserMenu'
 import { buttonClass } from '../../components/buttonClass'
-import { Select, TextInput } from '../../components/controls'
+import { ButtonMark, Select, TextInput } from '../../components/controls'
+import { PageTitle } from '../../components/PageTitle'
 import { useMockSession, useWorkspace } from '../../data/core'
 import { useFavorites, useProjects } from '../../data/views/projects'
 import { labels } from '../../labels/labels'
@@ -23,8 +24,9 @@ const emptyText: Record<Filter, string> = {
   archived: `No archived ${lower(labels.projects)}.`,
 }
 
-// Mission select, from Home.dc.html: search, filters, sort, favorites,
-// the Needs you strip and New mission.
+// Project select, from Home.dc.html: search, filters, sort, favorites,
+// the Needs you strip and New project. On mock data, and not routed until its
+// API exists (docs/implementation/api-gaps.md).
 export function ProjectSelectPage() {
   const { data: projects, isPending, error } = useProjects()
   const { data: workspace } = useWorkspace()
@@ -42,33 +44,31 @@ export function ProjectSelectPage() {
   const needs = useMemo(() => needsYou(projects ?? []), [projects])
 
   return (
-    <div className="stars min-h-screen bg-background text-text">
-      <header className="flex flex-wrap items-center gap-4 border-b border-line-soft bg-rail px-8 py-4">
+    <div className="stars min-h-screen bg-ground text-ink">
+      <header className="flex flex-wrap items-center gap-3 border-b border-rule bg-rail px-4 py-2.5 md:px-8">
         <Link to="/" className="mr-auto no-underline">
           <Logo />
         </Link>
         {workspace && (
-          <span className="text-[13px] text-text-muted">
+          <span className="text-[13px] text-ink-2">
             {labels.workspace} · {workspace.name}
           </span>
         )}
         <Link
           to="/settings"
           aria-label={labels.settings}
-          className="inline-flex size-11 items-center justify-center rounded-control border border-line text-text-muted-strong hover:text-text"
+          className="inline-flex size-11 items-center justify-center rounded-control border-[1.5px] border-ink bg-paper text-ink transition-colors duration-150 hover:bg-ink/8 hover:text-ink active:bg-ink/15"
         >
           <Icon name="settings" />
         </Link>
         <UserMenu />
       </header>
 
-      <main className="mx-auto flex max-w-[1240px] flex-col gap-7 px-8 pt-10 pb-16">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex-[1_1_360px]">
-            <h1 className="m-0 font-heading text-[32px] font-semibold">{labels.selectProject}</h1>
-          </div>
-          <button type="button" onClick={() => setCreating(true)} className={buttonClass('primary', 'min-h-[46px] px-5')}>
-            <Icon name="plus" size={16} strokeWidth={2.25} />
+      <main className="mx-auto flex max-w-[1240px] flex-col gap-6 px-4 pt-6 pb-16 md:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+          <PageTitle>{labels.selectProject}</PageTitle>
+          <button type="button" onClick={() => setCreating(true)} className={buttonClass('primary', 'min-h-[52px] pl-2 pr-[18px]')}>
+            <ButtonMark icon="plus" />
             {labels.newProject}
           </button>
         </div>
@@ -76,13 +76,15 @@ export function ProjectSelectPage() {
         {needs.top && (
           <section
             aria-label="Needs your attention"
-            className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-warning bg-warning/6 px-[18px] py-3.5"
+            className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-line bg-paper py-1.5 pr-1.5 pl-1.5"
           >
-            <span className="flex items-center gap-2 font-semibold text-warning">
-              <Icon name="alert" size={16} />
+            <span className="flex items-center gap-2.5 font-bold">
+              <span aria-hidden="true" className="grid size-10 place-items-center rounded-[2px] bg-approve text-on-approve">
+                <Icon name="person" size={20} />
+              </span>
               {labels.needsYou}
             </span>
-            {needs.approval > 0 && <span>{plural(needs.approval, lower(labels.task), lower(labels.tasks))} in mission review</span>}
+            {needs.approval > 0 && <span>{plural(needs.approval, lower(labels.task), lower(labels.tasks))} {lower(labels.awaitingApproval)}</span>}
             {needs.hails > 0 && <span>{plural(needs.hails, lower(labels.hail), lower(labels.hails))} from an {lower(labels.agent)}</span>}
             {needs.blockedProjects > 0 && (
               <span>{plural(needs.blockedProjects, lower(labels.project), lower(labels.projects))} with {lower(labels.blocked)}</span>
@@ -90,9 +92,10 @@ export function ProjectSelectPage() {
             <Link
               to={`/projects/${needs.top.id}`}
               aria-label={`${labels.reviewNow}: ${needs.top.name}`}
-              className="ml-auto inline-flex min-h-11 items-center px-3 font-medium no-underline"
+              className={buttonClass('primary', 'ml-auto')}
             >
               {labels.reviewNow}
+              <Icon name="chevronRight" size={16} />
             </Link>
           </section>
         )}
@@ -108,7 +111,7 @@ export function ProjectSelectPage() {
               placeholder={labels.searchProjects}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="bg-surface"
+              className="bg-paper"
             />
           </div>
           <div role="group" aria-label="Filter" className="flex flex-wrap gap-2">
@@ -120,7 +123,7 @@ export function ProjectSelectPage() {
                   type="button"
                   aria-pressed={on}
                   onClick={() => setFilter(f.key)}
-                  className={buttonClass(on ? 'accent' : 'secondary', on ? '' : 'text-text-muted-strong')}
+                  className={buttonClass(on ? 'primary' : 'secondary')}
                 >
                   {f.label}
                 </button>
@@ -131,7 +134,7 @@ export function ProjectSelectPage() {
             <label htmlFor="sort" className="sr-only">
               Sort by
             </label>
-            <Select id="sort" className="bg-surface" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+            <Select id="sort" className="bg-paper" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
               {SORTS.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
@@ -146,12 +149,12 @@ export function ProjectSelectPage() {
         ) : error ? (
           <StatusMessage title="Something went wrong" body={error.message} />
         ) : (
-          <section aria-label={labels.projects} className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+          <section aria-label={labels.projects} className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
             {visible.map((p) => (
               <ProjectCard key={p.id} project={p} favorite={favorites.includes(p.id)} onToggleFavorite={() => toggle(p.id)} />
             ))}
             {visible.length === 0 && (
-              <p role="status" className="col-span-full m-0 py-10 text-center text-text-muted-strong">
+              <p role="status" className="col-span-full m-0 py-10 text-center text-ink-2">
                 {query.trim() ? `No ${lower(labels.projects)} match “${query.trim()}”.` : emptyText[filter]}
               </p>
             )}
@@ -159,10 +162,12 @@ export function ProjectSelectPage() {
               <button
                 type="button"
                 onClick={() => setCreating(true)}
-                className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-[14px] border border-dashed border-line-strong bg-transparent p-5 font-[inherit] text-text-muted-strong hover:border-ion"
+                className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-card border-[1.5px] border-dashed border-line bg-transparent p-5 font-[inherit] text-ink-2 transition-colors duration-150 hover:border-ink hover:bg-ink/8 active:bg-ink/15"
               >
-                <Icon name="plus" size={28} />
-                <span className="font-medium text-text">{labels.newProject}</span>
+                <span aria-hidden="true" className="grid size-10 place-items-center rounded-[2px] bg-ink text-on-ink">
+                  <Icon name="plus" size={20} />
+                </span>
+                <span className="font-bold text-ink">{labels.newProject}</span>
                 <span className="text-[13px]">Start from scratch</span>
               </button>
             )}

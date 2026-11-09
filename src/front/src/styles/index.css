@@ -2,77 +2,81 @@
 
 /* Color themes. Each sets every theme variable below for [data-theme='<id>'] and is listed in src/theme/themes.ts.
    To add one, see "Themes" in src/front/README.md. */
-@import './themes/space-dark.css';
-@import './themes/space-light.css';
-@import './themes/dark.css';
 @import './themes/light.css';
+@import './themes/dark.css';
+@import './themes/space-light.css';
+@import './themes/space-dark.css';
 
-/* The theme contract: one Tailwind color per theme variable, so bg-surface reads var(--surface).
+/* The theme contract: one Tailwind color per theme variable, so bg-paper reads var(--paper).
    inline makes each utility read the variable where it's used, so data-theme on any element themes that subtree.
    Every theme sets each of these, plus --stars (the starfield, or none) and color-scheme. */
 @theme inline {
-  /* Surfaces, back to front: the page, cards, wells inside cards, the nav rail and headers (translucent), the active nav item */
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-surface-sunken: var(--surface-sunken);
+  /* Surfaces, back to front: the page, the nav rail, blocks (inactive nav items, secondary fills), stage tiles
+     (stepping from first to last across the board; the tile utility mixes them), the tiles' inset frame,
+     and paper (cards, inputs, dialogs, the drawer) */
+  --color-ground: var(--ground);
   --color-rail: var(--rail);
-  --color-header: var(--header);
-  --color-nav-active: var(--nav-active);
+  --color-block: var(--block);
+  --color-block-hover: var(--block-hover);
+  --color-tile-first: var(--tile-first);
+  --color-tile-last: var(--tile-last);
+  --color-tile-keyline: var(--tile-keyline);
+  --color-paper: var(--paper);
 
-  /* Lines and borders */
+  /* Lines, lightest first: the keyline inset in paper, rules between regions, and line, the edge of every
+     control and card (3:1 against what it sits on) */
+  --color-keyline: var(--keyline);
+  --color-rule: var(--rule);
   --color-line: var(--line);
-  --color-line-soft: var(--line-soft);
-  --color-line-strong: var(--line-strong);
 
-  /* Text, strongest first. src/theme/contrast.test.ts checks each against WCAG AA on every surface. */
-  --color-text: var(--text);
-  --color-text-soft: var(--text-soft);
-  --color-text-muted-strong: var(--text-muted-strong);
-  --color-text-muted: var(--text-muted);
+  /* Ink: text, stage tabs, the primary action and the active nav block, with on-ink for what sits on it.
+     src/theme/contrast.test.ts checks each against WCAG AA on every surface. */
+  --color-ink: var(--ink);
+  --color-ink-hover: var(--ink-hover);
+  --color-ink-2: var(--ink-2);
+  --color-on-ink: var(--on-ink);
+  --color-on-ink-2: var(--on-ink-2);
 
-  /* ion: focus, selection and primary actions, with on-ion for text on it. astronaut: an AI agent is involved. */
-  --color-ion: var(--ion);
-  --color-ion-hover: var(--ion-hover);
-  --color-on-ion: var(--on-ion);
-  --color-astronaut: var(--astronaut);
-  --color-astronaut-text: var(--astronaut-text);
+  /* accent: what is live (tests running), links, selection and the focus ring. Ink in Light and Dark. */
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
 
-  /* State: done or approved, waiting on a human, blocked or failed. Tints are these at 6 to 25 percent. */
+  /* Colour only where a person is needed: signal for needs attention, failed and errors; approve for awaiting
+     approval. -ink is the colour as text, on- is text on its fill. good marks success. */
+  --color-signal: var(--signal);
+  --color-signal-ink: var(--signal-ink);
+  --color-on-signal: var(--on-signal);
+  --color-signal-wash: var(--signal-wash);
+  --color-approve: var(--approve);
+  --color-on-approve: var(--on-approve);
+  --color-approve-ink: var(--approve-ink);
   --color-good: var(--good);
-  --color-warning: var(--warning);
-  --color-critical: var(--critical);
 }
 
 /* The same in every theme */
 @theme {
-  --font-ui: Inter, system-ui, sans-serif;
-  --font-heading: 'Space Grotesk', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Display caps for page titles and stage tabs, a workhorse sans for the UI, mono for issue numbers and branches */
+  --font-display: 'Big Shoulders Display Variable', 'Arial Narrow', sans-serif;
+  --font-ui: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Red Hat Mono Variable', ui-monospace, monospace;
 
-  --radius-control: 10px;
-  --radius-card: 12px;
-  --radius-dialog: 16px;
+  /* Blocky: small radii everywhere */
+  --radius-control: 4px;
+  --radius-card: 4px;
+  --radius-dialog: 6px;
 
-  --animate-orbit-pulse: orbit-pulse 2.4s ease-in-out infinite;
-  --animate-liftoff: liftoff 0.9s ease-in-out infinite;
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
-  @keyframes liftoff {
+  --animate-live: live 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+
+  /* A small mark moving along its track: tests running */
+  @keyframes live {
     0%,
     100% {
-      transform: translateY(1px);
+      transform: translateX(-3px);
     }
     50% {
-      transform: translateY(-1.5px);
-    }
-  }
-
-  @keyframes orbit-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--astronaut) 45%, transparent);
-    }
-    50% {
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--astronaut) 0%, transparent);
+      transform: translateX(3px);
     }
   }
 }
@@ -80,11 +84,19 @@
 @layer base {
   body {
     margin: 0;
-    background-color: var(--background);
-    color: var(--text);
+    background-color: var(--ground);
+    color: var(--ink);
     font-family: var(--font-ui);
     font-size: 14px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
+    caret-color: var(--accent);
+  }
+
+  ::selection {
+    background: var(--approve);
+    color: var(--on-approve);
   }
 
   p {
@@ -92,32 +104,34 @@
   }
 
   a {
-    color: var(--ion);
+    color: var(--accent);
+    text-underline-offset: 3px;
   }
 
   a:hover {
-    color: var(--ion-hover);
+    color: var(--ink);
   }
 
   :focus-visible {
-    outline: 2px solid var(--ion);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+
+  * {
+    scrollbar-color: var(--line) transparent;
+  }
+}
+
+/* A stage tile's fill: --tile-step (0 for the first column, 1 for the last) mixes tile-first into tile-last,
+   so the board steps darker left to right however many columns it has. */
+@utility tile {
+  background-color: color-mix(in oklab, var(--tile-first), var(--tile-last) calc(var(--tile-step, 0) * 100%));
 }
 
 /* The theme's static starfield, tiled at 300x120. No animation. */
 @utility stars {
   background-image: var(--stars);
   background-size: 300px 120px;
-}
-
-@utility eyebrow {
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

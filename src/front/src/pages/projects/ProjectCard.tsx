@@ -1,7 +1,6 @@
 import { Link } from 'react-router'
 import { UserAvatar } from '../../components/Avatar'
 import { Chip } from '../../components/Chip'
-import { Icon } from '../../components/Icon'
 import { ProgressBar } from '../../components/ProgressBar'
 import type { ProjectSummary } from '../../data/types'
 import { labels } from '../../labels/labels'
@@ -17,8 +16,8 @@ interface ProjectCardProps {
 }
 
 /**
- * One mission card. The star is a sibling of the card link, laid over its
- * corner, so no interactive element sits inside another.
+ * One project as a white card with an inset keyline, as tasks are on the board. The star is a sibling of the card
+ * link, laid over its corner, so no interactive element sits inside another.
  */
 export function ProjectCard({ project: p, favorite, onToggleFavorite }: ProjectCardProps) {
   const members = p.members
@@ -28,64 +27,57 @@ export function ProjectCard({ project: p, favorite, onToggleFavorite }: ProjectC
     <div className="relative">
       <Link
         to={`/projects/${p.id}`}
-        className="flex h-full flex-col gap-4 rounded-[14px] border border-line bg-surface p-5 text-text no-underline transition-[border-color,translate] hover:-translate-y-px hover:border-ion hover:text-text"
+        className="group flex h-full flex-col rounded-card border border-line bg-paper p-[3px] text-ink no-underline transition-colors duration-150 ease-out-quint hover:border-ink hover:text-ink"
       >
-        <div className="pr-10">
-          <div className="min-w-0">
-            <div className="font-heading text-[19px] font-semibold">{p.name}</div>
-            {p.description && <div className="mt-1 text-[13px] leading-[1.45] text-text-muted-strong">{p.description}</div>}
+        <div className="flex flex-1 flex-col gap-4 rounded-[2px] border border-keyline p-4 transition-colors duration-150 group-hover:border-ink">
+          <div className="min-w-0 pr-10">
+            <div className="text-lg leading-snug font-bold">{p.name}</div>
+            {p.description && <div className="mt-1 text-[13px] leading-[1.45] text-ink-2">{p.description}</div>}
           </div>
-        </div>
 
-        <div className="flex items-center justify-between gap-2">
-          {p.archived ? (
-            <Chip tone="neutral" className="px-2.5">
-              Archived
-            </Chip>
-          ) : sprint ? (
-            <Chip tone="ion" className="px-2.5">
-              {labels.inSprint(sprint.number)}
-            </Chip>
-          ) : (
-            <Chip tone="neutral" className="px-2.5">
-              {labels.betweenSprints}
-            </Chip>
-          )}
-          <span className="font-mono text-xs text-text-muted">
-            {sprint ? `T-${countdown(sprint.end)}` : p.nextSprintStart ? labels.nextSprint(shortDate(p.nextSprintStart)) : ''}
-          </span>
-        </div>
-
-        <ProgressBar label={labels.tasksLanded} value={p.stats.tasksLanded} max={p.stats.tasksTotal} />
-
-        <div className="flex flex-wrap gap-2">
-          {p.stats.awaitingApproval > 0 && (
-            <Chip tone="warning" shape="tag">
-              <Icon name="dock" size={14} />
-              {p.stats.awaitingApproval} {lower(labels.awaitingApproval)}
-            </Chip>
-          )}
-          {p.stats.blocked > 0 && (
-            <Chip tone="critical" shape="tag">
-              <Icon name="alert" size={14} />
-              {p.stats.blocked} {lower(labels.blocked)}
-            </Chip>
-          )}
-          <Chip tone="astronaut" shape="tag">
-            <Icon name="helmet" size={14} className="text-astronaut" />
-            {plural(p.stats.activeAgents, lower(labels.agent), lower(labels.agents))}
-          </Chip>
-        </div>
-
-        <div className="mt-auto flex items-center justify-between border-t border-line-soft pt-3.5">
-          <div className="flex">
-            {members.map((u) => (
-              <UserAvatar key={u.id} user={u} stacked />
-            ))}
+          <div className="flex items-center justify-between gap-2">
+            {p.archived ? (
+              <Chip tone="neutral">Archived</Chip>
+            ) : sprint ? (
+              <Chip tone="live">{labels.inSprint(sprint.number)}</Chip>
+            ) : (
+              <Chip tone="neutral" soft>
+                {labels.betweenSprints}
+              </Chip>
+            )}
+            <span className="text-xs text-ink-2">
+              {sprint ? `${labels.tMinus} ${countdown(sprint.end)}` : p.nextSprintStart ? labels.nextSprint(shortDate(p.nextSprintStart)) : ''}
+            </span>
           </div>
-          <span className="text-xs text-text-muted">
-            {plural(members.length, lower(labels.user), lower(labels.users))} · {timeAgo(p.lastActivityAt)}
-          </span>
+
+          <ProgressBar label={labels.tasksLanded} value={p.stats.tasksLanded} max={p.stats.tasksTotal} />
+
+          <div className="flex flex-wrap gap-1.5">
+            {p.stats.awaitingApproval > 0 && (
+              <Chip tone="approve" icon="person">
+                {p.stats.awaitingApproval} {lower(labels.awaitingApproval)}
+              </Chip>
+            )}
+            {p.stats.blocked > 0 && (
+              <Chip tone="signal" icon="alert">
+                {p.stats.blocked} {lower(labels.blocked)}
+              </Chip>
+            )}
+            <Chip tone="neutral" icon="agent" shape="tag">
+              {plural(p.stats.activeAgents, lower(labels.agent), lower(labels.agents))}
+            </Chip>
+          </div>
+
+          <div className="mt-auto flex items-center justify-between border-t border-keyline pt-3">
+            <div className="flex">
+              {members.map((u) => (
+                <UserAvatar key={u.id} user={u} size="sm" stacked />
+              ))}
+            </div>
+            <span className="text-xs text-ink-2">
+              {plural(members.length, lower(labels.user), lower(labels.users))} · {timeAgo(p.lastActivityAt)}
+            </span>
+          </div>
         </div>
       </Link>
 
@@ -94,11 +86,11 @@ export function ProjectCard({ project: p, favorite, onToggleFavorite }: ProjectC
         aria-label={`Favorite ${p.name}`}
         aria-pressed={favorite}
         onClick={onToggleFavorite}
-        className={`absolute top-3 right-3 inline-flex size-11 cursor-pointer items-center justify-center rounded-control border-0 bg-transparent ${
-          favorite ? 'text-warning' : 'text-text-muted hover:text-text'
+        className={`absolute top-2 right-2 inline-flex size-11 cursor-pointer items-center justify-center rounded-control border-0 bg-transparent transition-colors duration-150 hover:bg-ink/8 active:bg-ink/15 ${
+          favorite ? 'text-ink' : 'text-ink-2 hover:text-ink'
         }`}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill={favorite ? 'var(--approve)' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" aria-hidden="true">
           <path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.9l-5.25 2.7 1-5.8L3.5 9.7l5.9-.9z" />
         </svg>
       </button>

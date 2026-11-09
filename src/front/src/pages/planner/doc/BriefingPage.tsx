@@ -28,8 +28,8 @@ function Briefing({ draft }: { draft: FeatureDraft }) {
     <div className="flex flex-wrap items-start gap-6">
       <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-5">
         <div>
-          <h1 className="m-0 font-heading text-[28px] font-semibold">Tell the {agentWord} about the {labels.feature.toLowerCase()}</h1>
-          <p className="mt-2 mb-0 max-w-[640px] leading-normal text-text-muted-strong">
+          <h1 className="m-0 text-[28px] font-semibold">Tell the {agentWord} about the {labels.feature.toLowerCase()}</h1>
+          <p className="mt-2 mb-0 max-w-[640px] leading-normal text-ink-2">
             The briefing {agentWord} asks one question at a time, then drafts an {labels.feature.toLowerCase()} doc for you to approve. Nothing is
             added to the board yet.
           </p>
@@ -37,7 +37,7 @@ function Briefing({ draft }: { draft: FeatureDraft }) {
 
         <StatusNote draft={draft} base={base} />
 
-        <section aria-label="Conversation" className="rounded-[14px] border border-line bg-surface p-6">
+        <section aria-label="Conversation" className="rounded-[14px] border border-rule bg-paper p-6">
           <ol role="log" aria-label="Messages" className="m-0 flex list-none flex-col gap-[18px] p-0">
             {draft.messages.map((m) => (
               <Message key={m.id} message={m} />
@@ -63,15 +63,15 @@ function StatusNote({ draft, base }: { draft: FeatureDraft; base: string }) {
   switch (draft.status) {
     case 'denied':
       return note(
-        'border-warning bg-warning/6',
+        'border-approve bg-approve/6',
         <span>
-          <strong className="font-semibold text-warning">Revising.</strong> You sent the doc back. The briefing {agentWord} is revising it with
+          <strong className="font-semibold text-approve-ink">Revising.</strong> You sent the doc back. The briefing {agentWord} is revising it with
           your feedback.
         </span>,
       )
     case 'needs-review':
       return note(
-        'border-ion bg-ion/8',
+        'border-accent bg-accent/8',
         <>
           <span>The doc is drafted and waiting for your review.</span>
           <Link to={`${base}/doc`} className="ml-auto font-medium">
@@ -91,7 +91,7 @@ function StatusNote({ draft, base }: { draft: FeatureDraft; base: string }) {
       )
     case 'discarded':
       return note(
-        'border-line bg-surface',
+        'border-rule bg-paper',
         <>
           <span>This draft was discarded.</span>
           <Link to={`/projects/${projectId}`} className="ml-auto font-medium">
@@ -110,11 +110,11 @@ function Message({ message: m }: { message: BriefingMessage }) {
   if (m.from === 'agent') {
     return (
       <li className="flex max-w-[720px] items-start gap-3">
-        <span className="inline-flex size-9 flex-none items-center justify-center rounded-[10px] border border-astronaut bg-astronaut/10 text-astronaut">
+        <span className="inline-flex size-9 flex-none items-center justify-center rounded-[10px] border border-accent bg-accent/10 text-accent">
           <Icon name="helmet" size={20} />
         </span>
-        <div className="rounded-card border border-line bg-surface px-4 py-3.5">
-          <div className="mb-1 text-xs text-astronaut-text">{plannerLabels.briefingAgent}</div>
+        <div className="rounded-card border border-rule bg-paper px-4 py-3.5">
+          <div className="mb-1 text-xs text-accent">{plannerLabels.briefingAgent}</div>
           <div className="leading-[1.55]">{m.text}</div>
         </div>
       </li>
@@ -122,11 +122,11 @@ function Message({ message: m }: { message: BriefingMessage }) {
   }
   return (
     <li className="flex items-start justify-end gap-3">
-      <div className="max-w-[640px] rounded-card border border-ion bg-ion/8 px-4 py-3.5 leading-[1.55]">
+      <div className="max-w-[640px] rounded-card border border-accent bg-accent/8 px-4 py-3.5 leading-[1.55]">
         <span className="sr-only">You: </span>
         {m.text}
       </div>
-      <span aria-hidden="true" className="inline-flex size-9 flex-none items-center justify-center rounded-full bg-line text-[13px] font-semibold">
+      <span aria-hidden="true" className="inline-flex size-9 flex-none items-center justify-center rounded-full bg-rule text-[13px] font-semibold">
         {user?.initials}
       </span>
     </li>
@@ -154,18 +154,18 @@ function AnswerBox({ draft, base }: { draft: FeatureDraft; base: string }) {
   const draftNow = () => drafting.mutate({ draftId: draft.id }, { onSuccess: () => navigate(`${base}/doc`) })
 
   return (
-    <form onSubmit={send} aria-label={plannerLabels.yourAnswer} className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-surface-sunken p-5">
+    <form onSubmit={send} aria-label={plannerLabels.yourAnswer} className="flex flex-col gap-3.5 rounded-[14px] border border-rule bg-ground p-5">
       {asking && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[13px] text-text-muted">
+          <span className="text-[13px] text-ink-2">
             Question {question} of about {draft.expectedQuestions}
           </span>
           <div
             role="img"
             aria-label={`${draft.answered} of ${draft.expectedQuestions} questions answered`}
-            className="h-1.5 w-[180px] overflow-hidden rounded-[3px] bg-line-soft"
+            className="h-1.5 w-[180px] overflow-hidden rounded-[3px] bg-keyline"
           >
-            <div className="h-1.5 bg-astronaut" style={{ width: `${Math.round((draft.answered / draft.expectedQuestions) * 100)}%` }} />
+            <div className="h-1.5 bg-accent" style={{ width: `${Math.round((draft.answered / draft.expectedQuestions) * 100)}%` }} />
           </div>
         </div>
       )}
@@ -178,8 +178,8 @@ function AnswerBox({ draft, base }: { draft: FeatureDraft; base: string }) {
               type="button"
               aria-pressed={text === o}
               onClick={() => setText(o)}
-              className={`min-h-10 cursor-pointer rounded-full border border-astronaut px-3.5 font-[inherit] text-text ${
-                text === o ? 'bg-astronaut/25' : 'bg-astronaut/10 hover:bg-astronaut/20'
+              className={`min-h-10 cursor-pointer rounded-full border border-accent px-3.5 font-[inherit] text-ink ${
+                text === o ? 'bg-accent/25' : 'bg-accent/10 hover:bg-accent/20'
               }`}
             >
               {o}
@@ -200,7 +200,7 @@ function AnswerBox({ draft, base }: { draft: FeatureDraft; base: string }) {
       />
 
       {(answer.error ?? drafting.error) && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] text-signal-ink">
           {(answer.error ?? drafting.error)?.message}
         </p>
       )}
@@ -226,26 +226,26 @@ function AnswerBox({ draft, base }: { draft: FeatureDraft; base: string }) {
 
 const topicLook: Record<DocTopicState, { tone: Tone; text: string }> = {
   covered: { tone: 'good', text: 'text-good' },
-  asking: { tone: 'ion', text: 'text-ion' },
-  'not-yet': { tone: 'neutral', text: 'text-text-muted' },
+  asking: { tone: 'ion', text: 'text-accent' },
+  'not-yet': { tone: 'neutral', text: 'text-ink-2' },
 }
 
 function DraftColumn({ sections }: { sections: DocSection[] }) {
   const covered = sections.filter((s) => s.topicState === 'covered').length
   return (
-    <aside aria-label={`${labels.feature} doc draft`} className="flex min-w-0 flex-[1_1_360px] flex-col rounded-[14px] border border-line bg-surface-sunken p-6">
+    <aside aria-label={`${labels.feature} doc draft`} className="flex min-w-0 flex-[1_1_360px] flex-col rounded-[14px] border border-rule bg-ground p-6">
       <div className="flex items-baseline justify-between">
-        <h2 className="m-0 font-heading text-lg font-semibold">{labels.feature} doc (draft)</h2>
-        <span className="font-mono text-xs text-text-muted">
+        <h2 className="m-0 text-lg font-semibold">{labels.feature} doc (draft)</h2>
+        <span className="font-mono text-xs text-ink-2">
           {covered} of {sections.length} topics
         </span>
       </div>
-      <p className="mt-2 mb-2 text-[13px] leading-normal text-text-muted-strong">
+      <p className="mt-2 mb-2 text-[13px] leading-normal text-ink-2">
         Fills in as you answer. Topics left empty become open questions in the doc.
       </p>
       <ul className="m-0 list-none p-0">
         {sections.map((s) => (
-          <li key={s.key} className="flex gap-3 border-t border-line-soft py-3">
+          <li key={s.key} className="flex gap-3 border-t border-keyline py-3">
             <TopicMark state={s.topicState} />
             <div className="min-w-0 flex-1">
               <div className="flex justify-between gap-2">
@@ -253,7 +253,7 @@ function DraftColumn({ sections }: { sections: DocSection[] }) {
                 <Chip tone={topicLook[s.topicState].tone}>{topicStateLabels[s.topicState]}</Chip>
               </div>
               {s.topicState === 'covered' && s.body && (
-                <div className="mt-1 line-clamp-3 text-[13px] leading-normal text-text-muted-strong">{Array.isArray(s.body) ? s.body.join(' · ') : s.body}</div>
+                <div className="mt-1 line-clamp-3 text-[13px] leading-normal text-ink-2">{Array.isArray(s.body) ? s.body.join(' · ') : s.body}</div>
               )}
             </div>
           </li>
@@ -270,7 +270,7 @@ function TopicMark({ state }: { state: DocTopicState }) {
         <Icon name="check" size={14} strokeWidth={2.25} />
       </span>
     )
-  if (state === 'asking') return <span aria-hidden="true" className="size-[22px] flex-none rounded-full border-2 border-ion" />
-  return <span aria-hidden="true" className="size-[22px] flex-none rounded-full border border-dashed border-line-strong" />
+  if (state === 'asking') return <span aria-hidden="true" className="size-[22px] flex-none rounded-full border-2 border-accent" />
+  return <span aria-hidden="true" className="size-[22px] flex-none rounded-full border border-dashed border-line" />
 }
 

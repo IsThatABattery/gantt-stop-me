@@ -52,7 +52,7 @@ describe('sign out', () => {
 describe('sign up', () => {
   it('creates an account and lands on adding a project, asking to link GitHub', async () => {
     const { router } = renderApp('/login', { signedIn: false })
-    await userEvent.click(await screen.findByRole('link', { name: 'Request access' }))
+    await userEvent.click(await screen.findByRole('link', { name: 'Create an account' }))
     expect(router.state.location.pathname).toBe('/signup')
 
     await userEvent.type(screen.getByLabelText('Email'), 'grace@example.com')
@@ -76,12 +76,12 @@ describe('sign up', () => {
 })
 
 describe('project routes', () => {
-  it('opens the payload drawer from a card', async () => {
+  it('opens the task drawer from a card', async () => {
     const { router } = renderApp('/projects/1')
     await userEvent.click(await screen.findByRole('link', { name: /^#12:/ }))
 
     expect(router.state.location.pathname).toBe('/projects/1/tasks/7')
-    expect(await screen.findByRole('dialog', { name: 'Payload' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Task' })).toBeInTheDocument()
   })
 
   it('asks to link GitHub when no account is linked', async () => {
@@ -93,7 +93,7 @@ describe('project routes', () => {
 
   it('says a project the user cannot see is not found', async () => {
     renderApp('/projects/2')
-    expect(await screen.findByRole('heading', { name: 'Mission not found' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Project not found' })).toBeInTheDocument()
   })
 
   it('does not route the screens still on mock data', async () => {
@@ -104,11 +104,11 @@ describe('project routes', () => {
     }
   })
 
-  it('offers the board, the Hangar, planning and automation in the rail', async () => {
+  it('offers the board, the Backlog, planning and automation in the rail', async () => {
     renderApp('/projects/1')
     const rail = await screen.findByRole('navigation', { name: 'Primary' })
-    // The project's pages show once the missions list answered, so they don't jump into it.
+    // The project's pages show once the projects list answered, so they don't jump into it.
     await within(rail).findByRole('link', { name: 'Automation' })
-    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Add a mission', 'All missions', 'Mission control', 'Hangar', 'Plan a feature', 'Automation', 'Settings'])
+    expect(Array.from(rail.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['GanttStopMe', 'Board', 'Backlog', 'Plan a feature', 'Automation', 'All projects', 'Add a project', 'Settings'])
   })
 })

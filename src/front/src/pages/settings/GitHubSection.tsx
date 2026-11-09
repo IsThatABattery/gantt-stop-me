@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { Button, Field, TextInput } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
@@ -7,15 +8,15 @@ import type { Me } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
 import { GITHUB_OAUTH_URL, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
 import { labels, settingsLabels } from '../../labels/labels'
-import { Section } from './Section'
+import { Card, Confirm, Section } from './Section'
 import { sectionIds } from './sections'
 
 const kindLabel = { oauth: 'GitHub sign-in', pat: 'personal access token' } as const
 
 /** What the OAuth callback says in `?github=` when it sends the user back here. */
 const returnNotes = {
-  linked: { tone: 'text-good', text: 'GitHub is linked.' },
-  error: { tone: 'text-critical', text: "GitHub didn't link. Nothing was saved; try again." },
+  linked: { look: 'border border-line bg-paper text-ink [&>svg]:text-good', icon: 'check', text: 'GitHub is linked.' },
+  error: { look: 'bg-signal-wash text-signal-ink', icon: 'alert', text: "GitHub didn't link. Nothing was saved; try again." },
 } as const
 
 // Link one GitHub account, with OAuth or a personal access token, or unlink
@@ -31,13 +32,17 @@ export function GitHubSection({ me }: { me: Me }) {
       id={sectionIds.github}
       title={settingsLabels.github}
       intro={`Each ${labels.project.toLowerCase()} is a GitHub repository, and its board reads and writes the issues with your GitHub account.`}
+      // Nothing opens without it, so the tab lights until it's linked.
+      mark={me.github ? undefined : 'signal'}
+      markLabel={me.github ? undefined : 'Not linked'}
     >
       {note && (
-        <p role="status" className={`m-0 text-[13px] ${note.tone}`}>
+        <p role="status" className={`m-0 flex items-center gap-2 rounded-[2px] px-3 py-2.5 text-[13px] font-semibold ${note.look}`}>
+          <Icon name={note.icon} size={16} className="flex-none" />
           {note.text}
         </p>
       )}
-      {me.github ? <Linked login={me.github.login} kind={me.github.kind} /> : <NotLinked />}
+      <Card>{me.github ? <Linked login={me.github.login} kind={me.github.kind} /> : <NotLinked />}</Card>
     </Section>
   )
 }
@@ -45,35 +50,44 @@ export function GitHubSection({ me }: { me: Me }) {
 function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }) {
   const unlink = useUnlinkGitHub()
   const [confirming, setConfirming] = useState(false)
+  const id = useId()
+  // Focus goes into the confirm when it opens, and back to Unlink when it closes.
+  const confirm = (open: boolean) => {
+    flushSync(() => setConfirming(open))
+    document.getElementById(`${id}-${open ? 'keep' : 'open'}`)?.focus()
+  }
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="m-0 flex flex-wrap items-center gap-2">
-        <Icon name="github" />
-        Linked as <span className="font-mono">{login}</span>
-        <span className="text-[13px] text-text-muted">with a {kindLabel[kind]}</span>
-      </p>
-      {confirming ? (
-        <div role="alertdialog" aria-label="Unlink GitHub" className="flex flex-wrap items-center gap-3 rounded-card border border-warning bg-warning/6 p-4">
-          <p className="m-0 flex-1 text-[13px]">
-            Unlinking removes your access to every {labels.project.toLowerCase()} until you link again.
-          </p>
-          <Button onClick={() => setConfirming(false)}>Keep it linked</Button>
-          <Button
-            onClick={() => unlink.mutate()}
-            disabled={unlink.isPending}
-            className="border-warning text-warning hover:border-warning hover:text-warning"
-          >
+      <div className="flex flex-wrap items-center gap-3">
+        <span aria-hidden="true" className="grid size-10 flex-none place-items-center rounded-[2px] bg-ink text-on-ink">
+          <Icon name="github" size={20} />
+        </span>
+        <p className="m-0 flex min-w-0 flex-1 flex-col">
+          <span className="font-semibold">
+            Linked as <span className="font-bold">{login}</span>
+          </span>
+          <span className="text-[13px] text-ink-2">with a {kindLabel[kind]}</span>
+        </p>
+        {!confirming && (
+          <Button id={`${id}-open`} onClick={() => confirm(true)}>
+            Unlink
+          </Button>
+        )}
+      </div>
+      {confirming && (
+        <Confirm id={id} question={`Unlinking removes your access to every ${labels.project.toLowerCase()} until you link again.`}>
+          <Button id={`${id}-keep`} onClick={() => confirm(false)}>
+            Keep it linked
+          </Button>
+          <Button variant="danger" onClick={() => unlink.mutate()} busy={unlink.isPending}>
             Unlink GitHub
           </Button>
-        </div>
-      ) : (
-        <div>
-          <Button onClick={() => setConfirming(true)}>Unlink</Button>
-        </div>
+        </Confirm>
       )}
       {unlink.error && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 flex items-center gap-1.5 text-[13px] font-semibold text-signal-ink">
+          <Icon name="alert" size={16} className="flex-none" />
           {unlink.error.message}
         </p>
       )}
@@ -93,18 +107,19 @@ function NotLinked() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <div>
+      <div className="flex flex-col gap-3">
+        <h3 className="m-0 text-base font-bold">Link your GitHub account</h3>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {/* A full-page visit: the API redirects to GitHub, and GitHub back to /settings. */}
           <a href={GITHUB_OAUTH_URL} className={buttonClass('primary')}>
             <Icon name="github" />
             Link with GitHub
           </a>
+          <p className="m-0 max-w-[46ch] text-xs leading-normal text-ink-2">Needs the server's GitHub OAuth app. If it isn't set up, use a token instead.</p>
         </div>
-        <p className="m-0 text-xs text-text-muted">Needs the server's GitHub OAuth app. If it isn't set up, use a token instead.</p>
       </div>
 
-      <form onSubmit={submit} noValidate className="flex flex-col gap-3 border-t border-line-soft pt-5">
+      <form onSubmit={submit} noValidate className="flex flex-col gap-3 border-t border-rule pt-5">
         <Field id="github-token" label="Or use a personal access token">
           <TextInput
             id="github-token"
@@ -116,18 +131,20 @@ function NotLinked() {
             onChange={(e) => setToken(e.target.value)}
             aria-invalid={tokenError}
             aria-describedby="github-token-help"
+            className="max-w-[440px]"
           />
-          <span id="github-token-help" className="text-xs text-text-muted">
+          <span id="github-token-help" className="text-xs text-ink-2">
             It needs read and write access to issues and repository metadata.
           </span>
         </Field>
         {link.error && (
-          <p role="alert" className="m-0 text-[13px] text-critical">
+          <p role="alert" className="m-0 flex items-center gap-1.5 text-[13px] font-semibold text-signal-ink">
+            <Icon name="alert" size={16} className="flex-none" />
             {link.error.message}
           </p>
         )}
         <div>
-          <Button type="submit" disabled={link.isPending || !token.trim()}>
+          <Button type="submit" busy={link.isPending} disabled={!token.trim()}>
             {link.isPending ? 'Checking…' : 'Link token'}
           </Button>
         </div>

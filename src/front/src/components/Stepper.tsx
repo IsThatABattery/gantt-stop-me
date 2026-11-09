@@ -14,7 +14,7 @@ interface StepperProps {
   current: number
 }
 
-/** Numbered steps from the planner mockups; finished steps show a check. */
+/** Steps as square marks: the current one solid ink, finished ones checked, the rest hollow. */
 export function Stepper({ label, steps, current }: StepperProps) {
   return (
     <ol aria-label={label} className="m-0 flex list-none flex-wrap items-center gap-2.5 p-0 text-[13px]">
@@ -24,11 +24,11 @@ export function Stepper({ label, steps, current }: StepperProps) {
         const marker = (
           <span
             aria-hidden="true"
-            className={`inline-flex size-6 items-center justify-center rounded-full border text-xs ${
-              now ? 'border-ion bg-ion/12 font-semibold text-text' : done ? 'border-good text-good' : 'border-line text-text-muted'
+            className={`inline-flex size-6 flex-none items-center justify-center rounded-[2px] border-[1.5px] text-xs font-bold ${
+              now ? 'border-ink bg-ink text-on-ink' : done ? 'border-ink bg-paper text-ink' : 'border-line text-ink-2'
             }`}
           >
-            {done ? <Icon name="check" size={13} strokeWidth={2.25} /> : i + 1}
+            {done ? <Icon name="check" size={14} strokeWidth={2.5} /> : i + 1}
           </span>
         )
         const text = (
@@ -40,13 +40,13 @@ export function Stepper({ label, steps, current }: StepperProps) {
         )
         return (
           <li key={s.label} className="flex items-center gap-2.5">
-            {i > 0 && <span aria-hidden="true" className="h-px w-7 bg-line" />}
+            {i > 0 && <span aria-hidden="true" className="h-[1.5px] w-6 bg-line" />}
             {done && s.to ? (
-              <Link to={s.to} className="flex min-h-11 items-center gap-2 text-text-soft no-underline hover:text-text">
+              <Link to={s.to} className="flex min-h-11 items-center gap-2 font-semibold text-ink no-underline hover:text-ink hover:underline">
                 {text}
               </Link>
             ) : (
-              <span aria-current={now ? 'step' : undefined} className={`flex items-center gap-2 ${now ? 'font-medium text-text' : done ? 'text-text-soft' : 'text-text-muted'}`}>
+              <span aria-current={now ? 'step' : undefined} className={`flex items-center gap-2 ${now ? 'font-bold text-ink' : done ? 'font-semibold text-ink' : 'text-ink-2'}`}>
                 {text}
               </span>
             )}

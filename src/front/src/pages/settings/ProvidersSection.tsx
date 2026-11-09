@@ -1,14 +1,14 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Chip } from '../../components/Chip'
 import { Button, Field, TextInput } from '../../components/controls'
 import { ModelCombobox } from '../../components/ModelCombobox'
 import { Icon } from '../../components/Icon'
-import { StatusMessage } from '../../components/StatusMessage'
 import type { Provider } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
 import { updateProvider, useCreateProvider, useDeleteProvider, useProviders, useUpdateProvider } from '../../data/views/settings'
 import { actionLabels, settingsLabels } from '../../labels/labels'
 import { FieldError } from '../forms/ItemForm'
-import { Section } from './Section'
+import { Card, Section } from './Section'
 import { sectionIds } from './sections'
 
 // The user's LLM providers (docs/providers.md). Adding one checks the
@@ -45,38 +45,57 @@ export function ProvidersSection() {
   const [editing, setEditing] = useState<number | null>(null)
 
   return (
-    <Section id={sectionIds.providers} title={settingsLabels.providers} intro={settingsLabels.providersHelp}>
+    <Section
+      id={sectionIds.providers}
+      title={settingsLabels.providers}
+      intro={settingsLabels.providersHelp}
+      count={providers?.length}
+      countLabel={providers?.length === 1 ? 'provider' : 'providers'}
+    >
       {error ? (
-        <StatusMessage title="Couldn't load providers" body={error.message} />
+        <Problem>Couldn't load providers. {error.message}</Problem>
       ) : !providers ? (
-        <p className="m-0 text-[13px] text-text-muted">Loading…</p>
+        <p role="status" className="m-0 px-0.5 text-[13px] text-ink-2">
+          Loading providers…
+        </p>
       ) : (
         <>
-          {providers.length === 0 && !adding && <p className="m-0 text-[13px] text-text-muted-strong">No providers yet.</p>}
-          <ul className="m-0 flex list-none flex-col gap-3 p-0">
-            {providers.map((p) => (
-              <li key={p.id} className="rounded-control border border-line-soft bg-surface-sunken p-4">
-                {editing === p.id ? (
-                  <EditProvider provider={p} onDone={() => setEditing(null)} />
-                ) : picking?.id === p.id ? (
-                  <PickModels provider={p} available={picking.available} onDone={() => setPicking(null)} />
-                ) : (
-                  <ProviderRow provider={p} onEdit={() => setEditing(p.id)} />
-                )}
-              </li>
-            ))}
-          </ul>
+          {providers.length === 0 && !adding && (
+            <Card>
+              <p className="m-0 max-w-[60ch] text-sm leading-normal text-ink-2">
+                <span className="font-semibold text-ink">No providers yet.</span> Add an OpenAI-compatible endpoint, such as OpenAI itself
+                or a local Ollama, to choose your agents' models.
+              </p>
+            </Card>
+          )}
+          {providers.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
+              {providers.map((p) => (
+                <Card key={p.id} as="li">
+                  {editing === p.id ? (
+                    <EditProvider provider={p} onDone={() => setEditing(null)} />
+                  ) : picking?.id === p.id ? (
+                    <PickModels provider={p} available={picking.available} onDone={() => setPicking(null)} />
+                  ) : (
+                    <ProviderRow provider={p} onEdit={() => setEditing(p.id)} />
+                  )}
+                </Card>
+              ))}
+            </ul>
+          )}
           {adding ? (
-            <AddProvider
-              onCancel={() => setAdding(false)}
-              onAdded={(id, available) => {
-                setAdding(false)
-                setPicking({ id, available })
-              }}
-            />
+            <Card>
+              <AddProvider
+                onCancel={() => setAdding(false)}
+                onAdded={(id, available) => {
+                  setAdding(false)
+                  setPicking({ id, available })
+                }}
+              />
+            </Card>
           ) : (
             <div>
-              <Button variant="accent" onClick={() => setAdding(true)}>
+              <Button onClick={() => setAdding(true)}>
                 <Icon name="plus" size={16} />
                 Add provider
               </Button>
@@ -88,34 +107,55 @@ export function ProvidersSection() {
   )
 }
 
+/** An error that belongs to the whole form, under it: the alert mark and the words, on the signal wash. */
+function Problem({ children, alert }: { children: ReactNode; alert?: boolean }) {
+  return (
+    <p role={alert ? 'alert' : undefined} className="m-0 flex items-start gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] font-semibold text-signal-ink">
+      <Icon name="alert" size={16} className="mt-px flex-none" />
+      <span>{children}</span>
+    </p>
+  )
+}
+
 function ProviderRow({ provider, onEdit }: { provider: Provider; onEdit: () => void }) {
   const remove = useDeleteProvider()
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="font-medium">{provider.name}</span>
-        <span className="font-mono text-xs text-text-muted">{provider.baseUrl}</span>
-        <span className="ml-auto flex gap-2">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
+        <div className="flex min-w-[min(100%,14rem)] flex-1 flex-col gap-1">
+          <h3 className="m-0 text-base font-bold">{provider.name}</h3>
+          <span className="font-mono text-xs break-all text-ink-2">{provider.baseUrl}</span>
+        </div>
+        <span className="flex flex-none gap-2">
           <Button onClick={onEdit} aria-label={`Edit ${provider.name}`}>
+            <Icon name="edit" size={16} />
             Edit
           </Button>
-          <Button onClick={() => remove.mutate(provider.id)} disabled={remove.isPending} aria-label={`Remove ${provider.name}`}>
+          <Button onClick={() => remove.mutate(provider.id)} busy={remove.isPending} aria-label={`Remove ${provider.name}`}>
             Remove
           </Button>
         </span>
       </div>
-      <span className="inline-flex items-center gap-2 text-[13px] text-text-muted-strong">
-        <Icon name="lock" size={14} />
-        Key: <span className="font-mono text-text">{provider.keyLast4 ? `•••• ${provider.keyLast4}` : 'saved'}</span>
-      </span>
-      <p className="m-0 text-[13px] text-text-muted-strong">
-        Models: {provider.models.length ? <span className="text-text">{provider.models.join(', ')}</span> : 'none picked yet'}
-      </p>
-      {remove.error && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
-          {remove.error.message}
-        </p>
-      )}
+      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-t border-keyline pt-3 text-[13px]">
+        <dt className="inline-flex items-center gap-1.5 font-semibold text-ink-2">
+          <Icon name="lock" size={14} />
+          Key
+        </dt>
+        <dd className="m-0 font-mono text-ink">{provider.keyLast4 ? `•••• ${provider.keyLast4}` : 'saved'}</dd>
+        <dt className="font-semibold text-ink-2">Models</dt>
+        <dd className="m-0 flex flex-wrap gap-1.5">
+          {provider.models.length ? (
+            provider.models.map((m) => (
+              <Chip key={m} tone="neutral" shape="tag">
+                {m}
+              </Chip>
+            ))
+          ) : (
+            <span className="text-ink-2">None picked yet. Edit to pick them.</span>
+          )}
+        </dd>
+      </dl>
+      {remove.error && <Problem alert>{remove.error.message}</Problem>}
     </div>
   )
 }
@@ -134,8 +174,9 @@ function AddProvider({ onCancel, onAdded }: { onCancel: () => void; onAdded: (id
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-label="Add provider" className="flex flex-col gap-4 border-t border-line-soft pt-5">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+    <form onSubmit={submit} noValidate aria-label="Add provider" className="flex flex-col gap-4">
+      <h3 className="m-0 text-base font-bold">Add a provider</h3>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-4">
         <TextField id="provider-name" label="Name" value={form.name} placeholder="e.g. OpenAI" error={errors.on('name')} onChange={(name) => setForm({ ...form, name })} />
         <TextField
           id="provider-url"
@@ -147,14 +188,10 @@ function AddProvider({ onCancel, onAdded }: { onCancel: () => void; onAdded: (id
         />
       </div>
       <TextField id="provider-key" label={settingsLabels.apiKey} type="password" value={form.apiKey} error={errors.on('apiKey')} onChange={(apiKey) => setForm({ ...form, apiKey })} />
-      {errors.general && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
-          {errors.general}
-        </p>
-      )}
+      {errors.general && <Problem alert>{errors.general}</Problem>}
       <div className="flex flex-wrap justify-end gap-2.5">
         <Button onClick={onCancel}>{actionLabels.cancel}</Button>
-        <Button type="submit" variant="primary" disabled={create.isPending}>
+        <Button type="submit" variant="primary" busy={create.isPending}>
           {create.isPending ? 'Checking the endpoint…' : 'Add provider'}
         </Button>
       </div>
@@ -175,18 +212,17 @@ function PickModels({ provider, available, onDone }: { provider: Provider; avail
 
   return (
     <form onSubmit={submit} noValidate aria-label={`Pick models for ${provider.name}`} className="flex flex-col gap-3">
-      <p className="m-0">
-        <span className="font-medium">{provider.name}</span> is added. Pick the models to use from it.
+      <p className="m-0 flex items-center gap-2">
+        <Icon name="check" size={16} className="flex-none text-good" />
+        <span>
+          <span className="font-bold">{provider.name}</span> is added. Pick the models to use from it.
+        </span>
       </p>
       <ModelPicker available={available} chosen={models} onChange={setModels} error={errors.on('models')} idPrefix={`pick-${provider.id}`} />
-      {errors.general && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
-          {errors.general}
-        </p>
-      )}
+      {errors.general && <Problem alert>{errors.general}</Problem>}
       <div className="flex flex-wrap justify-end gap-2.5">
         <Button onClick={onDone}>Later</Button>
-        <Button type="submit" variant="primary" disabled={update.isPending}>
+        <Button type="submit" variant="primary" busy={update.isPending}>
           Save models
         </Button>
       </div>
@@ -228,8 +264,8 @@ function EditProvider({ provider, onDone }: { provider: Provider; onDone: () => 
 
   return (
     <form onSubmit={submit} noValidate aria-label={`Edit ${provider.name}`} className="flex flex-col gap-4">
-      <p className="m-0 font-medium">{provider.name}</p>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+      <h3 className="m-0 text-base font-bold">Edit {provider.name}</h3>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-4">
         <TextField id={`edit-${provider.id}-url`} label="Base URL" value={form.baseUrl} error={errors.on('baseUrl')} onChange={(baseUrl) => setForm({ ...form, baseUrl })} />
         <TextField
           id={`edit-${provider.id}-key`}
@@ -244,18 +280,16 @@ function EditProvider({ provider, onDone }: { provider: Provider; onDone: () => 
       {available ? (
         <ModelPicker available={available} chosen={form.models} onChange={(models) => setForm({ ...form, models })} error={errors.on('models')} idPrefix={`edit-${provider.id}`} />
       ) : listError ? (
-        <p className="m-0 text-[13px] text-critical">Couldn't list the models: {listError.message}</p>
+        <Problem>Couldn't list the models. {listError.message}</Problem>
       ) : (
-        <p className="m-0 text-[13px] text-text-muted">Listing models…</p>
-      )}
-      {errors.general && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
-          {errors.general}
+        <p role="status" className="m-0 text-[13px] text-ink-2">
+          Listing models…
         </p>
       )}
+      {errors.general && <Problem alert>{errors.general}</Problem>}
       <div className="flex flex-wrap justify-end gap-2.5">
         <Button onClick={onDone}>{actionLabels.cancel}</Button>
-        <Button type="submit" variant="primary" disabled={update.isPending}>
+        <Button type="submit" variant="primary" busy={update.isPending}>
           {actionLabels.save}
         </Button>
       </div>
@@ -280,9 +314,9 @@ function ModelPicker({
   const all = [...available, ...chosen.filter((m) => !available.includes(m))]
   return (
     <fieldset className="m-0 flex flex-col gap-1 border-0 p-0" aria-describedby={error ? `${idPrefix}-models-error` : undefined}>
-      <legend className="mb-1 p-0 text-[13px] text-text-soft">Models</legend>
+      <legend className="mb-1.5 p-0 text-[13px] font-semibold text-ink-2">Models</legend>
       {all.length === 0 ? (
-        <p className="m-0 text-[13px] text-text-muted">The endpoint lists no models.</p>
+        <p className="m-0 text-[13px] text-ink-2">The endpoint lists no models.</p>
       ) : (
         <ModelCombobox id={`${idPrefix}-models`} aria-label="Models" multiple options={all} selected={chosen} onChange={onChange} placeholder="Search models" />
       )}

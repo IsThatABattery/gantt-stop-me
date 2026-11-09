@@ -17,7 +17,7 @@ function isTyping(target: EventTarget | null) {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-/** Pinned bar for a payload in Mission review (PayloadDetail.dc.html), with A / R / T shortcuts. */
+/** Pinned bar for an agent's task waiting on review (PayloadDetail.dc.html), with A / R / T shortcuts. Mock data only. */
 export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
   const { task, assignee } = detail
   const ref = { projectId: task.projectId, taskId: task.id }
@@ -34,10 +34,10 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
   const focusNote = () => document.getElementById(noteId)?.focus()
 
   const alreadyMine = assignee?.kind === 'user' && assignee.user.id === signedInUserId
-  const who = assignee ? (assignee.kind === 'agent' ? assignee.agent.name : assignee.user.name) : 'This payload'
+  const who = assignee ? (assignee.kind === 'agent' ? assignee.agent.name : assignee.user.name) : 'This task'
 
   const actions = {
-    approve: () => approve.mutate(ref, { onSuccess: (t) => onDone(`${t.key} approved and landed in ${columnLabels.closed.name}.`) }),
+    approve: () => approve.mutate(ref, { onSuccess: (t) => onDone(`${t.key} approved and merged. It is in ${columnLabels.closed.name}.`) }),
     request: () => {
       setNoting(true)
       setNoteError(null)
@@ -83,12 +83,12 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t border-warning bg-warning/6 px-6 pt-4 pb-5">
-      <p className="m-0 text-[13px]">{who} is waiting for your call on this payload.</p>
+    <div className="flex flex-col gap-3 border-t border-approve bg-approve/6 px-6 pt-4 pb-5">
+      <p className="m-0 text-[13px]">{who} is waiting for your call on this task.</p>
 
       {noting ? (
         <form onSubmit={sendBack} className="flex flex-col gap-2.5" noValidate>
-          <label htmlFor={noteId} className="text-[13px] text-text-soft">
+          <label htmlFor={noteId} className="text-[13px] text-ink">
             What should change? (required)
           </label>
           <Textarea
@@ -103,12 +103,12 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
             aria-describedby={noteError ? `${noteId}-error` : undefined}
           />
           {noteError && (
-            <p id={`${noteId}-error`} role="alert" className="m-0 text-[13px] text-critical">
+            <p id={`${noteId}-error`} role="alert" className="m-0 text-[13px] text-signal-ink">
               {noteError}
             </p>
           )}
           <div className="flex flex-wrap gap-2.5">
-            <Button type="submit" disabled={busy} className="flex-[1_1_160px] border-warning text-warning hover:border-warning hover:text-warning">
+            <Button type="submit" disabled={busy} className="flex-[1_1_160px] border-approve text-approve-ink hover:border-approve hover:text-approve-ink">
               Send back for changes
             </Button>
             <Button
@@ -130,7 +130,7 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
           <Button
             disabled={busy}
             onClick={actions.request}
-            className="flex-[1_1_140px] border-warning font-medium text-warning hover:border-warning hover:text-warning"
+            className="flex-[1_1_140px] border-approve font-medium text-approve-ink hover:border-approve hover:text-approve-ink"
           >
             {actionLabels.requestChanges}
           </Button>
@@ -143,11 +143,11 @@ export function ApprovalBar({ detail, onDone }: ApprovalBarProps) {
       )}
 
       {error && (
-        <p role="alert" className="m-0 text-[13px] text-critical">
+        <p role="alert" className="m-0 text-[13px] text-signal-ink">
           {error.message}
         </p>
       )}
-      <p className="m-0 font-mono text-xs text-text-muted" aria-hidden="true">
+      <p className="m-0 font-mono text-xs text-ink-2" aria-hidden="true">
         {alreadyMine ? 'A approve · R request changes' : actionLabels.shortcuts}
       </p>
       <p className="sr-only">Keyboard shortcuts: {alreadyMine ? 'A approve, R request changes.' : 'A approve, R request changes, T take over.'}</p>

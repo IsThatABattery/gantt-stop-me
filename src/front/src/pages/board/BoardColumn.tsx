@@ -1,73 +1,118 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+import { Icon } from '../../components/Icon'
+import { InkTab } from '../../components/Tile'
 import type { Task } from '../../data/api/types'
 import type { ColumnKey } from '../../data/types'
-import { columnLabels, labels } from '../../labels/labels'
+import { columnPurposeLabels } from '../../labels/labels'
+import { APPROVAL_COLUMN, needsPerson, taskCount } from './filters'
 
 /** Droppable id of a column, apart from card ids. */
 const columnDropId = (key: ColumnKey) => `column:${key}`
 
+// A column the label dictionary doesn't know yet gets no purpose line, and its row still lines up with the others.
+const purposes = columnPurposeLabels
+
 interface BoardColumnProps {
   columnKey: ColumnKey
+  name: string
+  /** The tile's shade, 0 for the first column and 1 for the last: tileStep(index, count) */
+  step: number
+  /** The tasks shown, in order */
   tasks: Task[]
-  /** Cards in the column before filters */
-  total: number
+  /** Their ids, as drag and drop knows them. Pass the layout's own array: a new one each render makes the sortable
+   *  context re-measure on every render, which loops while a card is dragged. */
+  ids: string[]
+  /** Every task in the column, before filters: the tab's mark counts these */
+  all: Task[]
   filtered: boolean
+  /** The active filter's name, for the empty state */
+  filterLabel?: string
+  /** A dragged card would land here */
+  dropTarget: boolean
   renderCard: (task: Task) => ReactNode
 }
 
-export function BoardColumn({ columnKey, tasks, total, filtered, renderCard }: BoardColumnProps) {
-  const name = columnLabels[columnKey]
-  const { setNodeRef, isOver } = useDroppable({ id: columnDropId(columnKey) })
-  const count = filtered ? `${tasks.length} of ${total}` : `${tasks.length}`
+/**
+ * One column as a stage tile: a stepped neutral fill, its solid ink tab, then inside the keyline frame its purpose line
+ * and the cards. Columns are subgrid items of the board, so tabs, purpose lines and first cards line up across them.
+ */
+export function BoardColumn({ columnKey, name, step, tasks, ids, all, filtered, filterLabel, dropTarget, renderCard }: BoardColumnProps) {
+  const { setNodeRef } = useDroppable({ id: columnDropId(columnKey) })
+
+  const needing = all.filter(needsPerson).length
+  const awaiting = columnKey === APPROVAL_COLUMN ? all.length : 0
+  const mark = needing ? 'signal' : awaiting ? 'approve' : undefined
+  const markLabel = needing ? `${needing} ${needing === 1 ? 'needs' : 'need'} attention` : awaiting ? `${awaiting} awaiting approval` : undefined
+  const count = filtered ? `${tasks.length} of ${all.length}` : String(tasks.length)
+  const purpose = purposes[columnKey]
 
   return (
     <section
       ref={setNodeRef}
-      aria-label={`${name.name} · ${name.plain}, ${count} ${labels.tasks.toLowerCase()}`}
-      className={`flex min-h-[640px] flex-col gap-3 rounded-card border bg-surface/60 p-3 transition-colors ${
-        isOver ? 'border-ion/60' : 'border-line-soft'
-      }`}
+      aria-label={`${name}, ${filtered ? taskCount(tasks.length, all.length) : taskCount(tasks.length)}${markLabel ? `, ${markLabel}` : ''}`}
+      className="tile row-span-3 grid min-w-0 grid-rows-subgrid gap-y-1.5 rounded-card p-1.5"
+      style={{ '--tile-step': step } as CSSProperties}
     >
-      <div className="flex items-baseline justify-between px-1 pt-1 pb-2">
-        <div>
-          <h2 className="m-0 font-heading text-[15px] font-semibold">{name.name}</h2>
-          <div className="text-xs text-text-muted">{name.plain}</div>
-        </div>
-        <span className="font-mono text-xs text-text-muted" aria-hidden="true">
-          {count}
-        </span>
+      <InkTab count={count} countLabel={filtered ? 'tasks' : tasks.length === 1 ? 'task' : 'tasks'} mark={mark} markLabel={markLabel}>
+        {name}
+      </InkTab>
+
+      <div
+        className={`row-span-2 grid min-w-0 grid-rows-subgrid gap-y-2.5 rounded-[3px] border p-2 transition-colors duration-150 ease-out-quint ${
+          dropTarget ? 'border-ink' : 'border-tile-keyline'
+        }`}
+      >
+        {purpose &&
+          (mark === 'approve' ? (
+            // Work waits on a person here: the purpose becomes the yellow approve band.
+            <p className="m-0 flex items-center gap-1.5 rounded-[2px] bg-approve px-2 py-[3px] text-[13px] leading-[1.3] font-semibold text-balance text-on-approve">
+              <Icon name="person" size={14} className="flex-none" />
+              {purpose}
+            </p>
+          ) : (
+            <p className="m-0 flex min-h-[26px] items-center text-[13px] leading-[1.3] text-balance text-ink-2">{purpose}</p>
+          ))}
+
+        <SortableContext id={columnDropId(columnKey)} items={ids} strategy={verticalListSortingStrategy}>
+          {tasks.length > 0 ? (
+            <ul className="row-start-2 m-0 flex min-w-0 list-none flex-col gap-2 self-start p-0">
+              {tasks.map((t) => (
+                <SortableCard key={t.id} id={String(t.id)}>
+                  {renderCard(t)}
+                </SortableCard>
+              ))}
+            </ul>
+          ) : (
+            <div className="row-start-2 flex flex-col items-center gap-1 self-start rounded-[3px] border border-ink/25 px-3 py-5 text-center">
+              <p className="m-0 text-[13px] font-bold text-ink">{filtered ? 'No matches' : 'No tasks'}</p>
+              <p className="m-0 text-[12.5px] leading-[1.4] text-ink-2">
+                {filtered && filterLabel ? `Filtered to ${filterLabel}` : 'Drag a task here, or move one with [ and ].'}
+              </p>
+            </div>
+          )}
+        </SortableContext>
       </div>
-      <SortableContext id={columnDropId(columnKey)} items={tasks.map((t) => String(t.id))} strategy={verticalListSortingStrategy}>
-        {tasks.map((t) => (
-          <SortableCard key={t.id} id={String(t.id)}>
-            {renderCard(t)}
-          </SortableCard>
-        ))}
-      </SortableContext>
-      {tasks.length === 0 && (
-        <p className="m-0 rounded-control border border-dashed border-line px-3 py-6 text-center text-[13px] text-text-muted">
-          {filtered ? `No matching ${labels.tasks.toLowerCase()}` : `No ${labels.tasks.toLowerCase()} here yet`}
-        </p>
-      )}
     </section>
   )
 }
 
-// Only the pointer listeners are spread: the card's own link stays the one
-// focusable element, and the board handles the keyboard itself.
+// Only the pointer listeners are spread: the card's own link stays the one focusable element, and the board handles
+// the keyboard itself. While its card is dragged, the item stays behind as the slot where it will land.
 function SortableCard({ id, children }: { id: string; children: ReactNode }) {
   const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id })
   return (
-    <div
+    <li
       ref={setNodeRef}
       {...listeners}
-      className={`touch-manipulation ${isDragging ? 'opacity-40' : ''}`}
+      className={`min-w-0 touch-manipulation rounded-card ${
+        isDragging ? 'bg-ink/8 outline-[1.5px] -outline-offset-[1.5px] outline-ink outline-dashed [&>*]:invisible' : ''
+      }`}
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       {children}
-    </div>
+    </li>
   )
 }

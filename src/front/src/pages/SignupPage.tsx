@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router'
-import { Button, Field, TextInput } from '../components/controls'
+import { Icon } from '../components/Icon'
+import { Field, TextInput } from '../components/controls'
 import { errorCode } from '../data/errors'
 import { keys } from '../data/keys'
 import { signUp, useMe } from '../data/session'
-import { AuthFrame } from './LoginPage'
+import { AuthError, AuthFrame, AuthSubmit } from './LoginPage'
 
 /** Which field each signup error belongs to (docs/accounts.md). */
 const fieldOf: Record<string, 'email' | 'password'> = {
@@ -14,8 +15,18 @@ const fieldOf: Record<string, 'email' | 'password'> = {
   weak_password: 'password',
 }
 
-// Create an account with email and password (POST /api/auth/signup). No mockup;
-// it follows the sign-in card.
+/** A field's refusal under it: the alert mark and the words. */
+function FieldError({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <span id={id} className="flex items-start gap-1.5 text-[13px] leading-snug font-medium text-signal-ink">
+      <Icon name="alert" size={14} className="mt-px flex-none" />
+      {children}
+    </span>
+  )
+}
+
+// Create an account with email and password (POST /api/auth/signup), in the
+// same frame as sign in.
 export function SignupPage() {
   const { data: me } = useMe()
   const client = useQueryClient()
@@ -44,18 +55,19 @@ export function SignupPage() {
 
   return (
     <AuthFrame
+      title="Create an account"
       footer={
         <>
           Already have an account? <Link to="/login">Sign in</Link>
         </>
       }
     >
-      <div>
-        <h1 className="m-0 font-heading text-[26px] font-semibold">Create an account</h1>
-      </div>
+      <p className="m-0 text-sm leading-normal text-ink-2">
+        Sign up with your email. You'll link GitHub next, so the board can read the repository's issues.
+      </p>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-4">
           <Field id="signup-email" label="Email">
             <TextInput
               id="signup-email"
@@ -67,11 +79,7 @@ export function SignupPage() {
               aria-describedby={fieldError('email') ? 'signup-email-error' : undefined}
               onChange={(e) => setEmail(e.target.value)}
             />
-            {fieldError('email') && (
-              <span id="signup-email-error" className="text-xs text-critical">
-                {fieldError('email')}
-              </span>
-            )}
+            {fieldError('email') && <FieldError id="signup-email-error">{fieldError('email')}</FieldError>}
           </Field>
           <Field id="signup-password" label="Password">
             <TextInput
@@ -84,26 +92,18 @@ export function SignupPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
             {fieldError('password') ? (
-              <span id="signup-password-error" className="text-xs text-critical">
-                {fieldError('password')}
-              </span>
+              <FieldError id="signup-password-error">{fieldError('password')}</FieldError>
             ) : (
-              <span id="signup-password-hint" className="text-xs text-text-muted">
+              <span id="signup-password-hint" className="text-[13px] text-ink-2">
                 8 or more characters.
               </span>
             )}
           </Field>
         </div>
 
-        {mutation.error && !field && (
-          <p role="alert" className="m-0 text-[13px] text-critical">
-            {mutation.error.message}
-          </p>
-        )}
+        {mutation.error && !field && <AuthError>{mutation.error.message}</AuthError>}
 
-        <Button type="submit" variant="primary" className="min-h-12" disabled={mutation.isPending}>
-          {mutation.isPending ? 'Creating account…' : 'Create account'}
-        </Button>
+        <AuthSubmit busy={mutation.isPending}>{mutation.isPending ? 'Creating account…' : 'Create account'}</AuthSubmit>
       </form>
     </AuthFrame>
   )

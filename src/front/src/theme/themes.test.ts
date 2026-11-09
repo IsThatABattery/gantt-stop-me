@@ -42,7 +42,8 @@ describe('theme stylesheets', () => {
   })
 
   it('gives every theme variable a use, and reads none that no theme sets', () => {
-    const readByCss = read(indexCss).filter((v) => !tailwindVars.includes(v))
+    // --tile-step is set on each stage tile, by its position, not by a theme
+    const readByCss = read(indexCss).filter((v) => !tailwindVars.includes(v) && v !== 'tile-step')
     expect([...readByCss].sort()).toEqual(variables)
   })
 })
@@ -53,6 +54,16 @@ describe('code', () => {
     const unknown = Object.entries(source).flatMap(([path, text]) => read(text).filter((v) => !known.has(v)).map((v) => `var(--${v}) in ${path}`))
     expect(Object.keys(source).length).toBeGreaterThan(50)
     expect(unknown).toEqual([])
+  })
+
+  it('colours classes only from the contract', () => {
+    // The tokens the process-flow overhaul replaced, and Tailwind's own palette, which no theme repaints
+    const retired = ['background', 'surface', 'surface-sunken', 'header', 'nav-active', 'line-soft', 'line-strong', 'text', 'text-soft', 'text-muted', 'text-muted-strong', 'ion', 'ion-hover', 'on-ion', 'astronaut', 'astronaut-text', 'warning', 'critical']
+    const palette = '(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d+'
+    const utility = '(?:bg|text|border(?:-[trblxy])?|ring|outline|accent|fill|stroke|shadow|divide|placeholder|caret|from|to|via|decoration)'
+    const pattern = new RegExp(`(?<![\\w-])${utility}-(?:${retired.join('|')}|${palette})(?:/\\d+)?(?![\\w-])`, 'g')
+    const found = Object.entries(source).flatMap(([path, text]) => [...text.matchAll(pattern)].map((m) => `${m[0]} in ${path}`))
+    expect(found).toEqual([])
   })
 
   it('applies the saved theme in index.html before first paint, from the same key', () => {

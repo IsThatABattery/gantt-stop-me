@@ -57,7 +57,7 @@ Tests for the hidden screens are `describe.skip`ped with a pointer to `api-gaps.
 | `src/styles/index.css` | Tailwind setup: the theme contract, fonts, radii, starfield, reduced motion |
 | `src/styles/themes/` | One stylesheet per color theme (see [Themes](#themes)) |
 | `src/theme/` | The list of themes, and `useTheme()` to read and set the one in use |
-| `src/labels/labels.ts` | Every space display label. Code uses plain names (Project, Task, Agent…) |
+| `src/labels/labels.ts` | Every word the UI shows, plain by default (Project, Task, Backlog…), so another label set can swap in |
 | `src/data/` | See [Data](#data) |
 | `src/components/` | Shared pieces: nav rail, user menu, chips, avatars, form controls, drawer, dialog, tabs, and more |
 | `src/app/` | Router, session guard, app shell, project layout |
@@ -66,11 +66,14 @@ Tests for the hidden screens are `describe.skip`ped with a pointer to `api-gaps.
 
 ## Themes
 
-Settings → Appearance picks the color theme: Space dark (the default, from `design/tokens.json`), Space light, Dark or Light. It applies at once and is saved in this browser under the `gsm.theme` key. `index.html` applies it before first paint.
+The app has one design, a process flow: stepped gray stage tiles under solid ink tabs, white keylined cards, and colour only where a person is needed. `PRODUCT.md` and `DESIGN.md` at the repo root hold its product context and its system. The themes repaint that one structure.
 
-- **One stylesheet per theme.** `src/styles/themes/<id>.css` sets every theme variable (`--background`, `--surface`, `--ion`…), plus `--stars` (the starfield, or `none`) and `color-scheme`, for `[data-theme='<id>']`.
-- **One contract.** `src/styles/index.css` maps each Tailwind color onto a theme variable with `@theme inline`, so `bg-surface` reads `var(--surface)`. The comments there say what each one is for.
-- **Classes first.** Components use those classes. Where a class can't go, such as an SVG attribute, read the theme variable itself (`var(--ion)`), not Tailwind's `--color-*` name. Tailwind sets that only on `:root`, where it resolves once, so a `data-theme` lower down doesn't reach it.
+Settings → Appearance picks the theme: Light (the default), Dark, Space light or Space dark. It applies at once and is saved in this browser under the `gsm.theme` key. `index.html` applies it before first paint.
+
+- **One stylesheet per theme.** `src/styles/themes/<id>.css` sets every theme variable (`--ground`, `--paper`, `--ink`, `--accent`, `--signal`…), plus `--stars` (the starfield, or `none`) and `color-scheme`, for `[data-theme='<id>']`.
+- **One contract.** `src/styles/index.css` maps each Tailwind color onto a theme variable with `@theme inline`, so `bg-paper` reads `var(--paper)`. The comments there say what each one is for. Stage tiles use the `tile` utility, which mixes `tile-first` into `tile-last` by `--tile-step` (0 for the first column, 1 for the last), so the board steps darker across any number of columns.
+- **Classes first.** Components use those classes. Where a class can't go, such as an SVG attribute, read the theme variable itself (`var(--accent)`), not Tailwind's `--color-*` name. Tailwind sets that only on `:root`, where it resolves once, so a `data-theme` lower down doesn't reach it.
+- **Fonts are self-hosted** from `@fontsource-variable` packages, imported in `src/main.tsx`: Big Shoulders Display (`font-display`, caps, for page titles and stage tabs), Public Sans (`font-ui`, everything else) and Red Hat Mono (`font-mono`, issue numbers and branches).
 - **Scoped.** `data-theme` on any element themes just that subtree. The previews in Settings work this way.
 - **One list.** `themes` in `src/theme/themes.ts` names each theme for Settings.
 
@@ -80,7 +83,7 @@ To add a theme:
 2. Import it in `src/styles/index.css` beside the others.
 3. Add `{ id, name, description }` to `themes` in `src/theme/themes.ts`.
 
-`src/theme/themes.test.ts` fails when a theme misses a variable or a step. `src/theme/contrast.test.ts` fails when its text, tints or focus ring fall below WCAG AA (4.5:1 for text, 3:1 for the ring) on the pairs the components use. To add a variable, set it in every theme and map it in `@theme inline`.
+`src/theme/themes.test.ts` fails when a theme misses a variable or a step, or when a class uses a colour outside the contract. `src/theme/contrast.test.ts` fails when text or control edges fall below WCAG AA (4.5:1 for text, 3:1 for edges and the focus ring) on the pairs the components use. To add a variable, set it in every theme and map it in `@theme inline`.
 
 ## Routes
 

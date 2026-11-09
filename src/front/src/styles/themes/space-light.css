@@ -1,32 +1,37 @@
-/* Space light: the space console on daylight surfaces. Accents are darkened to stay readable on white. */
+/* Space light: the process-flow board in navy-tinted daylight, with a teal accent for what is live. */
 [data-theme='space-light'] {
   color-scheme: light;
 
-  --background: #f6f8fc;
-  --surface: #ffffff;
-  --surface-sunken: #eef2f8;
-  --rail: rgba(255, 255, 255, 0.85);
-  --header: rgba(255, 255, 255, 0.7);
-  --nav-active: #e1e9f6;
+  --ground: #eef2f8;
+  --rail: #e1e8f2;
+  --block: #cfd8e5;
+  --block-hover: #c2ccdc;
+  --tile-first: #e0e7f1;
+  --tile-last: #c3cfdf;
+  --tile-keyline: rgba(255, 255, 255, 0.85);
+  --paper: #ffffff;
 
-  --line: #d5dce8;
-  --line-soft: #e3e8f0;
-  --line-strong: #b8c3d6;
+  --keyline: #dce3ed;
+  --rule: #c2ccdc;
+  --line: #5a6983;
 
-  --text: #0f1626;
-  --text-soft: #2a3550;
-  --text-muted: #5b6780;
-  --text-muted-strong: #4a5670;
+  --ink: #0f1626;
+  --ink-hover: #24304a;
+  --ink-2: #435069;
+  --on-ink: #ffffff;
+  --on-ink-2: #b8c3d6;
 
-  --ion: #0b6680;
-  --ion-hover: #0a5468;
-  --on-ion: #ffffff;
-  --astronaut: #6d2fd6;
-  --astronaut-text: #5b21b6;
+  --accent: #095a71;
+  --on-accent: #ffffff;
 
-  --good: #146c36;
-  --warning: #964306;
-  --critical: #b31b1b;
+  --signal: #c8341a;
+  --signal-ink: #9c2811;
+  --on-signal: #ffffff;
+  --signal-wash: #fcebe7;
+  --approve: #ffd02a;
+  --on-approve: #0f1626;
+  --approve-ink: #6b4c00;
+  --good: #115a2d;
 
   --stars:
     radial-gradient(1px 1px at 20px 30px, rgba(15, 22, 38, 0.12) 50%, transparent 51%),

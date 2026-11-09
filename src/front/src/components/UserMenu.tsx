@@ -4,8 +4,15 @@ import { useMe, useSignOut } from '../data/session'
 import { UserAvatar } from './Avatar'
 import { Icon } from './Icon'
 
-/** Signed-in avatar with a menu holding Sign out. The menu opens below the avatar, or above it at the foot of the rail. */
-export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above' }) {
+interface UserMenuProps {
+  /** The menu opens below the button, or above it at the foot of the rail */
+  placement?: 'below' | 'above'
+  /** Show the signed-in email beside the avatar, as a full-width row (the rail's foot) */
+  showEmail?: boolean
+}
+
+/** The signed-in person's avatar, with a menu holding Sign out. */
+export function UserMenu({ placement = 'below', showEmail = false }: UserMenuProps) {
   const { data: me } = useMe()
   const signOut = useSignOut()
   const [open, setOpen] = useState(false)
@@ -32,7 +39,7 @@ export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above
   const initials = me.email.slice(0, 2).toUpperCase()
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative ${showEmail ? 'w-full' : ''}`}>
       <button
         type="button"
         aria-haspopup="menu"
@@ -40,19 +47,30 @@ export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above
         aria-controls={menuId}
         aria-label={`Account menu, signed in as ${me.email}`}
         onClick={() => setOpen((o) => !o)}
-        className="flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0"
+        className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-[3px] border-0 bg-transparent font-[inherit] text-ink transition-colors duration-150 hover:bg-block aria-expanded:bg-block ${
+          showEmail ? 'w-full px-2.5 text-left' : 'min-w-11 justify-center p-0'
+        }`}
       >
-        <UserAvatar user={{ initials, role: 'member' }} size="lg" />
+        <UserAvatar user={{ initials, role: 'member' }} size={showEmail ? 'md' : 'lg'} />
+        {showEmail && (
+          <>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{me.email}</span>
+            <Icon name="chevronDown" size={14} className={`flex-none text-ink-2 transition-transform duration-150 ${placement === 'above' ? 'rotate-180' : ''}`} />
+          </>
+        )}
       </button>
       {open && (
         <div
           id={menuId}
           role="menu"
-          className={`absolute z-20 flex ${placement === 'above' ? 'bottom-full left-0 mb-2' : 'top-full right-0 mt-2'} w-60 flex-col gap-1 rounded-card border border-line bg-surface p-2 shadow-xl`}
+          // In the rail it spans the rail's width, so the rail's scroll box never clips it.
+          className={`absolute z-20 flex ${placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'} ${
+            showEmail ? 'inset-x-0' : `w-60 ${placement === 'above' ? 'left-0' : 'right-0'}`
+          } flex-col gap-1 rounded-card border-[1.5px] border-ink bg-paper p-1.5 shadow-lg`}
         >
-          <div className="px-3 py-2 text-xs text-text-muted">
+          <div className="px-2.5 py-2 text-xs text-ink-2">
             Signed in as
-            <div className="truncate text-sm text-text">{me.email}</div>
+            <div className="truncate text-sm font-semibold text-ink">{me.email}</div>
           </div>
           <button
             type="button"
@@ -61,7 +79,7 @@ export function UserMenu({ placement = 'below' }: { placement?: 'below' | 'above
               await signOut()
               navigate('/login', { replace: true })
             }}
-            className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-left font-[inherit] text-text hover:bg-nav-active"
+            className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-[3px] border-0 bg-transparent px-2.5 text-left font-[inherit] font-semibold text-ink hover:bg-ink/8 active:bg-ink/15"
           >
             <Icon name="signOut" />
             Sign out

@@ -1,28 +1,39 @@
+import { useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
 import { Drawer } from '../../components/Drawer'
+import { Icon } from '../../components/Icon'
 import { StatusMessage } from '../../components/StatusMessage'
+import { Tabs } from '../../components/Tabs'
+import { tileStep } from '../../components/tileStep'
+import type { TaskDetail } from '../../data/api/types'
 import { NotFoundError } from '../../data/errors'
 import { useBoard } from '../../data/views/board'
+import { useRuns } from '../../data/views/runs'
 import { useTask } from '../../data/views/tasks'
-import { actionLabels, formLabels, labels } from '../../labels/labels'
-import { DrawerHeader } from './DrawerHeader'
-import { Assignees } from './Assignees'
+import { actionLabels, labels } from '../../labels/labels'
+import { ApprovalBand } from './ApprovalBand'
+import { Details } from './Details'
+import { DrawerHeader, DrawerTab } from './DrawerHeader'
+import { useTestCount } from './state'
 import { TestRuns } from './TestRuns'
 
-// Payload drawer over the board (PayloadDetail.dc.html), showing the GitHub
-// issue as the API last read it. The mockup's modules, flight log, cargo,
-// trace and approval bar need data the API doesn't have yet; their
-// components stay in this folder (docs/implementation/api-gaps.md).
+// The task drawer over the board, showing the GitHub issue as the API last read it. The mockup's subtasks, log,
+// files, trace and agent approval bar (TaskTabs, Trace, ApprovalBar) wait on data the API doesn't have yet
+// (docs/implementation/api-gaps.md).
 export function TaskDrawerPage() {
   const { projectId = '', taskId = '' } = useParams()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  // Close back to the page under the drawer: the board, or the Hangar list.
+  // Close back to the page under the drawer: the board, or the Backlog list.
   const close = () => navigate(pathname.slice(0, pathname.lastIndexOf('/tasks/')))
   const { data: task, isPending, error } = useTask(projectId, taskId)
   const { data: board } = useBoard(projectId)
-  const column = board?.columns.find((c) => c.id === task?.columnId)
+  const runs = useRuns(projectId, taskId)
+  // A confirmation after approving or sending back, kept with the task it is about.
+  const [notice, setNotice] = useState({ taskId: '', text: '' })
+  const index = board?.columns.findIndex((c) => c.id === task?.columnId) ?? -1
+  const column = index >= 0 ? board?.columns[index] : undefined
 
   if (isPending || error) {
     return (
@@ -32,6 +43,7 @@ export function TaskDrawerPage() {
         ) : error instanceof NotFoundError ? (
           <StatusMessage
             title={`${labels.task} not found`}
+            icon="search"
             body={`There's no ${labels.task.toLowerCase()} with that id in this ${labels.project.toLowerCase()}. It may have been deleted, or the link is wrong.`}
           >
             <Link to={`/projects/${projectId}`} className={buttonClass('secondary')}>
@@ -39,53 +51,69 @@ export function TaskDrawerPage() {
             </Link>
           </StatusMessage>
         ) : (
-          <StatusMessage title="Something went wrong" body={error.message} />
+          <StatusMessage tone="signal" title="Something went wrong" body={error.message} />
         )}
       </Drawer>
     )
   }
 
-  // board:* labels repeat the column, which the header already shows.
-  const shown = task.labels.filter((l) => !l.name.startsWith('board:'))
+  const awaiting = column?.key === 'user-check' && task.state === 'open' && !runs.data?.[0]?.approvedAt
 
   return (
-    <Drawer label={labels.task} onClose={close}>
-      <div className="h-[3px] bg-ion" />
-      <DrawerHeader projectId={projectId} task={task} column={column?.key} />
-      <div className="flex flex-col gap-4 px-6 py-5">
-        <Assignees projectId={projectId} task={task} />
-        {task.branch && (
-          <section className="flex flex-col gap-1">
-            <h2 className="eyebrow m-0">Branch</h2>
-            <a href={`${task.url.replace(/\/issues\/\d+$/, '')}/tree/${task.branch}`} target="_blank" rel="noreferrer" className="font-mono text-sm break-all">
-              {task.branch}
-            </a>
-          </section>
-        )}
-        {shown.length > 0 && (
-          <section className="flex flex-col gap-2">
-            <h2 className="eyebrow m-0">Labels</h2>
-            <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-              {shown.map((l) => (
-                <li key={l.name} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-[3px] text-xs text-text-soft">
-                  <span className="size-2.5 flex-none rounded-full" style={{ background: `#${l.color}` }} aria-hidden="true" />
-                  {l.name}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        <section className="flex flex-col gap-2">
-          <h2 className="eyebrow m-0">{formLabels.description}</h2>
-          {task.body.trim() ? (
-            // Issue bodies are Markdown; shown as written until there's a renderer.
-            <p className="m-0 leading-normal break-words whitespace-pre-wrap text-text-soft">{task.body}</p>
-          ) : (
-            <p className="m-0 text-[13px] leading-normal text-text-muted">No description yet.</p>
+    <Drawer
+      label={labels.task}
+      title={<DrawerTab task={task} column={column?.key} />}
+      onClose={close}
+      footer={awaiting ? <ApprovalBand key={task.id} projectId={projectId} task={task} onDone={(text) => setNotice({ taskId, text })} /> : undefined}
+    >
+      <div className="flex min-h-full flex-col">
+        <DrawerHeader projectId={projectId} task={task} column={column?.key} />
+        <div role="status" className="px-5 sm:px-6">
+          {notice.taskId === taskId && notice.text && (
+            <p className="m-0 mb-4 flex items-center gap-2 rounded-[2px] bg-block px-3 py-2.5 text-[13px] font-semibold">
+              <Icon name="check" size={16} className="flex-none text-good" />
+              {notice.text}
+            </p>
           )}
-        </section>
-        <TestRuns projectId={projectId} task={task} inUserCheck={column?.key === 'user-check'} />
+        </div>
+        <TaskSections key={task.id} projectId={projectId} task={task} step={board && column ? tileStep(index, board.columns.length) : 0} />
       </div>
     </Drawer>
+  )
+}
+
+interface TaskSectionsProps {
+  projectId: string
+  task: TaskDetail
+  /** The column's place on the board, so the drawer's tile matches its stage tile */
+  step: number
+}
+
+/** Details and Tests, on a tile stepped like the task's own column. A task that has been tested opens on Tests. */
+function TaskSections({ projectId, task, step }: TaskSectionsProps) {
+  const [tab, setTab] = useState(() => (task.runStatus || task.needsAttention ? 'tests' : 'details'))
+  const count = useTestCount(projectId, task)
+
+  return (
+    <div className="tile flex-1 px-3 pt-3 pb-8 sm:px-4" style={{ '--tile-step': step } as CSSProperties}>
+      <Tabs
+        label={`${labels.task} sections`}
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: 'details', label: 'Details', content: <Details projectId={projectId} task={task} /> },
+          {
+            id: 'tests',
+            label: (
+              <span className="inline-flex items-center gap-2">
+                {'Tests '}
+                {count > 0 && <span className="min-w-5 rounded-[2px] border border-current/45 px-1 text-center text-xs leading-[18px]">{count}</span>}
+              </span>
+            ),
+            content: <TestRuns projectId={projectId} task={task} />,
+          },
+        ]}
+      />
+    </div>
   )
 }

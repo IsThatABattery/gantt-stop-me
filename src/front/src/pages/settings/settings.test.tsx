@@ -58,7 +58,7 @@ describe('appearance', () => {
     const s = within(section('Appearance'))
     const group = s.getByRole('group', { name: 'Theme' })
     expect(within(group).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(themes.map((t) => t.id))
-    expect(s.getByRole('radio', { name: /^Space dark/ })).toBeChecked()
+    expect(s.getByRole('radio', { name: /^Light/ })).toBeChecked()
   })
 
   it('picks the theme in use, and follows a change made elsewhere', async () => {
@@ -76,11 +76,11 @@ describe('appearance', () => {
   it('applies a picked theme at once and saves it in this browser', async () => {
     await openSettings()
     const s = within(section('Appearance'))
-    await userEvent.click(s.getByRole('radio', { name: /^Light/ }))
-    expect(document.documentElement.dataset.theme).toBe('light')
-    expect(localStorage.getItem('gsm.theme')).toBe('light')
-    expect(s.getByRole('radio', { name: /^Light/ })).toBeChecked()
-    expect(s.getByRole('radio', { name: /^Space dark/ })).not.toBeChecked()
+    await userEvent.click(s.getByRole('radio', { name: /^Space dark/ }))
+    expect(document.documentElement.dataset.theme).toBe('space-dark')
+    expect(localStorage.getItem('gsm.theme')).toBe('space-dark')
+    expect(s.getByRole('radio', { name: /^Space dark/ })).toBeChecked()
+    expect(s.getByRole('radio', { name: /^Light/ })).not.toBeChecked()
   })
 })
 
@@ -92,7 +92,7 @@ describe('GitHub', () => {
     expect(s.getByText('with a personal access token')).toBeInTheDocument()
 
     await userEvent.click(s.getByRole('button', { name: 'Unlink' }))
-    expect(s.getByRole('alertdialog')).toHaveTextContent('Unlinking removes your access to every mission')
+    expect(s.getByRole('alertdialog')).toHaveTextContent('Unlinking removes your access to every project')
     await userEvent.click(s.getByRole('button', { name: 'Unlink GitHub' }))
 
     expect(await s.findByRole('link', { name: 'Link with GitHub' })).toHaveAttribute('href', '/api/github/link')
