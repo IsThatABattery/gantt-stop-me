@@ -62,7 +62,7 @@ Turns automation on with the caller as its owner, or takes it over: the caller r
 | `decisionProviderId` | body | integer | one of the caller's providers |
 | `decisionModel` | body | string | one of that provider's chosen `models`; picks workflows, so it should serve the OpenAI Decisions API |
 | `chatProviderId` | body | integer | one of the caller's providers, the same or another |
-| `chatModel` | body | string | one of that provider's chosen `models`; runs LLM checks, so it should support tool calling |
+| `chatModel` | body | string | one of that provider's chosen `models`; runs LLM checks, so it should serve the OpenAI Responses API, `POST {baseUrl}/responses`, with tool calling, `store` false and the reasoning's encrypted content |
 | `decisionInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added once to the end of the decision model's input |
 | `chatInstructions` | body | string | optional, default `""`; trimmed, then at most 4000 characters and no NUL; added to every LLM check's prompt after its rules, which win where they conflict |
 
@@ -129,7 +129,7 @@ Returns the repository's workflows file, `.gantt/workflows.yml`, on its default 
 | --- | --- |
 | `200` | the workflows file |
 | `401` | `unauthorized` |
-| `403` | `github_not_linked` |
+| `403` | `github_not_linked`, `forbidden` |
 | `404` | `not_found` |
 | `502` | `github_error` |
 
@@ -146,7 +146,7 @@ Returns the repository's workflows file, `.gantt/workflows.yml`, on its default 
 
 ## Save workflows
 
-Commits a workflows file that parses to a new branch off the default branch, `chore/gantt-workflows-{unix time}`, and opens a pull request of it into the default branch, with the caller's GitHub credential. The default branch keeps its file until the pull request merges.
+Commits a workflows file that parses to a new branch off the default branch, `chore/gantt-workflows-{unix time}-{8 random hex digits}`, and opens a pull request of it into the default branch, with the caller's GitHub credential. The default branch keeps its file until the pull request merges. A save that fails once the branch is made deletes the branch again.
 
 `PUT /api/projects/{id}/workflows`
 
@@ -544,7 +544,7 @@ Starts a new test run of a task's linked pull request at its head, as a move int
 | `409` | `automation_off`, `taken_over` |
 | `502` | `github_error` |
 
-With no linked pull request, or more than one, the run ends at once as a runner error saying so, as from a move.
+With no linked pull request, or more than one, the run ends at once as a runner error saying so, as from a move. Only a task in Testing then needs attention.
 
 ## Request changes
 
@@ -616,6 +616,7 @@ Takes a task from automation for the caller to finish by hand. It cancels the ta
   "runStatus": "cancelled",
   "needsAttention": null,
   "assignees": [{ "login": "ada", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4" }],
+  "branch": "feature/12-draw-the-timeline",
   "body": "One bar per task, by week.",
   "labels": [{ "name": "board:testing", "color": "fbca04" }],
   "tests": [],

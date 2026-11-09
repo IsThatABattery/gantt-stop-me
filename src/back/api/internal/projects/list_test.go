@@ -1,6 +1,7 @@
 package projects_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -60,4 +61,48 @@ func TestListProjectsNeedsLinkedGitHub(t *testing.T) {
 	ada := env.SignUp("ada@example.com", "correct horse")
 	env.Do("GET", "/api/projects", nil, ada).Expect(http.StatusForbidden, "github_not_linked")
 	env.Do("GET", "/api/projects", nil).Expect(http.StatusUnauthorized, "unauthorized")
+}
+
+func TestListProjectsAfterRelinking(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	repo := env.GitHub.AddRepo("octo", "hello")
+	repo.Grant(env.LinkGitHub(ada, "ada-gh"), "push")
+	env.AddProject(ada, "octo", "hello")
+
+	// Her token expired, so she links the same account again, as github_not_linked tells her to.
+	repo.Grant(env.LinkGitHub(ada, "ada-gh"), "push")
+	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 1 || got[0].Name != "hello" {
+		t.Fatalf("after relinking, ada's projects = %+v, want hello still listed", got)
+	}
+
+	// An account that cannot see the repository does not inherit the old one's access.
+	env.LinkGitHub(ada, "other-gh")
+	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 0 {
+		t.Fatalf("after linking another account, ada's projects = %+v", got)
+	}
+}
+
+func TestListProjectsKeepsAFailedCheck(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	token := env.LinkGitHub(ada, "ada-gh")
+	env.GitHub.AddRepo("octo", "hello").Grant(token, "push")
+	hello := env.AddProject(ada, "octo", "hello")
+	// Her only project's check is stale, and GitHub fails to answer it: it stays listed as last checked.
+	if _, err := env.DB.Exec(context.Background(),
+		`update project_members set checked_at = now() - interval '6 minutes' where project_id = $1`, hello); err != nil {
+		t.Fatal(err)
+	}
+	env.GitHub.Fail("GET /repositories/{id}", http.StatusBadGateway)
+	res := env.Do("GET", "/api/projects", nil, ada)
+	res.Expect(http.StatusOK, "")
+	if got := listed(t, res); len(got) != 1 || got[0].Name != "hello" || got[0].Permission != "write" {
+		t.Fatalf("ada's projects = %+v, want hello with write", got)
+	}
+	env.Do("GET", "/api/me/tasks", nil, ada).Expect(http.StatusOK, "")
+
+	// A credential GitHub no longer accepts still fails the list.
+	env.GitHub.Fail("GET /repositories/{id}", http.StatusUnauthorized)
+	env.Do("GET", "/api/projects", nil, ada).Expect(http.StatusForbidden, "github_not_linked")
 }
