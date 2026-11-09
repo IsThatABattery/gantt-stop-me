@@ -29,15 +29,14 @@ function ProjectBlock({ project: p }: { project: Project }) {
   return (
     <Link
       to={`/projects/${p.id}`}
-      title={`${p.owner}/${p.name}`}
-      className="group flex min-h-[92px] items-center gap-3 rounded-[3px] bg-block py-3 pr-3 pl-4 text-ink no-underline transition-colors duration-150 ease-out-quint hover:bg-ink hover:text-on-ink focus-visible:bg-ink focus-visible:text-on-ink active:bg-ink-hover"
+      className="group flex min-h-[92px] flex-1 items-center gap-3 rounded-[3px] bg-block py-3 pr-3 pl-4 text-ink no-underline transition-colors duration-150 ease-out-quint hover:bg-ink hover:text-on-ink focus-visible:bg-ink focus-visible:text-on-ink active:bg-ink-hover"
     >
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[13px] font-medium text-ink-2 group-hover:text-on-ink-2 group-focus-visible:text-on-ink-2">
+        <span className="text-[13px] font-medium wrap-anywhere text-ink-2 group-hover:text-on-ink-2 group-focus-visible:text-on-ink-2">
           {p.owner}
           <span className="sr-only">/</span>
         </span>
-        <span className="truncate text-lg leading-snug font-bold">{p.name}</span>
+        <span className="text-lg leading-snug font-bold wrap-anywhere">{p.name}</span>
         <span className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-ink-2 group-hover:text-on-ink-2 group-focus-visible:text-on-ink-2">
           <Icon name={a.icon} size={14} className="flex-none" />
           <span className="sr-only">, </span>
@@ -98,9 +97,27 @@ function LoadingGrid({ label }: { label: string }) {
   )
 }
 
+/** A first load that failed, under the page's title, with Try again. A failed refetch keeps the list that loaded. */
+function LoadError({ error, retry }: { error: Error | null; retry: () => unknown }) {
+  return (
+    <Notice
+      role="alert"
+      tone="signal"
+      title={`${labels.projects} didn't load`}
+      actions={
+        <Button variant="primary" onClick={() => retry()}>
+          Try again
+        </Button>
+      }
+    >
+      {error?.message}
+    </Notice>
+  )
+}
+
 /** The landing page: the projects opened most recently, or adding one when there are none. */
 export function FlightDeckPage() {
-  const { data: projects, isPending, error } = useMyProjects()
+  const { data: projects, isPending, error, refetch } = useMyProjects()
   if (isPending)
     return (
       <div className={page}>
@@ -109,7 +126,15 @@ export function FlightDeckPage() {
       </div>
     )
   // No GitHub link, or none opened yet: adding one explains what to do.
-  if (error || projects.length === 0) return <AddProjectPage />
+  if (errorCode(error) === 'github_not_linked' || projects?.length === 0) return <AddProjectPage />
+  // A failed first load says so: it is not the same as having no projects.
+  if (!projects)
+    return (
+      <div className={page}>
+        <Header title={`Recent ${lower(labels.projects)}`} />
+        <LoadError error={error} retry={refetch} />
+      </div>
+    )
   return (
     <div className={page}>
       <Header
@@ -154,19 +179,8 @@ export function ProjectsPage() {
         >
           {labels.projects} are GitHub repositories, so the board needs your GitHub account to list them.
         </Notice>
-      ) : error ? (
-        <Notice
-          role="alert"
-          tone="signal"
-          title={`${labels.projects} didn't load`}
-          actions={
-            <Button variant="primary" onClick={() => refetch()}>
-              Try again
-            </Button>
-          }
-        >
-          {error.message}
-        </Notice>
+      ) : !projects ? (
+        <LoadError error={error} retry={refetch} />
       ) : projects.length === 0 ? (
         <Notice icon="projects" title={`No ${lower(labels.projects)} yet`}>
           Add a GitHub repository by its URL, and its open issues become tasks on a board.

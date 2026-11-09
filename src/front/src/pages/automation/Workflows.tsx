@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Button, Textarea } from '../../components/controls'
 import { Icon } from '../../components/Icon'
 import { InkTab, Tile } from '../../components/Tile'
+import { errorCode } from '../../data/errors'
 import { useSaveWorkflows, useWorkflows } from '../../data/views/workflows'
-import { Card } from '../settings/Section'
+import { Card, Problem } from '../settings/Section'
 
 // One workflow's fields, as the parser documents them; context and dockerfile default to . and Dockerfile.
 const workflowBlock = (name: string) => `  ${name}:
@@ -28,16 +29,21 @@ export function Workflows({ projectId, readOnly }: { projectId: string; readOnly
       Workflows
     </InkTab>
   )
-  if (file.error)
+  // A failed refetch keeps the file and the draft.
+  if (file.error && !file.data)
     return (
       <Tile as="section" aria-labelledby="workflows-title" tab={tab()}>
-        <Problem>Couldn't load the workflows. {file.error.message}</Problem>
+        <Problem alert action={<Button onClick={() => file.refetch()}>Try again</Button>}>
+          Couldn't load the workflows. {file.error.message}
+        </Problem>
       </Tile>
     )
 
   const { content, sha, workflows, error } = file.data
   const text = draft ?? content
   const edited = draft !== null && draft !== content
+  // The draft stays after saving, so the file just sent stays in view.
+  const opened = save.data && text === save.variables?.content
   const add = () => {
     const base = text.trim() ? text.replace(/\n*$/, '\n') : 'workflows:\n'
     setDraft(base + workflowBlock(`workflow-${workflows.length + 1}`))
@@ -67,7 +73,13 @@ export function Workflows({ projectId, readOnly }: { projectId: string; readOnly
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <span className="font-mono text-[13px] font-semibold">{FILE}</span>
           <span className="text-xs text-ink-2">
-            {readOnly ? 'Read only: you need write access to change it.' : edited ? 'Edited here. Open a pull request to propose it.' : 'Edit it here; saving opens a pull request.'}
+            {readOnly
+              ? 'Read only: you need write access to change it.'
+              : opened
+                ? 'Sent in the pull request below. Edit it again to propose more.'
+                : edited
+                  ? 'Edited here. Open a pull request to propose it.'
+                  : 'Edit it here; saving opens a pull request.'}
           </span>
         </div>
         <Textarea
@@ -82,13 +94,12 @@ export function Workflows({ projectId, readOnly }: { projectId: string; readOnly
         />
       </Card>
 
-      {save.error && <Problem alert>{save.error.message}</Problem>}
       {!readOnly && (
         <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-tile-keyline pt-3">
-          {save.data && draft === null && (
-            <p role="status" className="m-0 mr-auto inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 px-0.5 text-[13px] font-semibold">
+          {opened && (
+            <p role="status" className="m-0 mr-auto inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 px-0.5 text-[13px] font-semibold">
               <Icon name="pr" size={16} className="flex-none text-good" />
-              <span>
+              <span className="min-w-0 wrap-anywhere">
                 Opened{' '}
                 <a href={save.data.pullRequest.url} target="_blank" rel="noreferrer">
                   pull request #{save.data.pullRequest.number}
@@ -101,22 +112,25 @@ export function Workflows({ projectId, readOnly }: { projectId: string; readOnly
             <Icon name="plus" size={16} />
             Add a workflow
           </Button>
-          <Button variant="primary" busy={save.isPending} disabled={!edited} onClick={() => save.mutate({ content: text, sha }, { onSuccess: () => setDraft(null) })}>
+          <Button
+            variant="primary"
+            busy={save.isPending}
+            disabled={!edited || opened}
+            // After workflows_changed, refetch the sha so saving again goes through.
+            onClick={() => save.mutate({ content: text, sha }, { onError: (e) => errorCode(e) === 'workflows_changed' && file.refetch() })}
+          >
             <Icon name="pr" size={16} />
             Open a pull request
           </Button>
         </div>
       )}
+      {/* Under the button that sent it. */}
+      {save.error && (
+        <Problem alert className="whitespace-pre-wrap">
+          {save.error.message}
+          {errorCode(save.error) === 'workflows_changed' && ' Opening a pull request again replaces the newer file with yours.'}
+        </Problem>
+      )}
     </Tile>
-  )
-}
-
-/** An error, on the signal wash with the alert mark */
-function Problem({ children, alert }: { children: ReactNode; alert?: boolean }) {
-  return (
-    <p role={alert ? 'alert' : undefined} className="m-0 flex items-start gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] font-semibold whitespace-pre-wrap text-signal-ink">
-      <Icon name="alert" size={16} className="mt-px flex-none" />
-      <span>{children}</span>
-    </p>
   )
 }

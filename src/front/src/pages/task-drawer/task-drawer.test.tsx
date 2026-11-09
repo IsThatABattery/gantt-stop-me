@@ -3,9 +3,26 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import type { Run, RunDetail, RunResult } from '../../data/views/runs'
-import { fake } from '../../test/fakeApi'
+import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 import { server } from '../../test/server'
+
+const passedRun = { id: 1, prNumber: 32, status: 'passed', reason: null, approvedBy: null, approvedAt: null }
+
+/** Task 11, in User Check, with a passed run waiting for the user's check. */
+function waitingForCheck() {
+  server.use(
+    http.get('/api/projects/1/tasks/11/runs', () => HttpResponse.json({ runs: [passedRun] })),
+    http.get('/api/projects/1/runs/1', () => HttpResponse.json({ ...passedRun, executions: [], results: [] })),
+  )
+}
+
+/** The approval band, once the latest run has loaded and Approve and merge is open. */
+async function openBand() {
+  const band = await screen.findByRole('region', { name: 'Check and approve' })
+  await waitFor(() => expect(within(band).getByRole('button', { name: 'Approve and merge' })).toBeEnabled())
+  return within(band)
+}
 
 async function openDrawer(id: number) {
   const utils = renderApp(`/projects/1/tasks/${id}`)
@@ -60,6 +77,35 @@ describe('task drawer', () => {
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/1'))
   })
+
+  it('offers to try again when the task fails to load', async () => {
+    failNext('GET /api/projects/1/tasks/8', { status: 502, code: 'github_error', message: 'GitHub did not answer in time.' })
+    renderApp('/projects/1/tasks/8')
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Zoom the timeline' })).toBeInTheDocument()
+  })
+
+  it('goes back to the Backlog, not the board, when opened from the Backlog', async () => {
+    const { router } = renderApp('/projects/1/backlog/tasks/999')
+    expect(await screen.findByRole('link', { name: 'Back to Backlog' })).toHaveAttribute('href', '/projects/1/backlog')
+
+    await router.navigate('/projects/1/backlog/tasks/7')
+    await userEvent.click(await screen.findByRole('link', { name: 'Edit task' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(router.state.location.pathname).toBe('/projects/1/backlog/tasks/7')
+  })
+
+  it('shows read-only members no write controls', async () => {
+    fake.project.permission = 'read'
+    waitingForCheck()
+    const { drawer } = await openDrawer(11)
+    expect(await within(drawer).findByRole('heading', { name: /Latest test run/ })).toBeInTheDocument()
+    expect(within(drawer).queryByRole('link', { name: 'Edit task' })).not.toBeInTheDocument()
+    expect(within(drawer).queryByRole('button', { name: 'Retest' })).not.toBeInTheDocument()
+    // The approval band is the redesign's "Your check".
+    expect(screen.queryByRole('region', { name: 'Check and approve' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve and merge' })).not.toBeInTheDocument()
+  })
 })
 
 describe('assignees', () => {
@@ -87,6 +133,87 @@ describe('test runs', () => {
       'href',
       'https://github.com/ada/gantt/tree/feature/12-draw-the-timeline',
     )
+  })
+
+  it('waits for the runs before offering a test run', async () => {
+    let answer = () => {}
+    const answered = new Promise<void>((resolve) => (answer = resolve))
+    server.use(
+      http.get('/api/projects/1/tasks/9/runs', async () => {
+        await answered
+        return HttpResponse.json({ runs: [{ ...passedRun, status: 'running' }] })
+      }),
+      http.get('/api/projects/1/runs/1', () => HttpResponse.json({ ...passedRun, status: 'running', executions: [], results: [] })),
+    )
+    await openDrawer(9)
+    // A tested task opens on its Tests tab.
+    expect(await screen.findByRole('tabpanel', { name: /^Tests/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Run tests' })).not.toBeInTheDocument()
+    answer()
+    expect(await screen.findByRole('button', { name: 'Restart test run' })).toBeInTheDocument()
+  })
+
+  it('says when the runs fail to load, and tries again', async () => {
+    let fails = true
+    server.use(
+      http.get('/api/projects/1/tasks/7/runs', () =>
+        fails ? HttpResponse.json({ error: { code: 'internal', message: 'Database is restarting.' } }, { status: 500 }) : undefined,
+      ),
+    )
+    const { drawer } = await openDrawer(7)
+    await userEvent.click(within(drawer).getByRole('tab', { name: /^Tests/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t load the test runs. Database is restarting.')
+    fails = false
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  })
+
+  it('shows the error of the last action only, under its own button', async () => {
+    waitingForCheck()
+    server.use(
+      http.post('/api/projects/1/tasks/11/approve', () => HttpResponse.json({ error: { code: 'not_mergeable', message: 'Approve failed.' } }, { status: 409 })),
+      http.post('/api/projects/1/tasks/11/request-changes', () =>
+        HttpResponse.json({ error: { code: 'github_error', message: 'Request changes failed.' } }, { status: 502 }),
+      ),
+    )
+    await openDrawer(11)
+    const band = await openBand()
+    await userEvent.click(band.getByRole('button', { name: 'Approve and merge' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Approve failed.')
+
+    // Request changes opens the note; sending it is the action.
+    await userEvent.click(band.getByRole('button', { name: 'Request changes' }))
+    await userEvent.type(band.getByRole('textbox', { name: 'What should change?' }), 'Fix the export')
+    await userEvent.click(band.getByRole('button', { name: 'Send back for changes' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Request changes failed.'))
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+  })
+
+  it('keeps a failed approve’s reason when the task leaves User Check', async () => {
+    waitingForCheck()
+    server.use(
+      http.post('/api/projects/1/tasks/11/approve', () => {
+        fake.tasks.find((t) => t.id === 11)!.columnId = 3 // the branch moved: back to Testing
+        return HttpResponse.json({ error: { code: 'head_moved', message: 'The branch moved; testing again.' } }, { status: 409 })
+      }),
+    )
+    await openDrawer(11)
+    const band = await openBand()
+    await userEvent.click(band.getByRole('button', { name: 'Approve and merge' }))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Check and approve' })).not.toBeInTheDocument())
+    expect(await screen.findByRole('alert')).toHaveTextContent('The branch moved; testing again.')
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+  })
+
+  it('asks before Esc throws away the feedback', async () => {
+    waitingForCheck()
+    const { router } = await openDrawer(11)
+    const band = within(await screen.findByRole('region', { name: 'Check and approve' }))
+    await userEvent.click(band.getByRole('button', { name: 'Request changes' }))
+    await userEvent.type(band.getByRole('textbox', { name: 'What should change?' }), 'Fix the export')
+    await userEvent.keyboard('{Escape}')
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Leave without saving?')
+    expect(router.state.location.pathname).toBe('/projects/1/tasks/11')
   })
 })
 

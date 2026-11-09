@@ -1,6 +1,7 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { fake } from '../test/fakeApi'
+import { fake, failNext } from '../test/fakeApi'
 import { renderApp } from '../test/render'
 
 const ada = { login: 'ada', avatarUrl: 'https://avatars.example/ada' }
@@ -56,5 +57,28 @@ describe('NavRail', () => {
     renderApp('/projects/1')
     await screen.findByRole('region', { name: 'Projects' })
     expect(screen.queryByRole('region', { name: 'Assigned to you' })).not.toBeInTheDocument()
+  })
+
+  it('says when its lists fail to load, and tries again', async () => {
+    fake.opened = [fake.project]
+    failNext('GET /api/projects', { status: 500, code: 'internal', message: 'boom' })
+    renderApp('/settings')
+    const rail = within(await screen.findByRole('navigation', { name: 'Primary' }))
+    expect(await rail.findByRole('alert')).toHaveTextContent("Couldn't load projects.")
+    await userEvent.click(rail.getByRole('button', { name: 'Try again' }))
+    expect(await rail.findByRole('region', { name: 'Projects' })).toBeInTheDocument()
+    expect(rail.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  // Below md the rail is a bar whose Menu button holds its lists.
+  it('folds its lists behind a button on phones, and folds them again on the next page', async () => {
+    fake.opened = [fake.project]
+    renderApp('/settings')
+    const fold = await screen.findByRole('button', { name: 'Menu' })
+    expect(fold).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(fold)
+    expect(fold).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.click(within(screen.getByRole('region', { name: 'Projects' })).getByRole('link', { name: 'ada/gantt' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-expanded', 'false'))
   })
 })

@@ -11,21 +11,30 @@ interface UserMenuProps {
   showEmail?: boolean
 }
 
-/** The signed-in person's avatar, with a menu holding Sign out. */
+/**
+ * The signed-in person's avatar, with a menu holding Sign out. Opening it focuses Sign out; Esc closes it and returns
+ * focus to the avatar.
+ */
 export function UserMenu({ placement = 'below', showEmail = false }: UserMenuProps) {
   const { data: me } = useMe()
   const signOut = useSignOut()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const navigate = useNavigate()
 
   useEffect(() => {
     if (!open) return
+    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus()
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      button.current?.focus()
+    }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
     return () => {
@@ -41,6 +50,7 @@ export function UserMenu({ placement = 'below', showEmail = false }: UserMenuPro
   return (
     <div ref={ref} className={`relative ${showEmail ? 'w-full' : ''}`}>
       <button
+        ref={button}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -54,7 +64,9 @@ export function UserMenu({ placement = 'below', showEmail = false }: UserMenuPro
         <UserAvatar user={{ initials, role: 'member' }} size={showEmail ? 'md' : 'lg'} />
         {showEmail && (
           <>
-            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{me.email}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2" title={me.email}>
+              {me.email}
+            </span>
             <Icon name="chevronDown" size={14} className={`flex-none text-ink-2 transition-transform duration-150 ${placement === 'above' ? 'rotate-180' : ''}`} />
           </>
         )}
@@ -63,21 +75,24 @@ export function UserMenu({ placement = 'below', showEmail = false }: UserMenuPro
         <div
           id={menuId}
           role="menu"
-          // In the rail it spans the rail's width, so the rail's scroll box never clips it.
+          // In the rail it spans the rail's width, so the rail's scroll box never clips it and it never runs past the edge.
           className={`absolute z-20 flex ${placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'} ${
             showEmail ? 'inset-x-0' : `w-60 ${placement === 'above' ? 'left-0' : 'right-0'}`
           } flex-col gap-1 rounded-card border-[1.5px] border-ink bg-paper p-1.5 shadow-lg`}
         >
           <div className="px-2.5 py-2 text-xs text-ink-2">
             Signed in as
-            <div className="truncate text-sm font-semibold text-ink">{me.email}</div>
+            <div className="truncate text-sm font-semibold text-ink" title={me.email}>
+              {me.email}
+            </div>
           </div>
           <button
             type="button"
             role="menuitem"
             onClick={async () => {
               await signOut()
-              navigate('/login', { replace: true })
+              // In sync: in a transition, RequireSession would first render the cleared session as one that ended.
+              navigate('/login', { replace: true, flushSync: true })
             }}
             className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-[3px] border-0 bg-transparent px-2.5 text-left font-[inherit] font-semibold text-ink hover:bg-ink/8 active:bg-ink/15"
           >

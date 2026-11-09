@@ -6,9 +6,10 @@ import { buttonClass } from '../../components/buttonClass'
 import { Icon } from '../../components/Icon'
 import type { Me } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
+import { useMe } from '../../data/session'
 import { GITHUB_OAUTH_URL, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
 import { labels, settingsLabels } from '../../labels/labels'
-import { Card, Confirm, Section } from './Section'
+import { Card, Confirm, Problem, Section } from './Section'
 import { sectionIds } from './sections'
 
 const kindLabel = { oauth: 'GitHub sign-in', pat: 'personal access token' } as const
@@ -23,9 +24,12 @@ const returnNotes = {
 // it (docs/github.md). Every project needs it: the board reads and writes the
 // repository's issues with this credential.
 export function GitHubSection({ me }: { me: Me }) {
+  // Linking and unlinking refetch the user; if that fails, what shows here is out of date.
+  const refresh = useMe()
   const [params] = useSearchParams()
   const returned = params.get('github')
-  const note = returned === 'linked' || returned === 'error' ? returnNotes[returned] : null
+  // Only while it still holds: linking with a token or unlinking afterwards outdates it.
+  const note = returned === 'linked' && me.github ? returnNotes.linked : returned === 'error' && !me.github ? returnNotes.error : null
 
   return (
     <Section
@@ -41,6 +45,11 @@ export function GitHubSection({ me }: { me: Me }) {
           <Icon name={note.icon} size={16} className="flex-none" />
           {note.text}
         </p>
+      )}
+      {refresh.error && (
+        <Problem alert action={<Button onClick={() => refresh.refetch()}>Try again</Button>}>
+          Couldn't refresh your account: {refresh.error.message}
+        </Problem>
       )}
       <Card>{me.github ? <Linked login={me.github.login} kind={me.github.kind} /> : <NotLinked />}</Card>
     </Section>
@@ -64,7 +73,7 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
           <Icon name="github" size={20} />
         </span>
         <p className="m-0 flex min-w-0 flex-1 flex-col">
-          <span className="font-semibold">
+          <span className="font-semibold wrap-anywhere">
             Linked as <span className="font-bold">{login}</span>
           </span>
           <span className="text-[13px] text-ink-2">with a {kindLabel[kind]}</span>
@@ -76,7 +85,11 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
         )}
       </div>
       {confirming && (
-        <Confirm id={id} question={`Unlinking removes your access to every ${labels.project.toLowerCase()} until you link again.`}>
+        <Confirm
+          id={id}
+          question={`Unlinking removes your access to every ${labels.project.toLowerCase()} until you link again.`}
+          onCancel={() => confirm(false)}
+        >
           <Button id={`${id}-keep`} onClick={() => confirm(false)}>
             Keep it linked
           </Button>
@@ -88,7 +101,7 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
       {unlink.error && (
         <p role="alert" className="m-0 flex items-center gap-1.5 text-[13px] font-semibold text-signal-ink">
           <Icon name="alert" size={16} className="flex-none" />
-          {unlink.error.message}
+          <span className="min-w-0 wrap-anywhere">{unlink.error.message}</span>
         </p>
       )}
     </div>
@@ -140,7 +153,7 @@ function NotLinked() {
         {link.error && (
           <p role="alert" className="m-0 flex items-center gap-1.5 text-[13px] font-semibold text-signal-ink">
             <Icon name="alert" size={16} className="flex-none" />
-            {link.error.message}
+            <span className="min-w-0 wrap-anywhere">{link.error.message}</span>
           </p>
         )}
         <div>

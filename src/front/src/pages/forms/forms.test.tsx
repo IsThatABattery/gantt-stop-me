@@ -42,6 +42,18 @@ describe('new task', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
     expect(router.state.location.pathname).toBe('/projects/1')
   })
+
+  it('opens with the title focused', async () => {
+    renderApp('/projects/1/new/task')
+    expect(await screen.findByLabelText('Title')).toHaveFocus()
+  })
+
+  it('tells read-only members they cannot add one', async () => {
+    fake.project.permission = 'read'
+    renderApp('/projects/1/new/task')
+    expect(await screen.findByRole('heading', { name: 'You have read access only' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+  })
 })
 
 describe('edit task', () => {
@@ -64,6 +76,14 @@ describe('edit task', () => {
   it('links to the issue on GitHub', async () => {
     renderApp('/projects/1/tasks/7/edit')
     expect(await screen.findByRole('link', { name: 'View on GitHub' })).toHaveAttribute('href', 'https://github.com/ada/gantt/issues/12')
+  })
+
+  it('asks before leaving with unsaved edits', async () => {
+    const { router } = renderApp('/projects/1/tasks/7/edit')
+    await userEvent.type(await screen.findByLabelText('Description (optional)'), ' More.')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Leave without saving?')
+    expect(router.state.location.pathname).toBe('/projects/1/tasks/7/edit')
   })
 
   it('shows not found for a missing task', async () => {

@@ -21,26 +21,9 @@ import (
 // slice, with the real runner on real Docker in place of the fake, from the runner-test container:
 // docker compose --profile test run --rm runner-test
 func TestRunOnDocker(t *testing.T) {
-	if os.Getenv("RUNNER_DOCKER_TESTS") != "1" {
-		t.Skip("needs Docker; run it with docker compose --profile test run --rm runner-test")
-	}
 	ctx := context.Background()
-	self, err := os.Hostname()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &runner.Server{Token: "e2e", Prefix: cmp.Or(os.Getenv("RUN_PREFIX"), "gantt-test"), Work: t.TempDir(), Self: self}
-	if err := s.DeleteAll(ctx); err != nil { // what a failed earlier run left
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.DeleteAll(ctx) })
-	// On loopback, which no test container can reach.
-	srv := httptest.NewServer(s.Handler())
-	t.Cleanup(srv.Close)
-	f := withLLM(t, func(c *app.Config) {
-		c.RunnerURL = srv.URL
-		c.Runner = &runner.Client{URL: srv.URL, Token: s.Token, HTTPClient: srv.Client()}
-	})
+	s, docker := onDocker(t)
+	f := withLLM(t, docker)
 
 	const page = "hello from octo/hello"
 	f.repo.AddFile("a1", "Dockerfile", "FROM busybox:1.37\nCOPY www /www\nCMD [\"httpd\", \"-f\", \"-p\", \"80\", \"-h\", \"/www\"]\n")
@@ -116,5 +99,31 @@ func TestRunOnDocker(t *testing.T) {
 		if err != nil || len(out) != 0 {
 			t.Errorf("docker %s left %q, %v", list[0], out, err)
 		}
+	}
+}
+
+// onDocker starts the real runner on real Docker, skipping the test outside the runner-test container, and returns
+// it with the config that points the API at it.
+func onDocker(t *testing.T) (*runner.Server, func(*app.Config)) {
+	t.Helper()
+	if os.Getenv("RUNNER_DOCKER_TESTS") != "1" {
+		t.Skip("needs Docker; run it with docker compose --profile test run --rm runner-test")
+	}
+	ctx := context.Background()
+	self, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &runner.Server{Token: "e2e", Prefix: cmp.Or(os.Getenv("RUN_PREFIX"), "gantt-test"), Work: t.TempDir(), Self: self}
+	if err := s.DeleteAll(ctx); err != nil { // what a failed earlier run left
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.DeleteAll(ctx) })
+	// On loopback, which no test container can reach.
+	srv := httptest.NewServer(s.Handler())
+	t.Cleanup(srv.Close)
+	return s, func(c *app.Config) {
+		c.RunnerURL = srv.URL
+		c.Runner = &runner.Client{URL: srv.URL, Token: s.Token, HTTPClient: srv.Client()}
 	}
 }

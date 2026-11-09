@@ -6,7 +6,7 @@ import { Icon, type IconName } from '../../components/Icon'
 import { PageTitle } from '../../components/PageTitle'
 import { InkTab, Tile } from '../../components/Tile'
 import { errorCode } from '../../data/errors'
-import { useMe } from '../../data/session'
+import { useSignedInUser } from '../../data/session'
 import { useAddProject } from '../../data/views/addProject'
 import { labels } from '../../labels/labels'
 import { Notice } from './Notice'
@@ -28,7 +28,7 @@ const steps: { icon: IconName; text: string }[] = [
 // Adds a project by its repository URL; one added before opens its board. The
 // home page shows it until the user has opened a project.
 export function AddProjectPage() {
-  const { data: me } = useMe()
+  const { data: me } = useSignedInUser()
   const navigate = useNavigate()
   const add = useAddProject()
   const [url, setUrl] = useState('')
@@ -80,7 +80,11 @@ export function AddProjectPage() {
                   spellCheck={false}
                   placeholder="https://github.com/owner/name"
                   value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  onChange={(e) => {
+                    setUrl(e.target.value)
+                    // Editing clears the refusal: it was about the old URL.
+                    if (add.isError) add.reset()
+                  }}
                   aria-invalid={!!add.error}
                   aria-describedby={add.error ? 'repo-url-error' : 'repo-url-hint'}
                   className="font-mono"
@@ -88,7 +92,7 @@ export function AddProjectPage() {
                 {add.error ? (
                   <span id="repo-url-error" role="alert" className="flex items-start gap-1.5 text-[13px] leading-snug font-medium text-signal-ink">
                     <Icon name="alert" size={14} className="mt-px flex-none" />
-                    {(code && reasons[code]) || add.error.message}
+                    <span className="min-w-0 wrap-anywhere">{(code && reasons[code]) || add.error.message}</span>
                   </span>
                 ) : (
                   <span id="repo-url-hint" className="flex items-center gap-1.5 text-[13px] text-ink-2">

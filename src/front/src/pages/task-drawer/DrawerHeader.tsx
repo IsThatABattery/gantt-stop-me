@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
 import { Chip } from '../../components/Chip'
 import { Icon } from '../../components/Icon'
@@ -35,10 +35,12 @@ interface DrawerHeaderProps {
   task: TaskDetail
   /** The task's column, once the board has loaded */
   column?: ColumnKey
+  readOnly: boolean
 }
 
-/** Title, state chips, the issue link and Edit, and why the task needs attention. */
-export function DrawerHeader({ projectId, task, column }: DrawerHeaderProps) {
+/** Title, state chips, the issue link and Edit (not for read-only members), and why the task needs attention. */
+export function DrawerHeader({ projectId, task, column, readOnly }: DrawerHeaderProps) {
+  const { pathname } = useLocation()
   const run = task.runStatus ? runLook[task.runStatus] : null
   const closed = task.state === 'closed'
   const awaiting = column === 'user-check' && !closed
@@ -47,11 +49,18 @@ export function DrawerHeader({ projectId, task, column }: DrawerHeaderProps) {
     <header className="flex flex-col gap-2.5 px-5 pt-5 pb-4 sm:px-6">
       {column && <p className="sr-only">In {columnName(column)}</p>}
       <div className="flex items-start gap-3">
-        <h1 className="m-0 min-w-0 flex-1 pt-1.5 text-[22px] leading-[1.25] font-bold tracking-[-0.01em] text-balance break-words">{task.title}</h1>
-        <Link to={`/projects/${projectId}/tasks/${task.id}/edit`} className={buttonClass('secondary', 'flex-none px-3.5')}>
-          <Icon name="edit" size={16} />
-          {actionLabels.editTask}
-        </Link>
+        <h1 className="m-0 min-w-0 flex-1 pt-1.5 text-[22px] leading-[1.25] font-bold tracking-[-0.01em] text-balance wrap-anywhere">{task.title}</h1>
+        {!readOnly && (
+          // The edit page goes back to this drawer, over the board or the Backlog.
+          <Link
+            to={`/projects/${projectId}/tasks/${task.id}/edit`}
+            state={{ back: pathname }}
+            className={buttonClass('secondary', 'flex-none px-3.5')}
+          >
+            <Icon name="edit" size={16} />
+            {actionLabels.editTask}
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
@@ -85,7 +94,7 @@ export function DrawerHeader({ projectId, task, column }: DrawerHeaderProps) {
           <Icon name="alert" size={16} className="mt-px flex-none" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <p className="m-0 font-bold">{labels.needsAttention}</p>
-            <p className="m-0 break-words">{task.needsAttention}</p>
+            <p className="m-0 wrap-anywhere">{task.needsAttention}</p>
             <p className="m-0 mt-1">The run broke, so it says nothing about the code. Retest once the cause is fixed.</p>
           </div>
         </div>

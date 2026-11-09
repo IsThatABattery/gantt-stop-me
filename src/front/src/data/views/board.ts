@@ -88,7 +88,7 @@ export function withCurrentTask(board: Board, task: Task): Board {
 /**
  * Move a card optimistically. The board cache changes at once; if the API
  * rejects the move the cache goes back to what it was and `onRejected` runs
- * with the task and the error, so the board can say why.
+ * with the task where it now is and the error, so the board can say why.
  */
 export function useMoveTask(projectId: string, onRejected: (task: Task, error: Error) => void) {
   const client = useQueryClient()
@@ -104,11 +104,9 @@ export function useMoveTask(projectId: string, onRejected: (task: Task, error: E
     onError: (error, vars, context) => {
       const before = context?.before
       const task = before?.columns.flatMap((c) => c.tasks).find((t) => t.id === vars.taskId)
-      if (before) {
-        const current = error instanceof ConflictError ? (error.body as { task?: Task } | null)?.task : undefined
-        client.setQueryData(boardKey, current ? withCurrentTask(before, current) : before)
-      }
-      if (task) onRejected(task, error)
+      const current = error instanceof ConflictError ? (error.body as { task?: Task } | null)?.task : undefined
+      if (before) client.setQueryData(boardKey, current ? withCurrentTask(before, current) : before)
+      if (task) onRejected(current ?? task, error)
     },
     onSettled: () => client.invalidateQueries({ queryKey: boardKey }),
   })

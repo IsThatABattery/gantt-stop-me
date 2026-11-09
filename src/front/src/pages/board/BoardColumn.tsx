@@ -32,6 +32,8 @@ interface BoardColumnProps {
   filterLabel?: string
   /** A dragged card would land here */
   dropTarget: boolean
+  /** Read-only members can't move cards, so the empty column doesn't offer it */
+  canWrite: boolean
   renderCard: (task: Task) => ReactNode
 }
 
@@ -39,7 +41,7 @@ interface BoardColumnProps {
  * One column as a stage tile: a stepped neutral fill, its solid ink tab, then inside the keyline frame its purpose line
  * and the cards. Columns are subgrid items of the board, so tabs, purpose lines and first cards line up across them.
  */
-export function BoardColumn({ columnKey, name, step, tasks, ids, all, filtered, filterLabel, dropTarget, renderCard }: BoardColumnProps) {
+export function BoardColumn({ columnKey, name, step, tasks, ids, all, filtered, filterLabel, dropTarget, canWrite, renderCard }: BoardColumnProps) {
   const { setNodeRef } = useDroppable({ id: columnDropId(columnKey) })
 
   const needing = all.filter(needsPerson).length
@@ -48,6 +50,8 @@ export function BoardColumn({ columnKey, name, step, tasks, ids, all, filtered, 
   const markLabel = needing ? `${needing} ${needing === 1 ? 'needs' : 'need'} attention` : awaiting ? `${awaiting} awaiting approval` : undefined
   const count = filtered ? `${tasks.length} of ${all.length}` : String(tasks.length)
   const purpose = purposes[columnKey]
+  // An empty column says why it's empty, or how to fill it, if this member can.
+  const hint = filtered && filterLabel ? `Filtered to ${filterLabel}` : canWrite ? 'Drag a task here, or move one with [ and ].' : undefined
 
   return (
     <section
@@ -78,7 +82,9 @@ export function BoardColumn({ columnKey, name, step, tasks, ids, all, filtered, 
 
         <SortableContext id={columnDropId(columnKey)} items={ids} strategy={verticalListSortingStrategy}>
           {tasks.length > 0 ? (
-            <ul className="row-start-2 m-0 flex min-w-0 list-none flex-col gap-2 self-start p-0">
+            // The board is at most a screen tall, so a long column scrolls its own cards. The 4px band around them
+            // (padding, cancelled by the margin) keeps a focused card's outline inside the scroll box's clip.
+            <ul className="row-start-2 -m-1 flex min-h-0 min-w-0 list-none flex-col gap-2 overflow-y-auto p-1">
               {tasks.map((t) => (
                 <SortableCard key={t.id} id={String(t.id)}>
                   {renderCard(t)}
@@ -88,9 +94,7 @@ export function BoardColumn({ columnKey, name, step, tasks, ids, all, filtered, 
           ) : (
             <div className="row-start-2 flex flex-col items-center gap-1 self-start rounded-[3px] border border-ink/25 px-3 py-5 text-center">
               <p className="m-0 text-[13px] font-bold text-ink">{filtered ? 'No matches' : 'No tasks'}</p>
-              <p className="m-0 text-[12.5px] leading-[1.4] text-ink-2">
-                {filtered && filterLabel ? `Filtered to ${filterLabel}` : 'Drag a task here, or move one with [ and ].'}
-              </p>
+              {hint && <p className="m-0 text-[12.5px] leading-[1.4] text-ink-2">{hint}</p>}
             </div>
           )}
         </SortableContext>

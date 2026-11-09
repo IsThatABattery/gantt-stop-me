@@ -33,7 +33,8 @@ export function Notice({ title, children, actions, tone = 'neutral', icon, role,
       </span>
       <div className="flex min-w-0 flex-col gap-1.5">
         <h2 className="m-0 pt-1.5 text-lg leading-tight font-bold">{title}</h2>
-        {children && <div className="leading-normal text-ink-2">{children}</div>}
+        {/* An error's words may hold a long URL: it wraps rather than pushing the page sideways. */}
+        {children && <div className="leading-normal wrap-anywhere text-ink-2">{children}</div>}
         {actions && <div className="mt-2.5 flex flex-wrap gap-2.5">{actions}</div>}
       </div>
     </div>

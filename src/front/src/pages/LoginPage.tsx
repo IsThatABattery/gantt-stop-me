@@ -170,7 +170,8 @@ export function AuthFrame({ title, children, footer }: { title: string; children
   const titleId = useId()
   return (
     <div className="stars box-border flex min-h-screen flex-col bg-ground text-ink">
-      <main className="mx-auto box-border grid w-full max-w-[1180px] flex-1 content-center items-center gap-x-20 gap-y-8 px-4 py-8 sm:px-8 sm:py-12 lg:grid-cols-[minmax(0,1fr)_440px]">
+      {/* Anchored to a fixed top, not centred, so an error appearing in the panel doesn't move it. */}
+      <main className="mx-auto box-border grid w-full max-w-[1180px] flex-1 content-start items-start gap-x-20 gap-y-8 px-4 py-8 sm:px-8 sm:pt-[12vh] sm:pb-12 lg:grid-cols-[minmax(0,1fr)_440px]">
         <div className="flex min-w-0 flex-col gap-4 lg:gap-6">
           <Link to="/login" aria-label={labels.appName} className="flex size-11 items-center rounded-[3px] no-underline lg:size-14">
             <LogoMark size={44} />

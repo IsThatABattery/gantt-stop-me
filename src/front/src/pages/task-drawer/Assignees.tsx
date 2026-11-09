@@ -1,3 +1,4 @@
+import { useProjectContext } from '../../app/projectContext'
 import { Icon } from '../../components/Icon'
 import { ModelCombobox } from '../../components/ModelCombobox'
 import type { TaskDetail } from '../../data/api/types'
@@ -7,7 +8,10 @@ import { useAssign, useAssignable } from '../../data/views/tasks'
 export function Assignees({ projectId, task }: { projectId: string; task: TaskDetail }) {
   const assignable = useAssignable(projectId)
   const assign = useAssign(projectId, String(task.id))
+  const readOnly = useProjectContext().permission === 'read'
   const current = task.assignees.map((a) => a.login)
+  // While a change saves, show it and keep the box usable: disabling it would drop focus and close the list.
+  const selected = assign.isPending ? assign.variables : current
   // Someone assigned on GitHub who is no longer assignable can still be removed.
   const options = [...(assignable.data ?? []).map((a) => a.login), ...current.filter((l) => !assignable.data?.some((a) => a.login === l))]
   const error = assign.error ?? assignable.error
@@ -30,11 +34,12 @@ export function Assignees({ projectId, task }: { projectId: string; task: TaskDe
         id={`assignees-${task.id}`}
         aria-label="Assignees"
         multiple
+        max={10}
         options={options}
-        selected={current}
+        selected={selected}
         onChange={(logins) => assign.mutate(logins)}
         placeholder={assignable.isPending ? 'Loading people…' : 'Assign people'}
-        disabled={assign.isPending || !!assignable.error}
+        disabled={readOnly || !!assignable.error}
       />
       {assign.isPending && (
         <p role="status" className="m-0 text-xs text-ink-2">
@@ -44,7 +49,7 @@ export function Assignees({ projectId, task }: { projectId: string; task: TaskDe
       {error && (
         <p role="alert" className="m-0 flex items-start gap-1.5 text-[13px] text-signal-ink">
           <Icon name="alert" size={16} className="mt-px flex-none" />
-          {error.message}
+          <span className="min-w-0 wrap-anywhere">{error.message}</span>
         </p>
       )}
     </div>

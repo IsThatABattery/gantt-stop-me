@@ -5,6 +5,7 @@ import { Icon } from '../../components/Icon'
 import { Toggle } from '../../components/Toggle'
 import { UnsavedChangesGuard } from '../../components/UnsavedChangesGuard'
 import type { PlanningSettings, Provider } from '../../data/api/types'
+import { errorCode } from '../../data/errors'
 import { agentProblems, firstError, usePlaceApiError, usePlanning, useSavePlanning, type AgentErrors } from '../../data/views/agentSettings'
 import { useProviders } from '../../data/views/settings'
 import { labels, llmAgentLabels, settingsLabels } from '../../labels/labels'
@@ -78,7 +79,8 @@ function PlanningForm({ initial, providers }: { initial: PlanningSettings; provi
       onError: async (err) => {
         const at = await placeApiError(err, { interviewer: form.interviewer, taskAgent: form.taskAgent })
         if (at) setErrors({ [at.agent]: { [at.field]: err.message } })
-        setFormError(at ? 'Fix the marked field and save again.' : err.message)
+        // A 401 has the session dialog, and the edits stay to save once signed in again.
+        if (errorCode(err) !== 'unauthorized') setFormError(at ? 'Fix the marked field and save again.' : err.message)
         focus(at)
       },
     })

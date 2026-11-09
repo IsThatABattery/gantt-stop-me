@@ -42,12 +42,11 @@ export async function api<T>(method: Method, path: string, body?: unknown): Prom
 
 /**
  * A TanStack mutation that refetches every query whose key starts with one of
- * `invalidate` after it succeeds.
+ * `invalidate` after it succeeds, or after it ends either way with `settled`,
+ * for actions whose failure (409, 502) may still have changed the server.
  */
-export function useApiMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>, invalidate: QueryKey[]) {
+export function useApiMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>, invalidate: QueryKey[], { settled = false } = {}) {
   const client = useQueryClient()
-  return useMutation({
-    mutationFn: fn,
-    onSuccess: () => Promise.all(invalidate.map((queryKey) => client.invalidateQueries({ queryKey }))),
-  })
+  const refetch = () => Promise.all(invalidate.map((queryKey) => client.invalidateQueries({ queryKey })))
+  return useMutation({ mutationFn: fn, ...(settled ? { onSettled: refetch } : { onSuccess: refetch }) })
 }

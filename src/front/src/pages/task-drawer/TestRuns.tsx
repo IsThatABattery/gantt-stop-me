@@ -1,19 +1,28 @@
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { buttonClass } from '../../components/buttonClass'
 import { Chip, type Tone } from '../../components/Chip'
 import { Button } from '../../components/controls'
 import { Icon, type IconName } from '../../components/Icon'
 import { runLook } from '../../components/runLook'
 import type { TaskDetail, TaskTest } from '../../data/api/types'
+import { NotFoundError } from '../../data/errors'
 import { useRetest, useRun, useRuns, type RunResult } from '../../data/views/runs'
 import { actionLabels, runStatusLabels } from '../../labels/labels'
 import { Card, type CardTone } from './Card'
 import { isLive } from './state'
 import { splitTestText } from './testText'
 
+interface TestRunsProps {
+  projectId: string
+  task: TaskDetail
+  /** Read access to the project: no Retest, and no link to edit the tests */
+  readOnly: boolean
+}
+
 /** The Tests tab: the latest test run, each test with its result, and the run's logs. */
-export function TestRuns({ projectId, task }: { projectId: string; task: TaskDetail }) {
+export function TestRuns({ projectId, task, readOnly }: TestRunsProps) {
   const taskId = String(task.id)
+  const { pathname } = useLocation()
   const runs = useRuns(projectId, taskId)
   const latest = runs.data?.[0]
   const run = useRun(projectId, latest?.id)
@@ -21,23 +30,35 @@ export function TestRuns({ projectId, task }: { projectId: string; task: TaskDet
   const live = isLive(latest?.status)
   const results = run.data?.results ?? []
   const media = `/api/projects/${projectId}/runs/${latest?.id}/results`
+  // A 404 means the API has no runner: no runs, and no error either. A failed refresh keeps the runs that loaded.
+  const runsError = runs.error && !runs.data && !(runs.error instanceof NotFoundError) ? runs.error : null
+  // Wait for the runs, so a running task never offers 'Run tests'.
+  const canRetest = !readOnly && !runs.isPending && !runsError
 
   return (
     <div className="flex flex-col gap-2.5 pt-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          <h2 className="m-0 text-sm font-bold">{latest ? 'Latest test run' : 'No test run yet'}</h2>
-          <p className="m-0 text-[13px] text-ink-2">
-            {latest
-              ? `${latest.prNumber ? `PR #${latest.prNumber}` : 'No linked pull request'} · ${runStatusLabels[latest.status]}`
-              : 'A test run checks the linked pull request in its own containers.'}
-          </p>
+          <h2 className="m-0 text-sm font-bold">{latest || runs.isPending || runsError ? 'Latest test run' : 'No test run yet'}</h2>
+          {!runsError && (
+            <p className="m-0 text-[13px] text-ink-2">
+              {runs.isPending
+                ? 'Loading…'
+                : latest
+                  ? `${latest.prNumber ? `PR #${latest.prNumber}` : 'No linked pull request'} · ${runStatusLabels[latest.status]}`
+                  : 'A test run checks the linked pull request in its own containers.'}
+            </p>
+          )}
         </div>
-        <Button busy={retest.isPending} onClick={() => retest.mutate(undefined)}>
-          {latest ? (live ? 'Restart test run' : 'Retest') : 'Run tests'}
-        </Button>
+        {canRetest && (
+          <Button busy={retest.isPending} onClick={() => retest.mutate(undefined)}>
+            {latest ? (live ? 'Restart test run' : 'Retest') : 'Run tests'}
+          </Button>
+        )}
       </div>
 
+      {runsError && <LoadError what="the test runs" error={runsError} retry={() => runs.refetch()} />}
+      {run.error && !run.data && <LoadError what="this test run" error={run.error} retry={() => run.refetch()} />}
       {retest.error && <Problem alert>{retest.error.message}</Problem>}
       {latest?.reason && latest.reason !== task.needsAttention && <Problem>{latest.reason}</Problem>}
       {latest?.approvedBy && (
@@ -57,7 +78,7 @@ export function TestRuns({ projectId, task }: { projectId: string; task: TaskDet
       ) : task.tests.length > 0 ? (
         <ol className="m-0 flex list-none flex-col gap-2 p-0">
           {task.tests.map((t, i) => (
-            <TestCard key={i} test={t} status={latest && !run.isPending ? (live ? 'running' : 'none') : latest ? 'loading' : 'none'} />
+            <TestCard key={i} test={t} status={latest ? (run.isPending ? 'loading' : live ? 'running' : 'none') : runs.isPending || runsError ? 'loading' : 'none'} />
           ))}
         </ol>
       ) : (
@@ -67,9 +88,11 @@ export function TestRuns({ projectId, task }: { projectId: string; task: TaskDet
             Tests live in the issue&rsquo;s description, under a <code className="font-mono text-xs text-ink">## Tests</code> heading: each item is a
             command to run or a plain-English check.
           </p>
-          <Link to={`/projects/${projectId}/tasks/${task.id}/edit`} className={buttonClass('link')}>
-            {actionLabels.editTask}
-          </Link>
+          {!readOnly && (
+            <Link to={`/projects/${projectId}/tasks/${task.id}/edit`} state={{ back: pathname }} className={buttonClass('link')}>
+              {actionLabels.editTask}
+            </Link>
+          )}
         </div>
       )}
 
@@ -104,10 +127,25 @@ function Problem({ title, alert, children }: { title?: string; alert?: boolean; 
   return (
     <div role={alert ? 'alert' : undefined} className="flex gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] leading-normal text-signal-ink">
       <Icon name="alert" size={16} className="mt-px flex-none" />
-      <div className="min-w-0 break-words">
+      <div className="min-w-0 wrap-anywhere">
         {title && <p className="m-0 font-bold">{title}</p>}
         <p className="m-0">{children}</p>
       </div>
+    </div>
+  )
+}
+
+/** A load that failed, on the signal wash, with a way to try again. Only the words are the alert. */
+function LoadError({ what, error, retry }: { what: string; error: Error; retry: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[2px] bg-signal-wash px-3 py-2.5">
+      <p role="alert" className="m-0 flex min-w-0 flex-[1_1_14rem] gap-2 text-[13px] leading-normal text-signal-ink">
+        <Icon name="alert" size={16} className="mt-px flex-none" />
+        <span className="min-w-0 wrap-anywhere">
+          Couldn&rsquo;t load {what}. {error.message}
+        </span>
+      </p>
+      <Button onClick={retry}>Try again</Button>
     </div>
   )
 }
@@ -161,7 +199,7 @@ function ResultCard({ result: r, live, media }: { result: RunResult; live: boole
   )
 }
 
-/** One of the issue's tests, before any run has results for it. */
+/** One of the issue's tests, before any run has results for it. loading: no chip until the runs say whether it ran. */
 function TestCard({ test, status }: { test: TaskTest; status: 'none' | 'running' | 'loading' }) {
   const command = test.kind === 'script' && test.command === test.name
   const meta = [test.kind === 'script' ? 'Command' : 'LLM check', test.workflow && `${test.workflow} workflow`].filter(Boolean)
