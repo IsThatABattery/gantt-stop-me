@@ -27,6 +27,21 @@ Run and Debug entries:
 - **Web**: Vite on :5173, proxying `/api` to :8080, opened in your default browser.
 - **Web (Chrome debug)**: as Web, with Chrome attached for breakpoints. Needs Chrome on the host.
 
+## Branches
+
+Every branch pushed to GitHub, so every PR's branch, is named `<type>/<slug>`:
+
+| Type | For |
+| --- | --- |
+| `feature/` | New behaviour |
+| `fix/` | A bug fix |
+| `docs/` | Docs only |
+| `chore/` | Config, tooling, cleanup: no change in behaviour |
+
+The slug is a few lowercase words joined by hyphens, such as `fix/backend-endpoints` or `docs/branch-naming`. Branches the app makes for tasks are `feature/<issue>-<slug>`, such as `feature/29-add-a-persistent-user-facing-theme`.
+
+- Never push a tool's own branch name, such as T3 Code's worktree branch `t3/…`. Push the work under its own name instead: `git push -u origin HEAD:docs/branch-naming`, then open the PR from that branch.
+
 ## API docs
 
 `docs/api/` documents every endpoint, one file per feature, in the shape of `docs/api/accounts.md`: name, one sentence, method and path, input table, output table. Change an endpoint and its doc in the same commit. Features not built yet are listed in `docs/gaps.md`.
