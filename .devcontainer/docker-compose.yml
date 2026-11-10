@@ -10,13 +10,17 @@ services:
       # Linux node_modules in a volume, so they never clash with a host install.
       - front-node-modules:/workspaces/gantt-stop-me/src/front/node_modules
     environment:
+      # This shell drives the host's Docker, so a docker compose up from it hands the root compose file's variables to
+      # the host stack. Those set here equal its defaults; PUBLIC_URL, RUNNER_URL and the GitHub OAuth App, which
+      # differ, are set by the API and Web entries instead (.vscode/launch.json).
       DATABASE_URL: postgres://gantt:gantt@db:5432/gantt?sslmode=disable
-      # The browser opens Vite on :5173, but Vite's proxy sends /api writes with Origin http://localhost:8080
-      # (src/front/vite.config.ts), so that is the origin the API must allow.
-      PUBLIC_URL: http://localhost:8080
       ENCRYPTION_KEY: rWhMzl7tTjnG0yUf8pzqa3gBBWudv5DWpXxrF6sgzB0=
-      # The Runner entry listens here, and the API entry reaches it with the same dev token.
-      RUNNER_URL: http://localhost:8081
+      # GitHub OAuth App for the API entry, which maps these to GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET. From the host
+      # environment or the repo-root .env, read when the container is built; empty links with tokens only. Register
+      # http://localhost:5173/api/github/callback, the API entry's PUBLIC_URL, as one of the app's callback URLs.
+      DEV_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      DEV_GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      # Shared with the Runner entry, which the API entry reaches at http://localhost:8081.
       RUNNER_TOKEN: nfxt5flPAKJ4penhSSAOvDKmN8MHofVxJjJ6YE/PUfQ=
     # Source checkouts for the Runner entry, writable by the vscode user.
     tmpfs:

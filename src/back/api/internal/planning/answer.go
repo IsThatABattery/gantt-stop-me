@@ -13,7 +13,7 @@ import (
 
 // answer answers the agent's last question, or skips it, and makes its next question the agent's job.
 func (p *Planning) answer(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
@@ -31,7 +31,7 @@ func (p *Planning) answer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		if err := waiting(pl, "briefing"); err != nil {
 			return err
 		}

@@ -56,8 +56,9 @@ Returns the projects the caller has added or opened, most recently visited first
 | `200` | `projects`, each as [Add project](#add-project) answers it; `[]` for none |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
+| `502` | `github_error`, when the linked OAuth token has expired and could not be refreshed, as while GitHub is unreachable |
 
-Adding a project counts as a visit the first time, and so does opening its board, which every project page loads. A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. When GitHub fails that check for another reason, such as an outage, the project is listed with the permission last checked. A credential GitHub no longer accepts answers `github_not_linked`. Unlinking GitHub forgets every project. Linking a new credential while linked keeps them, and checks each on GitHub again with it.
+Adding a project counts as a visit the first time, and so does opening its board, which every project page loads. A project whose access check is over 5 minutes old is checked on GitHub again, and dropped, as from opening it, when the account no longer sees it. When GitHub fails that check for another reason, such as an outage, the project is listed with the permission last checked. A credential GitHub no longer accepts answers `github_not_linked`; a token another request refreshed meanwhile is checked again with the new one. Unlinking GitHub forgets every project. Linking a new credential while linked keeps them, and checks each on GitHub again with it.
 
 ```json
 { "projects": [{ "id": 1, "owner": "ada", "name": "gantt", "permission": "write" }] }
@@ -82,6 +83,7 @@ Returns the open tasks assigned to the caller's GitHub account, grouped by proje
 | `200` | `projects`, each a `project` as [Add project](#add-project) answers it and its `tasks` in board order; `[]` for none |
 | `401` | `unauthorized` |
 | `403` | `github_not_linked` |
+| `502` | `github_error`, as for [List projects](#list-projects) |
 
 Each task is as [Show board](#show-board) gives it, with `column`, the `key` and `name` of the column it is in. A task matches by the GitHub login the caller had when they linked GitHub. Assignees are as GitHub last gave them to a sync, [Edit task](#edit-task) or [Take over task](automation.md#take-over-task), so an assignment made on GitHub shows after that project's next sync, which opening its board or one of its tasks runs.
 
@@ -145,7 +147,7 @@ A sync reads, with the caller's GitHub credential, the issues changed on GitHub 
 - A `board:*` label added on GitHub to an open issue since the last read moves its task to the end of that column, the first in board order when several were added. `board:closed` on an open issue moves nothing. An open issue whose task is in Closed, such as one reopened, moves to the end of Backlog when no added label moves it elsewhere. A label left on the issue never pulls the task back.
 - A task moved or edited through the API after the sync began reading GitHub is left for the next sync, which reads its issue again.
 
-A sync also reads the repository's labels, so a label renamed, recolored or deleted there changes on every task. A sync that fails is logged, the tasks are answered as last synced, and the next load tries again. Only a credential GitHub no longer accepts fails the request, with `github_not_linked`.
+A sync also reads the repository's labels, so a label renamed, recolored or deleted there changes on every task. A sync that fails is logged, the tasks are answered as last synced, and the next load tries again. Only a credential GitHub no longer accepts fails the request, with `github_not_linked`: a `401` for a token another request refreshed meanwhile is a sync that fails.
 
 ```json
 {

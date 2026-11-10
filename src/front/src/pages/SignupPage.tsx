@@ -6,7 +6,7 @@ import { Field, TextInput } from '../components/controls'
 import { errorCode } from '../data/errors'
 import { keys } from '../data/keys'
 import { signUp, useMe } from '../data/session'
-import { AuthError, AuthFrame, AuthSubmit } from './LoginPage'
+import { AuthError, AuthFrame, AuthSubmit, GitHubSignIn, OrWithEmail } from './LoginPage'
 
 /** Which field each signup error belongs to (docs/api/accounts.md). */
 const fieldOf: Record<string, 'email' | 'password'> = {
@@ -25,8 +25,8 @@ function FieldError({ id, children }: { id: string; children: ReactNode }) {
   )
 }
 
-// Create an account with email and password (POST /api/auth/signup), in the
-// same frame as sign in.
+// Create an account with email and password (POST /api/auth/signup), or with
+// Continue with GitHub, in the same frame as sign in.
 export function SignupPage() {
   const { data: me } = useMe()
   const client = useQueryClient()
@@ -64,6 +64,12 @@ export function SignupPage() {
         </>
       }
     >
+      <GitHubSignIn className="gap-2">
+        <p className="m-0 text-[13px] leading-normal text-ink-2">Signs you up with your GitHub email, and links GitHub at once.</p>
+        {/* gap-2 and mt-3 make the panel's gap-5. */}
+        <OrWithEmail className="mt-3" />
+      </GitHubSignIn>
+
       <p className="m-0 text-sm leading-normal text-ink-2">
         Sign up with your email. You'll link GitHub next, so the board can read the repository's issues.
       </p>

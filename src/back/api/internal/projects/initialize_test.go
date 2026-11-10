@@ -193,6 +193,22 @@ func TestInitializeImportsBodyAndLabels(t *testing.T) {
 	}
 }
 
+// GitHub retires a token as it refreshes it, so another request's refresh can beat setup's calls: adding again
+// finishes it.
+func TestInitializeAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	for _, route := range []string{"POST /repositories/{id}/labels", "GET /repositories/{id}/issues"} {
+		t.Run(route, func(t *testing.T) {
+			env := apptest.New(t)
+			ada := env.SignUp("ada@example.com", "correct horse")
+			expiringLink(t, env, ada, time.Hour)
+			refreshed := env.RefreshDuring(route, ada)
+			add(env, ada, "https://github.com/octo/hello").Expect(http.StatusBadGateway, "github_error")
+			refreshed()
+			add(env, ada, "https://github.com/octo/hello").Expect(http.StatusOK, "") // set up now, as the project added before
+		})
+	}
+}
+
 func TestInitializeFinishesHalfInitializedProject(t *testing.T) {
 	env := apptest.New(t)
 	ada := env.SignUp("ada@example.com", "correct horse")

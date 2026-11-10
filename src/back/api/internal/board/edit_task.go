@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"gantt-stop-me/api/internal/github"
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -85,7 +85,7 @@ func (b *Board) editTask(w http.ResponseWriter, r *http.Request) {
 	}
 	is, err := b.GitHub.UpdateIssue(ctx, token, p.RepoID, t.IssueNumber, fields)
 	if err != nil {
-		github.Fail(w, r, err)
+		b.Projects.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 		return
 	}
 	// updated_at, as a move sets it: a sync that fetched the issue before this edit then skips the task instead of undoing it.

@@ -44,7 +44,7 @@ func (a *Accounts) signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Nothing can change a password the account was created with a moment ago, so the session always starts.
-	if _, err := a.startSession(r.Context(), w, u.ID, hash); err != nil {
+	if _, err := a.startSession(r.Context(), w, u.ID, &hash); err != nil {
 		httpx.Internal(w, r, err)
 		return
 	}

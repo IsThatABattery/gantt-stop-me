@@ -67,6 +67,30 @@ func TestWorkflowsFile(t *testing.T) {
 	f.Do("PUT", f.path("/workflows"), map[string]any{"content": frontendFile, "sha": sha}, bob).Expect(http.StatusForbidden, "forbidden")
 }
 
+// GitHub retires a token as it refreshes it, so another request's refresh can beat a call made with it: that is no
+// reason to link again.
+func TestWorkflowsFileAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	for _, c := range []struct {
+		method, route string // the route GitHub refuses the token for
+	}{
+		{"GET", "GET /repositories/{id}/contents/{path...}"},
+		{"PUT", "POST /repositories/{id}/git/refs"},
+		{"PUT", "PUT /repositories/{id}/contents/{path...}"},
+		{"PUT", "POST /repositories/{id}/pulls"},
+	} {
+		t.Run(c.method+" "+c.route, func(t *testing.T) {
+			f := setup(t)
+			f.GitHub.ExpireTokens(8 * time.Hour)
+			f.repo.Grant(f.LinkGitHubOAuth(f.ada, "ada"), "push")
+			refreshed := f.RefreshDuring(c.route, f.ada)
+			body := map[string]any{"content": frontendFile, "sha": nil}
+			f.Do(c.method, f.path("/workflows"), body, f.ada).Expect(http.StatusBadGateway, "github_error")
+			refreshed()
+			f.Do(c.method, f.path("/workflows"), body, f.ada).Expect(http.StatusOK, "")
+		})
+	}
+}
+
 func TestSaveWorkflowsTwiceInOneSecond(t *testing.T) {
 	f := setup(t)
 	for time.Now().Nanosecond() > 200e6 { // early in a second, so both saves fall in it

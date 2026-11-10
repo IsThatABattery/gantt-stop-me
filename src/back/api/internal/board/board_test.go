@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -38,6 +39,14 @@ func setup(t *testing.T, titles ...string) *fixture {
 // path is the URL path of the project's route suffix, such as "/board".
 func (f *fixture) path(suffix string, args ...any) string {
 	return fmt.Sprintf("/api/projects/%d", f.project) + fmt.Sprintf(suffix, args...)
+}
+
+// oauth relinks ada with OAuth to a token that expires in 8 hours, as GitHub's do, and can push to the repository.
+func (f *fixture) oauth() {
+	f.t.Helper()
+	f.GitHub.ExpireTokens(8 * time.Hour)
+	f.token = f.LinkGitHubOAuth(f.ada, "ada-gh")
+	f.repo.Grant(f.token, "push")
 }
 
 // reader signs up bob, who can only read the repository, and returns his session.

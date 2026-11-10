@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"cmp"
 	"compress/gzip"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
@@ -32,19 +33,31 @@ type Fake struct {
 	ClientSecret string
 	PageSize     int // the most issues one page of the issue list holds, 100 like GitHub; lower it to test paging
 
-	mux      *http.ServeMux
-	mu       sync.Mutex        // held while serving each request
-	users    map[string]user   // by token
-	codes    map[string]string // OAuth code -> token
-	repos    []*Repo
-	failures map[string]int // route pattern -> the status it answers instead
-	requests []string
-	lastID   int64 // of repositories, issues, labels and comments
+	mux       *http.ServeMux
+	mu        sync.Mutex        // held while serving each request
+	users     map[string]user   // by token
+	emails    map[int64][]Email // by account id
+	codes     map[string]string // OAuth code -> token
+	expiresIn time.Duration     // of the OAuth tokens it issues, 0 for never
+	refresh   map[string]string // refresh token -> the access token it replaces
+	refreshes int               // refresh requests served
+	repos     []*Repo
+	failures  map[string]int    // route pattern -> the status it answers instead
+	before    map[string]func() // route pattern -> what runs before it serves each request
+	requests  []string
+	lastID    int64 // of repositories, issues, labels and comments
 }
 
 type user struct {
 	ID    int64  `json:"id"`
 	Login string `json:"login"`
+}
+
+// Email is one of an account's email addresses, as GET /user/emails lists them.
+type Email struct {
+	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
+	Verified bool   `json:"verified"`
 }
 
 // Repo is a repository on the fake GitHub. It is private: only tokens granted a role can see it.
@@ -137,10 +150,14 @@ func New(t testing.TB) *Fake {
 		PageSize:     100,
 		mux:          http.NewServeMux(),
 		users:        map[string]user{},
+		emails:       map[int64][]Email{},
 		codes:        map[string]string{},
+		refresh:      map[string]string{},
 		failures:     map[string]int{},
+		before:       map[string]func(){},
 	}
 	f.mux.HandleFunc("GET /user", f.user)
+	f.mux.HandleFunc("GET /user/emails", f.userEmails)
 	f.mux.HandleFunc("POST /login/oauth/access_token", f.accessToken)
 	f.mux.HandleFunc("GET /repos/{owner}/{name}", f.getRepo)
 	f.mux.HandleFunc("GET /repositories/{id}", f.getRepo)
@@ -180,11 +197,35 @@ func (f *Fake) AddUser(token string, id int64, login string) {
 	f.users[token] = user{id, login}
 }
 
+// SetEmails gives the GitHub account id these email addresses, which every token of the account lists. An account
+// starts with none.
+func (f *Fake) SetEmails(id int64, emails ...Email) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.emails[id] = emails
+}
+
 // AddCode makes code a valid, single-use OAuth code that exchanges for token.
 func (f *Fake) AddCode(code, token string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.codes[code] = token
+}
+
+// ExpireTokens makes the OAuth tokens issued from now on expire after d and come with a single-use refresh token,
+// as GitHub's do for an OAuth App with "Expire user access tokens" on. d = 0, the default, issues tokens that never
+// expire.
+func (f *Fake) ExpireTokens(d time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.expiresIn = d
+}
+
+// Refreshes counts the refresh requests served so far, refused ones included.
+func (f *Fake) Refreshes() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.refreshes
 }
 
 // Fail makes the route pattern, as New registers it (such as "POST /repositories/{id}/labels"),
@@ -193,6 +234,18 @@ func (f *Fake) Fail(pattern string, status int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.failures[pattern] = status
+}
+
+// Before makes the route pattern, as New registers it, call fn before it serves each request, outside the fake's
+// lock, so fn may block, or call the fake as another caller would meanwhile. A nil fn removes it.
+func (f *Fake) Before(pattern string, fn func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if fn == nil {
+		delete(f.before, pattern)
+		return
+	}
+	f.before[pattern] = fn
 }
 
 // Requests returns every request served so far, as "METHOD /path?query".
@@ -455,10 +508,17 @@ func (f *Fake) byLogin(login string) (user, string) {
 
 // serve logs the request and, unless its route is made to fail, serves it with mu held.
 func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
+	_, pattern := f.mux.Handler(r)
+	f.mu.Lock()
+	before := f.before[pattern]
+	f.mu.Unlock()
+	if before != nil {
+		before()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.requests = append(f.requests, r.Method+" "+r.URL.RequestURI())
-	if _, pattern := f.mux.Handler(r); f.failures[pattern] != 0 {
+	if f.failures[pattern] != 0 {
 		writeJSON(w, f.failures[pattern], map[string]string{"message": "Injected failure"})
 		return
 	}
@@ -519,6 +579,13 @@ func (f *Fake) issue(w http.ResponseWriter, r *http.Request, write bool) (*Repo,
 func (f *Fake) user(w http.ResponseWriter, r *http.Request) {
 	if u, ok := f.auth(w, r); ok {
 		writeJSON(w, http.StatusOK, u)
+	}
+}
+
+// userEmails serves GET /user/emails with its per_page and page parameters.
+func (f *Fake) userEmails(w http.ResponseWriter, r *http.Request) {
+	if u, ok := f.auth(w, r); ok {
+		writePage(w, r, f.emails[u.ID], 100)
 	}
 }
 
@@ -1216,34 +1283,74 @@ func (f *Fake) pullByNode(token, id string) (*Repo, *Issue, string) {
 	return nil, nil, ""
 }
 
+// accessToken exchanges a code, or with grant_type=refresh_token a refresh token, read from a form body as GitHub
+// documents.
 func (f *Fake) accessToken(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		ClientID     string `json:"client_id"`
-		ClientSecret string `json:"client_secret"`
-		Code         string `json:"code"`
-	}
-	json.NewDecoder(r.Body).Decode(&in)
-	token, found := f.codes[in.Code]
-	delete(f.codes, in.Code)
-
-	out := map[string]string{"access_token": token, "token_type": "bearer", "scope": "repo"}
+	r.ParseForm()
+	in := r.PostForm
+	var out map[string]any
 	switch {
-	case in.ClientID != f.ClientID || in.ClientSecret != f.ClientSecret:
-		out = map[string]string{"error": "incorrect_client_credentials"}
-	case !found:
-		out = map[string]string{"error": "bad_verification_code"}
+	case in.Get("client_id") != f.ClientID || in.Get("client_secret") != f.ClientSecret:
+		out = map[string]any{"error": "incorrect_client_credentials",
+			"error_description": "The client_id and/or client_secret passed are incorrect."}
+	case in.Get("grant_type") == "refresh_token":
+		f.refreshes++
+		out = f.refreshToken(in.Get("refresh_token"))
+	default:
+		token, found := f.codes[in.Get("code")]
+		delete(f.codes, in.Get("code"))
+		if !found {
+			out = map[string]any{"error": "bad_verification_code", "error_description": "The code passed is incorrect or expired."}
+		} else {
+			out = f.grant(token)
+		}
 	}
 	// Like GitHub: JSON only on request, otherwise form encoding, and 200 even for errors.
 	if r.Header.Get("Accept") != "application/json" {
 		form := url.Values{}
 		for k, v := range out {
-			form.Set(k, v)
+			form.Set(k, fmt.Sprint(v))
 		}
 		w.Header().Set("Content-Type", "application/x-www-form-urlencoded")
 		w.Write([]byte(form.Encode()))
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// grant is the token endpoint's answer issuing access, with a refresh token while ExpireTokens has set an expiry.
+func (f *Fake) grant(access string) map[string]any {
+	out := map[string]any{"access_token": access, "token_type": "bearer", "scope": "repo,workflow"}
+	if f.expiresIn > 0 {
+		refresh := "ghr_" + rand.Text()
+		f.refresh[refresh] = access
+		out["expires_in"] = int(f.expiresIn.Seconds())
+		out["refresh_token"] = refresh
+		out["refresh_token_expires_in"] = 15897600 // 6 months
+	}
+	return out
+}
+
+// refreshToken answers a refresh: like GitHub, it uses the refresh token up, and the access token it replaces stops
+// working, its account and repository roles passing to the new one.
+func (f *Fake) refreshToken(refresh string) map[string]any {
+	old, found := f.refresh[refresh]
+	if !found {
+		return map[string]any{"error": "bad_refresh_token", "error_description": "The refresh token passed is incorrect or expired."}
+	}
+	delete(f.refresh, refresh)
+	access := "gho_" + rand.Text()
+	if u, ok := f.users[old]; ok {
+		delete(f.users, old)
+		f.users[access] = u
+	}
+	for _, rp := range f.repos {
+		if role, ok := rp.roles[old]; ok {
+			delete(rp.roles, old)
+			rp.roles[access] = role
+		}
+	}
+	return f.grant(access)
 }
 
 // atLeastOne parses a positive page parameter, or returns def.

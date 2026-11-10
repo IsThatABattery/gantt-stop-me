@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 )
@@ -41,7 +42,7 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 	}
 	for _, c := range columns {
 		if err := p.GitHub.CreateLabel(ctx, token, pr.RepoID, "board:"+c.key, c.color); err != nil {
-			github.Fail(w, r, err)
+			p.Credentials.Fail(w, r, accounts.UserID(ctx), token, err)
 			return false
 		}
 	}
@@ -57,7 +58,7 @@ func (p *Projects) initialize(w http.ResponseWriter, r *http.Request, token stri
 		issues = append(issues, page...)
 		return true
 	}); err != nil {
-		github.Fail(w, r, err)
+		p.Credentials.Fail(w, r, accounts.UserID(ctx), token, err)
 		return false
 	}
 

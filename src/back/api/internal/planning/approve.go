@@ -11,11 +11,11 @@ import (
 
 // approve accepts a plan's doc, which makes generating its tasks the agent's job.
 func (p *Planning) approve(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		if err := waiting(pl, "needs_review"); err != nil {
 			return err
 		}

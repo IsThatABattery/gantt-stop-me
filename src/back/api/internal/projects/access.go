@@ -35,8 +35,9 @@ func permission(r github.Repo) string {
 }
 
 // Check runs the access check for the project in the {id} path value: the user's linked GitHub account must
-// see its repository with need, Read or Write, or more. It returns the project and the user's GitHub token,
-// or answers the request itself and returns false.
+// see its repository with need, Read or Write, or more. It returns the project and the user's GitHub token, the one
+// read again when another request replaced the first one read meanwhile, or answers the request itself and returns
+// false.
 func (p *Projects) Check(w http.ResponseWriter, r *http.Request, need string) (Project, string, bool) {
 	ctx := r.Context()
 	userID := accounts.UserID(ctx)
@@ -58,7 +59,7 @@ func (p *Projects) Check(w http.ResponseWriter, r *http.Request, need string) (P
 		return Project{}, "", false
 	}
 
-	pr.Permission, err = p.Permission(ctx, &pr, userID, token)
+	pr.Permission, token, err = p.recheck(ctx, &pr, userID, token)
 	if errors.As(err, new(gitHubError)) {
 		github.Fail(w, r, err)
 		return Project{}, "", false
@@ -114,6 +115,22 @@ func (p *Projects) Permission(ctx context.Context, pr *Project, userID int64, to
 	return perm, p.remember(ctx, pr.ID, userID, perm)
 }
 
+// recheck is Permission with token, asked again with the user's credential read anew when GitHub refused token with
+// 401 and the credential has since become another token: GitHub retires a token as another request refreshes it. It
+// returns the token the answer came with.
+func (p *Projects) recheck(ctx context.Context, pr *Project, userID int64, token string) (perm, used string, err error) {
+	perm, err = p.Permission(ctx, pr, userID, token)
+	if !unauthorized(err) {
+		return perm, token, err
+	}
+	current, tErr := p.Credentials.Token(ctx, userID)
+	if tErr != nil || current == token {
+		return perm, token, err // GitHub refused the credential in use now, or it cannot be read to tell
+	}
+	perm, err = p.Permission(ctx, pr, userID, current)
+	return perm, current, err
+}
+
 // Visited records that the user opened the project now, which orders Opened.
 func (p *Projects) Visited(ctx context.Context, projectID, userID int64) error {
 	_, err := p.DB.Exec(ctx, `update project_members set visited_at = now() where project_id = $1 and user_id = $2`, projectID, userID)
@@ -125,11 +142,16 @@ type gitHubError struct{ error }
 
 func (e gitHubError) Unwrap() error { return e.error }
 
-// token returns the user's GitHub credential, or answers 403 github_not_linked and returns false.
+// token returns the user's GitHub credential, or answers 403 github_not_linked, or 502 github_error for an expired
+// OAuth token GitHub could not refresh, and returns false.
 func (p *Projects) token(w http.ResponseWriter, r *http.Request) (string, bool) {
-	token, err := github.Token(r.Context(), p.DB, p.Secrets, accounts.UserID(r.Context()))
+	token, err := p.Credentials.Token(r.Context(), accounts.UserID(r.Context()))
 	if errors.Is(err, github.ErrNotLinked) {
 		httpx.Error(w, http.StatusForbidden, "github_not_linked", "Link your GitHub account in Settings first.")
+		return "", false
+	}
+	if errors.Is(err, github.ErrUnavailable) {
+		github.Fail(w, r, err)
 		return "", false
 	}
 	if err != nil {
@@ -146,6 +168,12 @@ func (p *Projects) remember(ctx context.Context, projectID, userID int64, permis
 		on conflict (project_id, user_id) do update set permission = excluded.permission, checked_at = excluded.checked_at`,
 		projectID, userID, permission)
 	return err
+}
+
+// unauthorized reports whether err is GitHub refusing the credential itself with 401.
+func unauthorized(err error) bool {
+	var ghErr *github.Error
+	return errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized
 }
 
 // hidden reports whether GitHub answered that the user cannot see the repository.

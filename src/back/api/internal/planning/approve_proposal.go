@@ -24,7 +24,7 @@ func (p *Planning) approveProposal(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	// Once GitHub has the issue, record its task even if the browser goes away.
 	r = r.WithContext(context.WithoutCancel(r.Context()))
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		pp, err := reviewing(ctx, tx, r, pl, "needs_review")
 		if err != nil {
 			return err

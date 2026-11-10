@@ -14,7 +14,7 @@ import (
 // editProposal changes a proposal waiting for review as a person wrote it, unless the plan changed since they loaded
 // its version. Approving it then records it as approved_edited.
 func (p *Planning) editProposal(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
@@ -29,7 +29,7 @@ func (p *Planning) editProposal(w http.ResponseWriter, r *http.Request) {
 	if !httpx.Decode(w, r, &in) {
 		return
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		pp, err := reviewing(ctx, tx, r, pl, "needs_review")
 		if err != nil {
 			return err

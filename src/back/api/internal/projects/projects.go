@@ -12,15 +12,14 @@ import (
 
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/github"
-	"gantt-stop-me/api/internal/secret"
 )
 
 // Projects serves POST and GET /api/projects and the access check every project route starts with.
 type Projects struct {
-	DB       *pgxpool.Pool
-	Accounts *accounts.Accounts // guards every route
-	Secrets  *secret.Box        // opens stored GitHub credentials
-	GitHub   *github.Client
+	DB          *pgxpool.Pool
+	Accounts    *accounts.Accounts  // guards every route
+	Credentials *github.Credentials // reads the users' GitHub tokens
+	GitHub      *github.Client
 }
 
 // Project is a repository added to the app, with the signed-in user's permission on it.

@@ -11,11 +11,11 @@ import (
 
 // draft ends the interview early: the agent's job becomes writing the doc from what it has.
 func (p *Planning) draft(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		if err := waiting(pl, "briefing"); err != nil {
 			return err
 		}

@@ -488,3 +488,30 @@ func TestLLMCheckRejectedCredentialRequeues(t *testing.T) {
 	}
 	f.expectExecutions(executionRow{"default", "queued", 0})
 }
+
+// The build and the scripts take long enough for another caller to refresh the owner's token, which retires the one
+// the execution started with, so the issue read before the first check reads the credential again.
+func TestLLMCheckAfterTheOwnersTokenWasRefreshed(t *testing.T) {
+	f := withLLM(t)
+	f.linkExpiring()
+	f.exec(`update github_links set expires_at = now() + interval '1 hour' where user_id = $1`, f.adaID)
+	f.tests(1, oneCheck)
+	f.llm.Reply(reported("pass", "It answered 400 invalid_email."))
+	f.ready()
+	hold := f.Runner.Hold(0, "prepare")
+	wait := f.workInBackground()
+	<-hold.Arrived()
+	f.exec(`update github_links set expires_at = now() + interval '1 minute' where user_id = $1`, f.adaID)
+	if _, err := f.Credentials.Token(context.Background(), f.adaID); err != nil || f.GitHub.Refreshes() != 1 {
+		t.Fatalf("the other caller's refresh: err = %v after %d refreshes, want one", err, f.GitHub.Refreshes())
+	}
+	hold.Release()
+	wait()
+
+	if got := f.checks(); len(got) != 1 || got[0].Status != "passed" {
+		t.Fatalf("results = %+v, want the check passed", got)
+	}
+	if f.pausedReason() != nil {
+		t.Fatalf("paused_reason = %v, want automation running", *f.pausedReason())
+	}
+}

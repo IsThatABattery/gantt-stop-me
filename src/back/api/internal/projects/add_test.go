@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 )
@@ -245,6 +246,54 @@ func TestAddProjectWithRevokedCredential(t *testing.T) {
 	env.GitHub.AddRepo("octo", "hello").Grant(env.LinkGitHub(ada, "ada-gh"), "push")
 	env.GitHub.Fail("GET /repos/{owner}/{name}", http.StatusUnauthorized) // the token expired or was revoked
 	add(env, ada, "https://github.com/octo/hello").Expect(http.StatusForbidden, "github_not_linked")
+}
+
+// expiringLink links ada with OAuth to a token GitHub lets push to octo/hello and that expires in d.
+func expiringLink(t *testing.T, env *apptest.Env, ada *http.Cookie, d time.Duration) {
+	t.Helper()
+	env.GitHub.ExpireTokens(8 * time.Hour)
+	env.GitHub.AddRepo("octo", "hello").Grant(env.LinkGitHubOAuth(ada, "ada-gh"), "push")
+	if _, err := env.DB.Exec(context.Background(), `update github_links set expires_at = $1`, time.Now().Add(d)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAddProjectRefreshesAnExpiringToken(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	expiringLink(t, env, ada, time.Minute)
+
+	add(env, ada, "https://github.com/octo/hello").Expect(http.StatusCreated, "")
+	if n := env.GitHub.Refreshes(); n != 1 {
+		t.Fatalf("%d refreshes, want 1", n)
+	}
+}
+
+func TestAddProjectWithAnExpiredTokenWhenGitHubIsDown(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	expiringLink(t, env, ada, -time.Minute)
+	env.GitHub.Fail("POST /login/oauth/access_token", http.StatusBadGateway)
+
+	add(env, ada, "https://github.com/octo/hello").Expect(http.StatusBadGateway, "github_error")
+	if n := count(t, env, "projects"); n != 0 {
+		t.Fatalf("%d projects stored, want none", n)
+	}
+}
+
+// GitHub retires a token as it refreshes it, so another request's refresh can beat the repository read: that is no
+// reason to link again.
+func TestAddProjectAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	expiringLink(t, env, ada, time.Hour)
+	refreshed := env.RefreshDuring("GET /repos/{owner}/{name}", ada)
+	add(env, ada, "https://github.com/octo/hello").Expect(http.StatusBadGateway, "github_error")
+	refreshed()
+	if n := count(t, env, "projects"); n != 0 {
+		t.Fatalf("%d projects stored, want none", n)
+	}
+	add(env, ada, "https://github.com/octo/hello").Expect(http.StatusCreated, "")
 }
 
 func TestAddProjectNeedsSession(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 )
@@ -53,6 +54,23 @@ func TestListProjects(t *testing.T) {
 	expire(t, env)
 	if got := listed(t, env.Do("GET", "/api/projects", nil, ada)); len(got) != 1 || got[0].Name != "hello" {
 		t.Fatalf("after losing other, ada's projects = %+v", got)
+	}
+}
+
+// GitHub retires a token as it refreshes it, so another request's refresh can beat a project's check: it is checked
+// again with the new token.
+func TestListProjectsAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	env := apptest.New(t)
+	ada := env.SignUp("ada@example.com", "correct horse")
+	expiringLink(t, env, ada, time.Hour)
+	env.AddProject(ada, "octo", "hello")
+	expire(t, env)
+	refreshed := env.RefreshDuring("GET /repositories/{id}", ada)
+	res := env.Do("GET", "/api/projects", nil, ada)
+	res.Expect(http.StatusOK, "")
+	refreshed()
+	if got := listed(t, res); len(got) != 1 || got[0].Name != "hello" || got[0].Permission != "write" {
+		t.Fatalf("ada's projects = %+v, want hello, checked again", got)
 	}
 }
 

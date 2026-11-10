@@ -8,6 +8,7 @@ export const keys = {
   assigned: ['assigned'] as const,
   board: (projectId: ID) => ['board', projectId] as const,
   task: (projectId: ID, taskId: ID) => ['task', projectId, taskId] as const,
+  githubOAuth: ['github', 'oauth'] as const,
   providers: ['providers'] as const,
   planning: ['planning'] as const,
   automation: (projectId: ID) => ['automation', projectId] as const,

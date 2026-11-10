@@ -173,7 +173,7 @@ _Avoid_: Claim, override
 ## Accounts
 
 **Linked GitHub Account**:
-The one GitHub account a user links, with OAuth or a personal access token. Every GitHub call made for them uses its credential, and it decides which projects they can see.
+The one GitHub account a user links, with OAuth or a personal access token, or by signing in with GitHub. Every GitHub call made for them uses its credential, and it decides which projects they can see.
 _Avoid_: Connected account, integration
 
 **Provider**:

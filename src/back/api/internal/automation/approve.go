@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"slices"
@@ -70,7 +71,8 @@ func (a *Automation) approve(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, ErrPaused):
 		httpx.Error(w, http.StatusConflict, "automation_paused",
 			"Automation is paused, so nothing merges. A write member can take over as its owner to unpause it.")
-	case errors.As(err, new(gitHubError)), errors.As(err, new(*github.Error)): // the latter from moving the task
+	// *github.Error from moving the task, and ErrUnavailable for the owner's OAuth token that GitHub could not refresh.
+	case errors.As(err, new(gitHubError)), errors.As(err, new(*github.Error)), errors.Is(err, github.ErrUnavailable):
 		github.Fail(w, r, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
@@ -93,7 +95,15 @@ func (a *Automation) merge(ctx context.Context, p projects.Project, taskID int64
 	if err != nil {
 		return run{}, err
 	}
-	defer func() { err = a.PauseIfRejected(ctx, p.ID, token, err) }() // every GitHub call below uses token
+	defer func() {
+		// Every GitHub call below uses token. A 401 that PauseIfRejected pauses nothing for is for a token the owner's
+		// credential has since replaced, as another caller's refresh does, or an earlier owner's: no verdict on the
+		// approver's credential, so it answers as a failed call, and trying again uses the credential in use now.
+		if err = a.PauseIfRejected(ctx, p.ID, token, err); rejected(err) {
+			// Not %w: github.Fail answers an error without GitHub's status with 502.
+			err = gitHubError{fmt.Errorf("automation: GitHub refused the owner's token, which is no longer the one in use: %v", err)}
+		}
+	}()
 	pr, err := a.GitHub.PullRequest(ctx, token, p.RepoID, ap.pr)
 	if err != nil {
 		return run{}, gitHubError{err}

@@ -32,3 +32,30 @@ func TestUnlink(t *testing.T) {
 func TestUnlinkNeedsSession(t *testing.T) {
 	apptest.New(t).Do("DELETE", "/api/github", nil).Expect(http.StatusUnauthorized, "unauthorized")
 }
+
+// A user made by signing in with GitHub has no password, so without the link they could not sign in.
+func TestUnlinkNeedsAPassword(t *testing.T) {
+	env := apptest.New(t)
+	session, token := env.SignInWithGitHub("octocat", "octo@example.com")
+	addMembership(t, env, session)
+
+	res := env.Do("DELETE", "/api/github", nil, session)
+	res.Expect(http.StatusConflict, "password_required")
+	var body struct{ Error struct{ Message string } }
+	res.JSON(&body)
+	if want := "Set a password before unlinking GitHub, so you can still sign in."; body.Error.Message != want {
+		t.Fatalf("message = %q, want %q", body.Error.Message, want)
+	}
+	if links := stored(t, env); len(links) != 1 || links[0].Token != token {
+		t.Fatalf("github_links = %+v, want the link untouched", links)
+	}
+	if n := memberships(t, env, session); n != 1 {
+		t.Fatalf("refused unlinking left %d project memberships, want 1", n)
+	}
+
+	env.Do("PATCH", "/api/me/password", map[string]string{"newPassword": "correct horse"}, session).Expect(http.StatusNoContent, "")
+	env.Do("DELETE", "/api/github", nil, session).Expect(http.StatusNoContent, "")
+	if links := stored(t, env); len(links) != 0 {
+		t.Fatalf("github_links = %+v, want none", links)
+	}
+}

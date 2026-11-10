@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
@@ -29,6 +29,130 @@ describe('sign in', () => {
     renderApp('/login', { signedIn: false })
     await signIn('ada@example.com', 'nope')
     expect(await screen.findByRole('alert')).toHaveTextContent('Wrong email or password.')
+  })
+})
+
+describe('Continue with GitHub', () => {
+  const github = () => screen.queryByRole('link', { name: 'Continue with GitHub' })
+
+  /** Until the OAuth query's answer has rendered */
+  async function settled(client: ReturnType<typeof renderApp>['client']) {
+    await waitFor(() => expect(client.getQueryState(keys.githubOAuth)?.status).not.toBe('pending'))
+    // The query tells its observers on a timer; let that render land.
+    await act(() => new Promise((done) => setTimeout(done, 0)))
+  }
+
+  it("signs in with GitHub when the server's OAuth app is set up, asking without a session", async () => {
+    const { client } = renderApp('/login', { signedIn: false })
+    expect(await screen.findByRole('link', { name: 'Continue with GitHub' })).toHaveAttribute('href', '/api/auth/github')
+    expect(screen.getByRole('button', { name: 'Continue with SSO' })).toBeInTheDocument()
+    expect(client.getQueryState(keys.githubOAuth)?.status).toBe('success')
+    expect(client.getQueryData(keys.me)).toBeNull()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it("offers no GitHub sign-in when the server's OAuth app isn't set up", async () => {
+    fake.githubOAuth = false
+    const { client } = renderApp('/login', { signedIn: false })
+    await screen.findByLabelText('Email')
+    await settled(client)
+    expect(github()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue with SSO' })).toBeInTheDocument()
+    expect(screen.getByText('or with email')).toBeInTheDocument()
+  })
+
+  it('holds its space, empty, until the server says whether OAuth is set up', async () => {
+    let finish: (() => void) | undefined
+    server.use(http.get('/api/github/oauth', () => new Promise<Response>((done) => (finish = () => done(HttpResponse.json({ enabled: true }))))))
+    renderApp('/login', { signedIn: false })
+    await screen.findByLabelText('Email')
+    await waitFor(() => expect(finish).toBeDefined())
+    expect(github()).not.toBeInTheDocument()
+    const held = screen.getByRole('link', { name: 'Continue with GitHub', hidden: true }).parentElement
+    expect(held).toHaveClass('invisible')
+    expect(held).toHaveAttribute('inert')
+    act(() => finish?.())
+    expect(await screen.findByRole('link', { name: 'Continue with GitHub' })).toBeInTheDocument()
+    expect(held).not.toHaveClass('invisible')
+    expect(held).not.toHaveAttribute('inert')
+  })
+
+  it("offers it when it can't tell whether OAuth is set up", async () => {
+    failNext('GET /api/github/oauth', { status: 500, code: 'internal', message: 'boom' })
+    const { client } = renderApp('/login', { signedIn: false })
+    expect(await screen.findByRole('link', { name: 'Continue with GitHub' })).toHaveAttribute('href', '/api/auth/github')
+    await settled(client)
+    expect(github()).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  for (const [outcome, text] of [
+    ['denied', "You cancelled on GitHub. You're not signed in."],
+    ['error', "GitHub sign-in didn't work. Try again, or sign in with your email."],
+    ['unavailable', "GitHub sign-in isn't set up on this server. Sign in with your email."],
+    ['account_exists', 'An account already uses your GitHub email. Sign in with its password, then link GitHub in Settings.'],
+    ['no_email', 'Your GitHub account has no verified email. Verify one on GitHub, or sign up with your email.'],
+    ['ambiguous', 'More than one account here is linked to that GitHub account. Sign in with your email.'],
+  ]) {
+    it(`says why when GitHub sends the person back with ?github=${outcome}`, async () => {
+      // It sends unavailable only while OAuth isn't set up.
+      if (outcome === 'unavailable') fake.githubOAuth = false
+      const { client } = renderApp(`/login?github=${outcome}`, { signedIn: false })
+      expect(await screen.findByRole('status')).toHaveTextContent(text)
+      await settled(client)
+      expect(screen.getByRole('status')).toHaveTextContent(text)
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  }
+
+  it('says nothing for an outcome it does not know', async () => {
+    for (const outcome of ['toString', 'linked', '']) {
+      const { client, unmount } = renderApp(`/login?github=${outcome}`, { signedIn: false })
+      await screen.findByRole('link', { name: 'Continue with GitHub' })
+      await settled(client)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it("drops the note that OAuth isn't set up once the server says it is", async () => {
+    const { client } = renderApp('/login?github=unavailable', { signedIn: false })
+    await settled(client)
+    expect(github()).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('still signs in with email and password under a note', async () => {
+    const { router } = renderApp('/login?github=account_exists', { signedIn: false })
+    await signIn('ada@example.com', 'correct horse')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    expect(fake.signedInId).toBe(1)
+  })
+
+  it('refuses a password for an account made with GitHub, as a wrong one', async () => {
+    fake.accounts.push({ id: 2, email: 'grace@example.com', password: null })
+    renderApp('/login', { signedIn: false })
+    await signIn('grace@example.com', 'anything at all')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Wrong email or password.')
+    expect(fake.signedInId).toBeNull()
+  })
+
+  it('offers to sign up with GitHub, which links it at once', async () => {
+    renderApp('/signup', { signedIn: false })
+    expect(await screen.findByRole('link', { name: 'Continue with GitHub' })).toHaveAttribute('href', '/api/auth/github')
+    expect(screen.getByText('Signs you up with your GitHub email, and links GitHub at once.')).toBeInTheDocument()
+    expect(screen.getByText('or with email')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument()
+  })
+
+  it("offers sign up with email alone when the server's OAuth app isn't set up", async () => {
+    fake.githubOAuth = false
+    const { client } = renderApp('/signup', { signedIn: false })
+    await screen.findByLabelText('Email')
+    await settled(client)
+    expect(github()).not.toBeInTheDocument()
+    expect(screen.queryByText(/links GitHub at once/)).not.toBeInTheDocument()
+    expect(screen.queryByText('or with email')).not.toBeInTheDocument()
   })
 })
 
@@ -63,6 +187,8 @@ describe('session ends mid-use', () => {
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Use another account' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    // An account made with GitHub has no password: Continue with GitHub must come up without touching the page.
+    expect(await screen.findByRole('link', { name: 'Continue with GitHub' })).not.toHaveAttribute('aria-hidden')
   })
 
   it('keeps the drawer under it on Esc', async () => {

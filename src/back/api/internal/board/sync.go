@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -19,14 +20,16 @@ import (
 // and its issue list can lag behind an update.
 const lookback = 2 * time.Minute
 
-// syncIfDue runs sync for a route that serves the project's cached tasks. Only when GitHub no longer accepts the
-// credential does it answer the request itself and return false.
+// syncIfDue runs sync for a route that serves the project's cached tasks, with token, the caller's credential. Only
+// when GitHub no longer accepts the credential does it answer the request itself and return false: a 401 for a token
+// another request has replaced meanwhile, by refreshing it, is an ordinary failed sync.
 func (b *Board) syncIfDue(w http.ResponseWriter, r *http.Request, p projects.Project, token string) bool {
 	// Not cancelled with the request: a long read, such as a backfill a proxy times out, still finishes and saves its work.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Minute)
 	defer cancel()
 	if err := b.sync(ctx, p, token); err != nil {
-		if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
+		if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized &&
+			!b.Projects.Credentials.Replaced(ctx, accounts.UserID(ctx), token) {
 			github.Fail(w, r, err) // a dead credential sends the user to Settings, as on every other project route
 			return false
 		}

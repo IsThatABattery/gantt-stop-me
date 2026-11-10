@@ -78,6 +78,20 @@ func TestCreateTaskWhenGitHubFails(t *testing.T) {
 	}
 }
 
+// GitHub retires a token as it refreshes it, so another request's refresh can beat a call made with it: that is no
+// reason to link again.
+func TestCreateTaskAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	f := setup(t)
+	f.oauth()
+	refreshed := f.RefreshDuring("POST /repositories/{id}/issues", f.ada)
+	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Lost"}, f.ada).Expect(http.StatusBadGateway, "github_error")
+	refreshed()
+	if n := len(f.board().Tasks); n != 0 {
+		t.Fatalf("%d tasks stored", n)
+	}
+	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Again"}, f.ada).Expect(http.StatusCreated, "")
+}
+
 func TestCreateTaskNeedsSession(t *testing.T) {
 	f := setup(t)
 	f.Do("POST", f.path("/tasks"), map[string]string{"title": "Nope"}).Expect(http.StatusUnauthorized, "unauthorized")

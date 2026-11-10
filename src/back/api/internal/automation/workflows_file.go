@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
@@ -53,7 +54,7 @@ func (a *Automation) showWorkflows(w http.ResponseWriter, r *http.Request) {
 	}
 	content, sha, err := a.GitHub.DefaultWorkflows(r.Context(), token, p.RepoID)
 	if err != nil {
-		github.Fail(w, r, err)
+		a.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 		return
 	}
 	httpx.JSON(w, http.StatusOK, newWorkflowsFile(content, sha))
@@ -88,7 +89,7 @@ func (a *Automation) saveWorkflows(w http.ResponseWriter, r *http.Request) {
 	branch := fmt.Sprintf("chore/gantt-workflows-%d-%x", time.Now().Unix(), nonce)
 	base, err := a.GitHub.CreateBranch(r.Context(), token, p.RepoID, branch)
 	if err != nil {
-		github.Fail(w, r, err)
+		a.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 		return
 	}
 	// A save that fails takes its branch with it, so nothing is left saved.
@@ -107,14 +108,14 @@ func (a *Automation) saveWorkflows(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		drop()
-		github.Fail(w, r, err)
+		a.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 		return
 	}
 	number, url, err := a.GitHub.CreatePullRequest(r.Context(), token, p.RepoID, "Update "+github.WorkflowsPath,
 		"Changes the workflows that test runs build, from the board's Automation page.", branch, base)
 	if err != nil {
 		drop()
-		github.Fail(w, r, err)
+		a.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 		return
 	}
 	// The default branch keeps its file until the pull request merges.

@@ -59,3 +59,43 @@ func TestMigrateAfterTheFirst005(t *testing.T) {
 		t.Fatalf("backfill pending %v (%v), want the label backfill set", pending, err)
 	}
 }
+
+// Sessions from before 020 have no start recorded, and each started 30 days before it expires, not when 020 ran: else
+// every one would be fresh enough to set a first password.
+func TestMigrate020DatesOldSessions(t *testing.T) {
+	db := apptest.EmptyDB(t)
+	ctx := context.Background()
+	names, err := fs.Glob(migrations.FS, "*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := fstest.MapFS{}
+	for _, name := range names {
+		if name >= "020" {
+			continue
+		}
+		data, err := fs.ReadFile(migrations.FS, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old[name] = &fstest.MapFile{Data: data}
+	}
+	if err := store.Migrate(ctx, db, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `
+		with u as (insert into users (email) values ('octo@example.com') returning id)
+		insert into sessions (id, user_id, expires_at) select 'token-hash', id, now() + interval '29 days' from u`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Migrate(ctx, db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	var hours float64
+	if err := db.QueryRow(ctx, `select extract(epoch from now() - created_at) / 3600 from sessions`).Scan(&hours); err != nil {
+		t.Fatal(err)
+	}
+	if hours < 23.9 || hours > 24.1 {
+		t.Fatalf("the session started %.2f hours ago, want 24: 30 days before it expires", hours)
+	}
+}

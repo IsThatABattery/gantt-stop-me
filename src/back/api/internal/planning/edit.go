@@ -12,7 +12,7 @@ import (
 
 // edit changes the doc's sections as a person wrote them, unless the plan changed since they loaded its version.
 func (p *Planning) edit(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
@@ -23,7 +23,7 @@ func (p *Planning) edit(w http.ResponseWriter, r *http.Request) {
 	if !httpx.Decode(w, r, &in) {
 		return
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		if err := waiting(pl, "briefing", "needs_review"); err != nil {
 			return err
 		}

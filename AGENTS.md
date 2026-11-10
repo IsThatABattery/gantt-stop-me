@@ -27,6 +27,8 @@ Run and Debug entries:
 - **Web**: Vite on :5173, proxying `/api` to :8080, opened in your default browser.
 - **Web (Chrome debug)**: as Web, with Chrome attached for breakpoints. Needs Chrome on the host.
 
+**API**, **Web** and **Web (Chrome debug)** set `PUBLIC_URL=http://localhost:5173` in `.vscode/launch.json`, and **API** also sets `RUNNER_URL` and the GitHub OAuth App (from the container's `DEV_GITHUB_*`). The container's environment sets none of them, because its shell drives the host's Docker and `docker compose up` there would pass them to the host stack. Started by hand in the container, Vite needs `PUBLIC_URL=http://localhost:5173 npm run dev`, and the API the variables its entry sets.
+
 ## Branches
 
 Every branch pushed to GitHub, so every PR's branch, is named `<type>/<slug>`:

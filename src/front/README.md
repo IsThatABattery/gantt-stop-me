@@ -2,7 +2,7 @@
 
 React + TypeScript (Vite), React Router, TanStack Query and Tailwind CSS v4. Its product context is [`PRODUCT.md`](PRODUCT.md) and its design system is [`DESIGN.md`](DESIGN.md), both beside this file.
 
-Every screen runs on the Go API in `src/back/api` through `/api`: sign-in and sign-up, recent and all projects, adding a project by repository URL, the board, the Backlog list, the task drawer with its test runs, creating and editing tasks, planning a feature, a project's automation, and Settings (password, theme, GitHub link, LLM providers, planning agents). Features not built yet are in [`docs/gaps.md`](../../docs/gaps.md).
+Every screen runs on the Go API in `src/back/api` through `/api`: sign-in and sign-up, with email or GitHub, recent and all projects, adding a project by repository URL, the board, the Backlog list, the task drawer with its test runs, creating and editing tasks, planning a feature, a project's automation, and Settings (password, theme, GitHub link, LLM providers, planning agents). Features not built yet are in [`docs/gaps.md`](../../docs/gaps.md).
 
 ## Run
 
@@ -16,11 +16,14 @@ npm test         # Vitest + Testing Library against a fake API (npm run test:wat
 
 From the repo root, `docker compose run --rm web-test` runs the tests in Docker, `docker compose run --rm web-test npm run lint` runs the linter, and `docker compose build web` typechecks and builds, so the host needs no Node.
 
-`npm run dev` needs something answering on `localhost:8080`: the compose stack (`docker compose up --build` from the repo root, where nginx forwards `/api` to the API) or the dev container's **API** launch entry. The Vite proxy sends `Origin: http://localhost:8080` on proxied writes, so they pass the API's Origin check while `PUBLIC_URL` is `http://localhost:8080`, its default.
+`npm run dev` needs something answering on `localhost:8080`: on the host, the compose stack (`docker compose up --build` from the repo root, where nginx forwards `/api` to the API); in the dev container, its **API** launch entry. The Vite proxy sends `PUBLIC_URL` as the `Origin` of proxied writes, or `http://localhost:8080` when it is unset, and the API refuses writes whose `Origin` isn't its own `PUBLIC_URL` (`403 bad_origin`). So match the API:
+
+- Against the compose stack, leave it unset: the stack's `PUBLIC_URL` is `http://localhost:8080`.
+- Against the dev container's **API** entry, run Vite in the container: its **Web** entry, or `PUBLIC_URL=http://localhost:5173 npm run dev` in its terminal. The **API**, **Web** and **Web (Chrome debug)** entries set that value (`.vscode/launch.json`), so the GitHub OAuth callback and the redirect after linking or signing in come back to Vite. Not on the host: VS Code forwards the container's :5173, so a host Vite lands on another port, where GitHub sign-in can't come back.
 
 In Docker, `docker compose up --build web` serves the production build at http://localhost:8080, with nginx proxying `/api`.
 
-To use the board you need an account (sign up at `/signup`) and a linked GitHub account (Settings → GitHub, with OAuth or a personal access token).
+To use the board you need an account (sign up at `/signup`) and a linked GitHub account (Settings → GitHub, with OAuth or a personal access token). Continue with GitHub, on sign in and sign up, does both at once: the account it makes has no password until Settings → Account sets one, and GitHub can't be unlinked until then. OAuth needs the server's OAuth App: [Link GitHub](../../README.md#link-github) in the root README sets one up.
 
 ## Data
 
@@ -31,7 +34,7 @@ To use the board you need an account (sign up at `/signup`) and a linked GitHub 
 | `src/data/types.ts` | `ID`, `ColumnKey` and `COLUMN_ORDER`, shared by the API types and the views |
 | `src/data/errors.ts` | `ApiError`, `NotFoundError` (404), `ConflictError` (409); `errorCode(e)` reads the API's code |
 | `src/data/queryClient.ts` | The query client. Any 401 clears the signed-in user, and a dialog asks them to sign in again over the page |
-| `src/data/session.ts` | `useMe()` from `GET /api/me`, sign in, sign up, sign out |
+| `src/data/session.ts` | `useMe()` from `GET /api/me`, sign in, sign up, Continue with GitHub, sign out |
 | `src/data/keys.ts` | The query keys views share, so a write in one view refreshes another |
 | `src/data/views/addProject.ts` | Add a project by repository URL, and the projects the user has opened |
 | `src/data/views/board.ts` | The project (`useProject`), its board, and optimistic moves |
@@ -40,7 +43,7 @@ To use the board you need an account (sign up at `/signup`) and a linked GitHub 
 | `src/data/views/runs.ts` | A task's test runs, approve and merge, retest, request changes |
 | `src/data/views/workflows.ts` | A project's workflows file, `.gantt/workflows.yml` |
 | `src/data/views/plans.ts` | Planning a feature: plans, the interview, the doc and the proposed tasks |
-| `src/data/views/settings.ts` | Password, GitHub link, LLM providers |
+| `src/data/views/settings.ts` | Password, GitHub link and whether the server has GitHub OAuth, LLM providers |
 | `src/data/views/agentSettings.ts` | Planning agents (`/api/me/planning`) and a project's automation agents |
 
 Pages call hooks from these modules, never `api()` directly. API errors arrive as `ApiError` with the API's `code`, so a form can put each refusal on its field.
@@ -99,7 +102,7 @@ To add a theme:
 
 | Path | View |
 | --- | --- |
-| `/login`, `/signup` | Sign in, create an account |
+| `/login`, `/signup` | Sign in, create an account, with email or Continue with GitHub. `/login?github=` says why GitHub didn't sign the user in |
 | `/` | Recent projects (the 6 opened last), or Add a project when GitHub isn't linked or none have been opened |
 | `/projects` | Every project the user has opened and can still see |
 | `/projects/new` | Add a project by repository URL |

@@ -27,7 +27,7 @@ func TestLink(t *testing.T) {
 	want := map[string]string{
 		"client_id":    env.Config.GitHubClientID,
 		"redirect_uri": apptest.PublicURL + "/api/github/callback",
-		"scope":        "repo",
+		"scope":        "repo workflow",
 	}
 	for k, v := range want {
 		if q.Get(k) != v {
@@ -47,11 +47,27 @@ func TestLink(t *testing.T) {
 	}
 }
 
-func TestLinkNeedsSession(t *testing.T) {
-	apptest.New(t).Do("GET", "/api/github/link", nil).Expect(http.StatusUnauthorized, "unauthorized")
+func TestLinkSignedOut(t *testing.T) {
+	env := apptest.New(t)
+	for name, cookies := range map[string][]*http.Cookie{
+		"no session":      nil,
+		"expired session": {{Name: "session", Value: "expired"}},
+	} {
+		// Outside t.Run, because env.Do fails the parent test.
+		res := env.Do("GET", "/api/github/link", nil, cookies...)
+		t.Run(name, func(t *testing.T) {
+			res.Expect(http.StatusFound, "")
+			if loc, want := res.Header.Get("Location"), apptest.PublicURL+"/settings?github=error#github"; loc != want {
+				t.Fatalf("redirect to %s, want %s", loc, want)
+			}
+			if c := res.Cookie("github_state"); c != nil && c.MaxAge >= 0 {
+				t.Fatalf("signed-out link set the state cookie %+v", c)
+			}
+		})
+	}
 }
 
-func TestLinkNeedsOAuthConfigured(t *testing.T) {
+func TestLinkWhenOAuthIsNotSetUp(t *testing.T) {
 	env := apptest.New(t)
 	session := env.SignUp("ada@example.com", "correct horse")
 	for _, unset := range []func(*app.Config){
@@ -64,7 +80,10 @@ func TestLinkNeedsOAuthConfigured(t *testing.T) {
 		t.Cleanup(env.Server.Close)
 
 		res := env.Do("GET", "/api/github/link", nil, session)
-		res.Expect(http.StatusServiceUnavailable, "oauth_not_configured")
+		res.Expect(http.StatusFound, "")
+		if loc, want := res.Header.Get("Location"), apptest.PublicURL+"/settings?github=unavailable#github"; loc != want {
+			t.Fatalf("redirect to %s, want %s", loc, want)
+		}
 		if res.Cookie("github_state") != nil {
 			t.Fatal("unconfigured link set a state cookie")
 		}

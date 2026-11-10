@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
@@ -93,7 +94,7 @@ func (b *Board) move(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, errInvalidBefore):
 		httpx.Error(w, http.StatusBadRequest, "invalid_before_task", "beforeTaskId must be another task in the target column.")
 	case errors.As(err, new(GitHubError)), errors.As(err, new(*github.Error)): // the latter from the rules
-		github.Fail(w, r, err)
+		b.Projects.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
 	default:

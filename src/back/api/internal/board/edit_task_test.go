@@ -104,6 +104,18 @@ func TestEditTaskWhenGitHubFails(t *testing.T) {
 	}
 }
 
+func TestEditTaskAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	f := setup(t, "One")
+	f.oauth()
+	id, _ := f.task(1)
+	refreshed := f.RefreshDuring("PATCH /repositories/{id}/issues/{number}", f.ada)
+	f.Do("PATCH", f.path("/tasks/%d", id), map[string]string{"title": "Lost"}, f.ada).Expect(http.StatusBadGateway, "github_error")
+	refreshed()
+	if _, s := f.task(1); s.Title != "One" {
+		t.Fatalf("cached title = %q after GitHub refused the edit, want One", s.Title)
+	}
+}
+
 // The card takes its tests from the body GitHub answers.
 func TestEditTaskTakesTests(t *testing.T) {
 	f := setup(t, "One")

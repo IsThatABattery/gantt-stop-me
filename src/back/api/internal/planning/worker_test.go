@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/llm/llmtest"
 )
@@ -112,6 +114,75 @@ func TestTurnWithoutAccessOrKey(t *testing.T) {
 			}
 			if n := len(f.llm.Chats()); n != 0 {
 				t.Fatalf("%d chat requests", n)
+			}
+		})
+	}
+}
+
+// relinkExpiring relinks ada with OAuth to a token that GitHub lets push and that expires in 8 hours, and returns it.
+func (f *fixture) relinkExpiring() string {
+	f.t.Helper()
+	f.GitHub.ExpireTokens(8 * time.Hour)
+	token := f.LinkGitHubOAuth(f.ada, "ada")
+	f.repo.Grant(token, "push")
+	return token
+}
+
+// refresh is another caller refreshing ada's token as it nears expiry, which GitHub retires as it answers. It returns
+// the new token. It may run outside the test's goroutine, so it reports failure as an error.
+func (f *fixture) refresh() (string, error) {
+	ctx := context.Background()
+	var id int64
+	if err := f.DB.QueryRow(ctx, `update github_links set expires_at = now() + interval '1 minute'
+		where user_id = (select id from users where email = 'ada@example.com') returning user_id`).Scan(&id); err != nil {
+		return "", err
+	}
+	return f.Credentials.Token(ctx, id)
+}
+
+// GitHub retires a token as another caller refreshes it, so a 401 for the token the turn read is checked with the
+// token read again, and lost access only when GitHub refuses that one too.
+func TestTurnAfterAnotherCallerRefreshedTheToken(t *testing.T) {
+	const lost = "The plan's creator can no longer see the repository on GitHub. Once they can, someone retries."
+	for _, c := range []struct {
+		name      string
+		rejectNew bool
+	}{{"the new token works", false}, {"GitHub refuses the new token too", true}} {
+		t.Run(c.name, func(t *testing.T) {
+			f := setup(t)
+			old := f.relinkExpiring()
+			pl := f.start("Exports", "Let admins export the board as CSV.")
+			if _, err := f.DB.Exec(context.Background(), `update project_members set checked_at = now() - interval '5 minutes 1 second'`); err != nil {
+				t.Fatal(err)
+			}
+			// While GitHub serves the turn's access check, another caller refreshes the token it was made with.
+			var once sync.Once
+			var refreshed string
+			var err error
+			f.GitHub.Before("GET /repositories/{id}", func() {
+				once.Do(func() {
+					refreshed, err = f.refresh()
+					if c.rejectNew {
+						f.GitHub.Fail("GET /repositories/{id}", http.StatusUnauthorized)
+					}
+				})
+			})
+			f.llm.Reply(reply(ask("Who exports?")))
+			f.work()
+			if err != nil || refreshed == "" || refreshed == old {
+				t.Fatalf("the other caller's refresh: Token = %q, %v; want a new token", refreshed, err)
+			}
+			f.GitHub.Fail("GET /repositories/{id}", 0)
+
+			pl = f.plan(pl.ID)
+			if c.rejectNew {
+				if pl.Pending != nil || orNull(pl.Error) != lost || len(f.llm.Chats()) != 0 {
+					t.Fatalf("plan %+v after %d chat requests, want lost access and none", pl, len(f.llm.Chats()))
+				}
+				return
+			}
+			if pl.Error != nil || len(pl.Messages) != 1 || pl.Messages[0].Text != "Who exports?" {
+				t.Fatalf("plan %+v, want the turn run with the refreshed token", pl)
 			}
 		})
 	}

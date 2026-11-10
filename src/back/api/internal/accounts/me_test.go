@@ -129,3 +129,35 @@ func TestEditMeRefusesBadNames(t *testing.T) {
 	}
 	env.Do("PATCH", "/api/me", map[string]any{"name": "Ada"}).Expect(http.StatusUnauthorized, "unauthorized")
 }
+
+func TestMeHasPassword(t *testing.T) {
+	env := apptest.New(t)
+	hasPassword := func(session *http.Cookie) bool {
+		t.Helper()
+		res := env.Do("GET", "/api/me", nil, session)
+		res.Expect(http.StatusOK, "")
+		var me struct{ HasPassword *bool }
+		res.JSON(&me)
+		if me.HasPassword == nil {
+			t.Fatalf("me = %s, want hasPassword", res.Body)
+		}
+		return *me.HasPassword
+	}
+
+	if !hasPassword(env.SignUp("bob@example.com", "correct horse")) {
+		t.Fatal("hasPassword = false for an account signed up with one")
+	}
+	ada, _ := env.SignInWithGitHub("octocat", "ada@example.com")
+	if hasPassword(ada) {
+		t.Fatal("hasPassword = true for an account made by signing in with GitHub")
+	}
+	env.Do("PATCH", "/api/me/password", map[string]string{"newPassword": "correct horse"}, ada).Expect(http.StatusNoContent, "")
+	if !hasPassword(ada) {
+		t.Fatal("hasPassword = false once set")
+	}
+	var me struct{ HasPassword bool }
+	env.Do("PATCH", "/api/me", map[string]any{"name": "Ada"}, ada).JSON(&me)
+	if !me.HasPassword {
+		t.Fatal("PATCH /api/me answered hasPassword = false")
+	}
+}

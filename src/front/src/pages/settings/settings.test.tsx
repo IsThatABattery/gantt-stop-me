@@ -1,8 +1,12 @@
+import { focusManager } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { keys } from '../../data/keys'
 import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
+import { server } from '../../test/server'
 import { setTheme } from '../../theme/theme'
 import { themes } from '../../theme/themes'
 
@@ -47,6 +51,84 @@ describe('account', () => {
     expect(await s.findByText('Password changed')).toBeInTheDocument()
     expect(fake.accounts[0].password).toBe('a new password')
     expect(fake.requests.filter((r) => r.method === 'PATCH').at(-1)?.body).toEqual({ currentPassword: 'correct horse', newPassword: 'a new password' })
+  })
+
+  it('sets a password for an account made by signing in with GitHub, with no current one, then unlinks', async () => {
+    fake.accounts[0].password = null
+    fake.github = { login: 'ada', kind: 'oauth' }
+    await openSettings()
+    const s = within(section('Account'))
+    expect(s.getByRole('heading', { name: 'Set a password' })).toBeInTheDocument()
+    expect(s.getByText('You sign in with GitHub. A password lets you sign in with your email too.')).toBeInTheDocument()
+    expect(s.queryByLabelText('Current password')).not.toBeInTheDocument()
+
+    await userEvent.click(s.getByRole('button', { name: 'Set a password' }))
+    expect(s.getByText('Use 8 or more characters.')).toBeInTheDocument()
+    expect(s.getByLabelText('New password')).toHaveFocus()
+    expect(fake.requests.some((r) => r.method === 'PATCH')).toBe(false)
+
+    await userEvent.type(s.getByLabelText('New password'), 'a new password')
+    await userEvent.type(s.getByLabelText('Confirm new password'), 'a new password')
+    await userEvent.click(s.getByRole('button', { name: 'Set a password' }))
+    expect(await s.findByText('Password set')).toBeInTheDocument()
+    expect(fake.requests.filter((r) => r.method === 'PATCH').at(-1)?.body).toEqual({ newPassword: 'a new password' })
+    expect(fake.accounts[0].password).toBe('a new password')
+
+    // It has one now: the form changes it, and GitHub can be unlinked.
+    expect(await s.findByLabelText('Current password')).toHaveValue('')
+    expect(s.getByRole('button', { name: 'Change password' })).toBeInTheDocument()
+    expect(s.getByText('Password set')).toBeInTheDocument()
+    const github = within(section('GitHub'))
+    await userEvent.click(github.getByRole('button', { name: 'Unlink' }))
+    await userEvent.click(github.getByRole('button', { name: 'Unlink GitHub' }))
+    expect(await github.findByRole('link', { name: 'Link with GitHub' })).toBeInTheDocument()
+    expect(fake.github).toBeNull()
+  })
+
+  it('turns into the change form when another session set a password first', async () => {
+    fake.accounts[0].password = null
+    await openSettings()
+    const s = within(section('Account'))
+    fake.accounts[0].password = 'set elsewhere' // another device set one; this page still says there is none
+    await userEvent.type(s.getByLabelText('New password'), 'a new password')
+    await userEvent.type(s.getByLabelText('Confirm new password'), 'a new password')
+    await userEvent.click(s.getByRole('button', { name: 'Set a password' }))
+    expect(await s.findByLabelText('Current password')).toHaveAttribute('aria-invalid', 'true')
+    expect(s.getByText('Your current password is wrong.')).toBeInTheDocument()
+    expect(s.getByRole('button', { name: 'Change password' })).toBeInTheDocument()
+    expect(fake.accounts[0].password).toBe('set elsewhere')
+  })
+
+  it('asks to sign in with GitHub again when the session is too old to set a password, and sets none', async () => {
+    fake.accounts[0].password = null
+    fake.github = { login: 'ada', kind: 'oauth' }
+    fake.sessionFresh = false // signed in with GitHub more than 10 minutes ago
+    await openSettings()
+    const s = within(section('Account'))
+    await userEvent.type(s.getByLabelText('New password'), 'a new password')
+    await userEvent.type(s.getByLabelText('Confirm new password'), 'a new password')
+    await userEvent.click(s.getByRole('button', { name: 'Set a password' }))
+
+    await s.findByText('Sign in with GitHub again, then set your password.')
+    const status = s.getByRole('status')
+    expect(status).toHaveTextContent('Sign in with GitHub again, then set your password.')
+    expect(within(status).getByRole('link', { name: 'Continue with GitHub' })).toHaveAttribute('href', '/api/auth/github?next=/settings')
+    expect(s.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'false')
+    expect(s.getByRole('heading', { name: 'Set a password' })).toBeInTheDocument()
+    expect(fake.accounts[0].password).toBeNull()
+  })
+
+  it("shows the API's refusal of a password being set on its field", async () => {
+    fake.accounts[0].password = null
+    await openSettings()
+    const s = within(section('Account'))
+    failNext('PATCH /api/me/password', { status: 400, code: 'weak_password', message: 'That password is too common.' })
+    await userEvent.type(s.getByLabelText('New password'), 'password')
+    await userEvent.type(s.getByLabelText('Confirm new password'), 'password')
+    await userEvent.click(s.getByRole('button', { name: 'Set a password' }))
+    expect(await s.findByText('That password is too common.')).toBeInTheDocument()
+    expect(s.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'true')
+    expect(fake.accounts[0].password).toBeNull()
   })
 })
 
@@ -105,6 +187,37 @@ describe('GitHub', () => {
     expect(fake.github).toBeNull()
   })
 
+  it('asks an account without a password to set one before unlinking, still offering to link again', async () => {
+    fake.accounts[0].password = null
+    fake.github = { login: 'ada', kind: 'oauth' }
+    const { router } = await openSettings()
+    const s = within(section('GitHub'))
+    expect(s.getByText('with a GitHub sign-in')).toBeInTheDocument()
+    expect(await s.findByRole('link', { name: 'Link again with GitHub' })).toHaveAttribute('href', '/api/github/link')
+    expect(s.queryByRole('button', { name: 'Unlink' })).not.toBeInTheDocument()
+    expect(s.getByText(/before unlinking, so/)).toHaveTextContent('Set a password before unlinking, so you can still sign in.')
+
+    await userEvent.click(s.getByRole('link', { name: 'Set a password' }))
+    expect(router.state.location.hash).toBe('#account')
+    expect(router.state.location.pathname).toBe('/settings')
+  })
+
+  it("says so when the API won't unlink because the account has no password, and catches up", async () => {
+    await openSettings()
+    const s = within(section('GitHub'))
+    await userEvent.click(s.getByRole('button', { name: 'Unlink' }))
+    // The API knows what this page doesn't yet.
+    fake.accounts[0].password = null
+    await userEvent.click(s.getByRole('button', { name: 'Unlink GitHub' }))
+
+    expect(await s.findByRole('alert')).toHaveTextContent('Set a password before unlinking GitHub, so you can still sign in.')
+    expect(s.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(await s.findByText(/before unlinking, so/)).toBeInTheDocument()
+    expect(s.queryByRole('button', { name: 'Unlink' })).not.toBeInTheDocument()
+    expect(within(section('Account')).getByRole('heading', { name: 'Set a password' })).toBeInTheDocument()
+    expect(fake.github).not.toBeNull()
+  })
+
   it('cancels the unlink confirm with Esc', async () => {
     await openSettings()
     const s = within(section('GitHub'))
@@ -153,6 +266,187 @@ describe('GitHub', () => {
     await userEvent.click(s.getByRole('button', { name: 'Link token' }))
     expect(await s.findByText('octo')).toBeInTheDocument()
     expect(s.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['error', "GitHub didn't link."],
+    ['denied', 'You cancelled on GitHub.'],
+  ])('says so when linking again comes back with %s, and the old link stays', async (outcome, text) => {
+    fake.github = { login: 'ada', kind: 'oauth' }
+    await openSettings(`/settings?github=${outcome}`)
+    const s = within(section('GitHub'))
+    expect(s.getByRole('status')).toHaveTextContent(text)
+    expect(s.getByText('ada')).toBeInTheDocument()
+  })
+
+  describe.each([
+    ['taken', 'That GitHub account is linked to another account here. Nothing changed.'],
+    ['password_required', 'Set a password before linking another GitHub account, so you can still sign in.'],
+  ])('when linking with GitHub comes back with %s', (outcome, text) => {
+    it('says so, and the old link stays', async () => {
+      fake.accounts[0].password = null
+      fake.github = { login: 'ada', kind: 'oauth' }
+      await openSettings(`/settings?github=${outcome}`)
+      const s = within(section('GitHub'))
+      expect(s.getByRole('status')).toHaveTextContent(text)
+      expect(s.getByText('ada')).toBeInTheDocument()
+      expect(s.getByText('with a GitHub sign-in')).toBeInTheDocument()
+    })
+
+    it('says so with none linked, until linking another way', async () => {
+      fake.github = null
+      await openSettings(`/settings?github=${outcome}`)
+      const s = within(section('GitHub'))
+      expect(s.getByRole('status')).toHaveTextContent(text)
+      expect(await s.findByRole('link', { name: 'Link with GitHub' })).toBeInTheDocument()
+      await userEvent.type(s.getByLabelText('Or use a personal access token'), 'ghp_good')
+      await userEvent.click(s.getByRole('button', { name: 'Link token' }))
+      expect(await s.findByText('octo')).toBeInTheDocument()
+      expect(s.queryByRole('status')).not.toBeInTheDocument()
+    })
+  })
+
+  it('says so when the user cancelled on GitHub', async () => {
+    fake.github = null
+    await openSettings('/settings?github=denied')
+    const s = within(section('GitHub'))
+    expect(s.getByRole('status')).toHaveTextContent('You cancelled on GitHub. Nothing was linked.')
+    expect(await s.findByRole('link', { name: 'Link with GitHub' })).toBeInTheDocument()
+  })
+
+  it("drops the note that OAuth isn't set up once the server says it is", async () => {
+    fake.github = null
+    await openSettings('/settings?github=unavailable')
+    const s = within(section('GitHub'))
+    expect(await s.findByRole('link', { name: 'Link with GitHub' })).toBeInTheDocument()
+    expect(s.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('asks the server again on focus, so OAuth set up meanwhile shows the button', async () => {
+    fake.github = null
+    fake.githubOAuth = false
+    await openSettings()
+    const s = within(section('GitHub'))
+    await s.findByText("GitHub sign-in isn't set up on this server.")
+    fake.githubOAuth = true
+    try {
+      act(() => {
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+      })
+      expect(await s.findByRole('link', { name: 'Link with GitHub' })).toBeInTheDocument()
+      expect(s.queryByText("GitHub sign-in isn't set up on this server.")).not.toBeInTheDocument()
+    } finally {
+      focusManager.setFocused(undefined)
+    }
+  })
+
+  it('offers to link again with GitHub while linked, and not when OAuth is off', async () => {
+    const { client } = await openSettings()
+    const s = within(section('GitHub'))
+    expect(await s.findByRole('link', { name: 'Link again with GitHub' })).toHaveAttribute('href', '/api/github/link')
+    await userEvent.click(s.getByRole('button', { name: 'Unlink' }))
+    expect(s.queryByRole('link', { name: 'Link again with GitHub' })).not.toBeInTheDocument()
+
+    fake.githubOAuth = false
+    await act(() => client.refetchQueries({ queryKey: keys.githubOAuth }))
+    await userEvent.click(s.getByRole('button', { name: 'Keep it linked' }))
+    expect(s.getByRole('button', { name: 'Unlink' })).toBeInTheDocument()
+    expect(s.queryByRole('link', { name: 'Link again with GitHub' })).not.toBeInTheDocument()
+  })
+
+  it('says GitHub is linked when it is', async () => {
+    await openSettings('/settings?github=linked')
+    expect(within(section('GitHub')).getByRole('status')).toHaveTextContent('GitHub is linked.')
+  })
+
+  it('says nothing for an outcome it does not know', async () => {
+    fake.github = null
+    await openSettings('/settings?github=toString')
+    const s = within(section('GitHub'))
+    await s.findByRole('link', { name: 'Link with GitHub' })
+    expect(s.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it("offers no OAuth button when the server's OAuth app isn't set up", async () => {
+    fake.github = null
+    fake.githubOAuth = false
+    await openSettings()
+    const s = within(section('GitHub'))
+    expect(await s.findByText("GitHub sign-in isn't set up on this server.")).toBeInTheDocument()
+    expect(s.queryByRole('link', { name: 'Link with GitHub' })).not.toBeInTheDocument()
+    expect(s.getByLabelText('Or use a personal access token')).toBeInTheDocument()
+  })
+
+  it("says it once when the user comes back because OAuth isn't set up", async () => {
+    fake.github = null
+    fake.githubOAuth = false
+    const { client } = await openSettings('/settings?github=unavailable')
+    const s = within(section('GitHub'))
+    expect(s.getByRole('status')).toHaveTextContent("GitHub sign-in isn't set up on this server.")
+    await waitFor(() => expect(client.getQueryState(keys.githubOAuth)?.status).toBe('success'))
+    // The query tells its observers on a timer; let that render land.
+    await act(() => new Promise((done) => setTimeout(done, 0)))
+    expect(s.getAllByText(/sign-in isn't set up/)).toHaveLength(1)
+    expect(s.queryByRole('link', { name: 'Link with GitHub' })).not.toBeInTheDocument()
+  })
+
+  it('shows neither the button nor the note until the server says whether OAuth is set up', async () => {
+    fake.github = null
+    let finish: (() => void) | undefined
+    server.use(http.get('/api/github/oauth', () => new Promise<Response>((done) => (finish = () => done(HttpResponse.json({ enabled: false }))))))
+    await openSettings()
+    const s = within(section('GitHub'))
+    await s.findByLabelText('Or use a personal access token')
+    await waitFor(() => expect(finish).toBeDefined())
+    expect(s.queryByRole('link', { name: 'Link with GitHub' })).not.toBeInTheDocument()
+    expect(s.queryByText("GitHub sign-in isn't set up on this server.")).not.toBeInTheDocument()
+    act(() => finish?.())
+    expect(await s.findByText("GitHub sign-in isn't set up on this server.")).toBeInTheDocument()
+  })
+
+  it("offers the OAuth button when it can't tell whether OAuth is set up", async () => {
+    fake.github = null
+    failNext('GET /api/github/oauth', { status: 500, code: 'internal', message: 'boom' })
+    await openSettings()
+    const s = within(section('GitHub'))
+    expect(await s.findByRole('link', { name: 'Link with GitHub' })).toHaveAttribute('href', '/api/github/link')
+    expect(s.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says which token to make, and links to making it on GitHub', async () => {
+    fake.github = null
+    await openSettings()
+    const s = within(section('GitHub'))
+    const field = await s.findByLabelText('Or use a personal access token')
+    expect(field).toHaveAttribute('placeholder', 'github_pat_…')
+    expect(field).toHaveAccessibleDescription(
+      'Use a fine-grained token. Set Resource owner to whoever owns your repositories, give it access to them, and these repository permissions:',
+    )
+    expect(
+      within(s.getByRole('list'))
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([
+      'Contents: Read and write',
+      'Issues: Read and write',
+      'Pull requests: Read and write',
+      'Workflows: Read and write (to merge changes to workflow files)',
+      'Metadata: Read-only (added automatically)',
+    ])
+
+    const create = s.getByRole('link', { name: 'Create a token with these permissions (opens GitHub in a new tab)' })
+    expect(create).toHaveAttribute('target', '_blank')
+    expect(create).toHaveAttribute('rel', 'noreferrer')
+    const href = create.getAttribute('href') ?? ''
+    expect(href.startsWith('https://github.com/settings/personal-access-tokens/new?')).toBe(true)
+    for (const param of ['name=GanttStopMe', 'contents=write', 'issues=write', 'pull_requests=write', 'workflows=write']) {
+      expect(href.split(/[?&]/)).toContain(param)
+    }
+    const description = new URL(href).searchParams.get('description') ?? ''
+    expect(description.length).toBeGreaterThan(0)
+    expect(description.length).toBeLessThanOrEqual(1024)
+    expect(s.getByText(/^A classic token needs the/)).toHaveTextContent('A classic token needs the repo and workflow scopes.')
   })
 })
 

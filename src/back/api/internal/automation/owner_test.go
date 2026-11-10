@@ -5,7 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/automation"
 	"gantt-stop-me/api/internal/github"
@@ -68,6 +71,28 @@ func TestOwnerToken(t *testing.T) {
 	}
 }
 
+// linkExpiring relinks ada with OAuth to a token that expires in a minute, and returns it.
+func (f *fixture) linkExpiring() string {
+	f.t.Helper()
+	f.GitHub.ExpireTokens(8 * time.Hour)
+	token := f.LinkGitHubOAuth(f.ada, "ada")
+	f.repo.Grant(token, "push")
+	f.exec(`update github_links set expires_at = now() + interval '1 minute' where user_id = $1`, f.adaID)
+	return token
+}
+
+func TestOwnerTokenRefreshesAnExpiringToken(t *testing.T) {
+	f := on(t)
+	old := f.linkExpiring()
+	token, err := f.automation().OwnerToken(context.Background(), f.project)
+	if err != nil || token == old || token == "" || f.GitHub.Refreshes() != 1 {
+		t.Fatalf("OwnerToken = %q, %v after %d refreshes; want a new token from one refresh", token, err, f.GitHub.Refreshes())
+	}
+	if f.pausedReason() != nil {
+		t.Fatal("paused a project whose owner's token was refreshed")
+	}
+}
+
 func TestOwnerTokenPausesWhenOwnerLosesWriteAccess(t *testing.T) {
 	for _, role := range []string{"pull", "none", ""} { // "" hides the repository from ada
 		t.Run(role, func(t *testing.T) {
@@ -103,7 +128,67 @@ func TestOwnerTokenPausesWhenGitHubRejectsTheCredential(t *testing.T) {
 	f := on(t)
 	f.expire()
 	f.GitHub.Fail("GET /repositories/{id}", http.StatusUnauthorized)
+	before := len(f.GitHub.Requests())
 	f.expectPaused("GitHub no longer accepts ada's credential.")
+	// The credential read again is the one GitHub refused, so it is not tried again.
+	if got := f.GitHub.Requests()[before:]; len(got) != 1 || got[0] != "GET /repositories/1" {
+		t.Fatalf("GitHub requests = %v, want one repository read", got)
+	}
+}
+
+// refreshDuring has another caller refresh ada's expiring token while GitHub serves OwnerToken's first repository
+// read, so GitHub refuses the token that read was made with. With rejectNew, GitHub refuses the new token too. It
+// returns ada's token from before and a function that returns the new one.
+func (f *fixture) refreshDuring(rejectNew bool) (old string, refreshed func() string) {
+	f.t.Helper()
+	old = f.linkExpiring()
+	f.exec(`update github_links set expires_at = now() + interval '1 hour' where user_id = $1`, f.adaID) // read unrefreshed
+	f.expire()
+	var once sync.Once
+	var token string
+	var err error
+	f.GitHub.Before("GET /repositories/{id}", func() {
+		once.Do(func() {
+			ctx := context.Background()
+			if _, err = f.DB.Exec(ctx, `update github_links set expires_at = now() + interval '1 minute' where user_id = $1`, f.adaID); err == nil {
+				token, err = f.Credentials.Token(ctx, f.adaID)
+			}
+			if rejectNew {
+				f.GitHub.Fail("GET /repositories/{id}", http.StatusUnauthorized)
+			}
+		})
+	})
+	return old, func() string {
+		f.t.Helper()
+		if err != nil || token == "" || token == old {
+			f.t.Fatalf("the other caller's refresh: Token = %q, %v; want a new token", token, err)
+		}
+		return token
+	}
+}
+
+func TestOwnerTokenAfterAnotherCallerRefreshedTheToken(t *testing.T) {
+	f := on(t)
+	_, refreshed := f.refreshDuring(false)
+	before := len(f.GitHub.Requests())
+	token, err := f.automation().OwnerToken(context.Background(), f.project)
+	if err != nil || token != refreshed() {
+		t.Fatalf("OwnerToken = %q, %v; want the token the other caller refreshed", token, err)
+	}
+	if f.pausedReason() != nil || f.cached() != "write" {
+		t.Fatalf("paused_reason %v, cached permission %q; want automation running and the check made with the new token", f.pausedReason(), f.cached())
+	}
+	want := []string{"POST /login/oauth/access_token", "GET /repositories/1", "GET /repositories/1"}
+	if got := f.GitHub.Requests()[before:]; !slices.Equal(got, want) {
+		t.Fatalf("GitHub requests = %v, want the other caller's refresh, the repository read it beat, and the read again", got)
+	}
+}
+
+func TestOwnerTokenPausesWhenGitHubRejectsTheRefreshedTokenToo(t *testing.T) {
+	f := on(t)
+	_, refreshed := f.refreshDuring(true)
+	f.expectPaused("GitHub no longer accepts ada's credential.")
+	refreshed()
 }
 
 func TestOwnerTokenTemporaryErrorsDoNotPause(t *testing.T) {
@@ -228,6 +313,27 @@ func TestPauseIfRejected(t *testing.T) {
 		f.LinkGitHub(f.ada, "ada")
 		if err := f.automation().PauseIfRejected(ctx, f.project, f.token, rejected); err != rejected || f.pausedReason() != nil {
 			t.Fatalf("PauseIfRejected = %v, paused_reason %v; want the error back and no pause", err, f.pausedReason())
+		}
+	})
+	t.Run("a credential refreshed since", func(t *testing.T) {
+		f := on(t)
+		old := f.linkExpiring()
+		if _, err := f.automation().OwnerToken(ctx, f.project); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.automation().PauseIfRejected(ctx, f.project, old, rejected); err != rejected || f.pausedReason() != nil {
+			t.Fatalf("PauseIfRejected = %v, paused_reason %v; want the error back and no pause", err, f.pausedReason())
+		}
+	})
+	t.Run("a credential GitHub refused for expiring", func(t *testing.T) {
+		f := on(t)
+		token := f.linkExpiring()
+		// Looking at the owner's credential refreshes it, so the next execution runs with the new one.
+		if err := f.automation().PauseIfRejected(ctx, f.project, token, rejected); err != rejected || f.pausedReason() != nil {
+			t.Fatalf("PauseIfRejected = %v, paused_reason %v; want the error back and no pause", err, f.pausedReason())
+		}
+		if n := f.GitHub.Refreshes(); n != 1 {
+			t.Fatalf("%d refreshes, want 1", n)
 		}
 	})
 	t.Run("a credential of the owner before a takeover", func(t *testing.T) {

@@ -16,11 +16,11 @@ import (
 // shortcut: a draft asked for after a failed question, which fails too, is retried as a question; store the failed
 // job if that confuses people.
 func (p *Planning) retry(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		if err := waiting(pl, "briefing", "approved"); err != nil {
 			return err
 		}

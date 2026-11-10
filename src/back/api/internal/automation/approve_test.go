@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -442,6 +443,42 @@ func TestApproveWhilePausedOrOff(t *testing.T) {
 			t.Fatalf("task = %+v with %d approvals, want it left in User Check unapproved", got, f.approvals())
 		}
 	})
+	t.Run("the owner's token expired and GitHub cannot refresh it", func(t *testing.T) {
+		f, _ := inUserCheck(t)
+		manual := f.manual()
+		bob, _, _ := f.member("bob", "push") // approves with his own credential, which works
+		f.linkExpiring()
+		f.exec(`update github_links set expires_at = now() - interval '1 minute' where user_id = $1`, f.adaID)
+		f.GitHub.Fail("POST /login/oauth/access_token", http.StatusServiceUnavailable)
+		f.approve(bob, manual...).Expect(http.StatusBadGateway, "github_error")
+		if f.merges() != 0 || f.approvals() != 0 || f.pausedReason() != nil {
+			t.Fatalf("%d merges and %d approvals, paused_reason %v; want none, and automation running", f.merges(), f.approvals(), f.pausedReason())
+		}
+	})
+}
+
+// GitHub retires a token as it refreshes it, so another caller's refresh of the owner's can beat the merge's calls:
+// no reason to pause, nor for the approver, whose credential works, to link again.
+func TestApproveAfterAnotherCallerRefreshedTheOwnersToken(t *testing.T) {
+	for _, route := range []string{"GET /repositories/{id}/pulls/{number}", "PUT /repositories/{id}/pulls/{number}/merge"} {
+		t.Run(route, func(t *testing.T) {
+			f, n := inUserCheck(t)
+			manual := f.manual()
+			bob, _, _ := f.member("bob", "push")
+			f.GitHub.ExpireTokens(8 * time.Hour)
+			f.repo.Grant(f.LinkGitHubOAuth(f.ada, "ada"), "push")
+			refreshed := f.RefreshDuring(route, f.ada)
+			f.approve(bob, manual...).Expect(http.StatusBadGateway, "github_error")
+			refreshed()
+			if f.merges() > 1 || f.approvals() != 0 || f.pausedReason() != nil {
+				t.Fatalf("%d merges and %d approvals, paused_reason %v; want none, and automation running", f.merges(), f.approvals(), f.pausedReason())
+			}
+			f.approve(bob, manual...).Expect(http.StatusOK, "")
+			if pr := f.repo.Issue(n); pr.State != "closed" {
+				t.Fatalf("pull request = %s, want it merged by the retry", pr.State)
+			}
+		})
+	}
 }
 
 func TestApproveKeepsTheMergeWhenTheMoveFails(t *testing.T) {
