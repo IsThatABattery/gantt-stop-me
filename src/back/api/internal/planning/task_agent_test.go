@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -358,6 +359,32 @@ func TestGenerateNeedsTheCreatorToPush(t *testing.T) {
 	if n := len(f.llm.Chats()); n != chats || f.tasks() != 0 {
 		t.Fatalf("%d chat requests and %d tasks, want none", n-chats, f.tasks())
 	}
+}
+
+// The agent's turn may outlast the creator's token, which GitHub retires as another caller refreshes it, so each
+// task is created with the token read again.
+func TestReviewOffCreatesTasksAfterTheTokenWasRefreshed(t *testing.T) {
+	f := setup(t)
+	old := f.relinkExpiring()
+	pl := f.noReview()
+	var once sync.Once
+	var refreshed string
+	var err error
+	client := *f.Planning.LLM
+	next := client.Transport
+	client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		once.Do(func() { refreshed, err = f.refresh() }) // during the task agent's turn
+		return next.RoundTrip(r)
+	})
+	f.Planning.LLM = &client
+	pl = f.generate(pl, task("Export", nil, script("make")), task("Import", nil, script("make")))
+	if err != nil || refreshed == "" || refreshed == old {
+		t.Fatalf("the other caller's refresh: Token = %q, %v; want a new token", refreshed, err)
+	}
+	if pl.Status != "done" || pl.Error != nil || f.tasks() != 2 {
+		t.Fatalf("plan %+v with %d tasks, want it done with both", pl, f.tasks())
+	}
+	f.expectTask(pl.Proposals[0], 1, "ada", "Build Export.\n\n## Acceptance criteria\n- [ ] Export works\n\n## Tests\n- [ ] `make`\n")
 }
 
 // roundTrip is a RoundTripper from a function.

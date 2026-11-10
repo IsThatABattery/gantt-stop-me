@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/runner"
 )
@@ -71,6 +72,15 @@ func (a *Automation) check(ctx context.Context, e *execution, r result) (result,
 		return r, err
 	}
 	if e.issue == nil {
+		// Read again: the build and the scripts may have outlasted the token the execution started with.
+		token, err := a.freshToken(ctx, e.project.ID)
+		if errors.Is(err, github.ErrNotLinked) || errors.Is(err, github.ErrUnavailable) {
+			return r, gitHubFailure{fmt.Errorf("read the automation owner's GitHub credential: %w", err)}
+		}
+		if err != nil {
+			return r, err
+		}
+		e.token = token
 		is, err := a.GitHub.Issue(ctx, e.token, e.project.RepoID, issue)
 		if err != nil {
 			return r, gitHubFailure{fmt.Errorf("read the issue from GitHub: %w", err)}

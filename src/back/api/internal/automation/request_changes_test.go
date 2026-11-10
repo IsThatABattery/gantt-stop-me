@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -157,6 +158,22 @@ func TestRequestChangesRetriedCommentsOnce(t *testing.T) {
 	if got := f.changeRequests(n); got != 1 || f.task(1).Column != "in-progress" {
 		t.Fatalf("after the retry: %d comments, task %+v; want one, in In Progress", got, f.task(1))
 	}
+}
+
+// GitHub retires a token as it refreshes it, so another request's refresh can beat the move: that is no reason to link
+// again.
+func TestRequestChangesAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	f, n := inUserCheck(t)
+	bob, _, _ := f.member("bob", "push")
+	f.GitHub.ExpireTokens(8 * time.Hour)
+	f.repo.Grant(f.LinkGitHubOAuth(bob, "bob"), "push")
+	refreshed := f.RefreshDuring("POST /repositories/{id}/issues/{number}/labels", bob)
+	f.requestChanges(bob, "Fix it.").Expect(http.StatusBadGateway, "github_error")
+	refreshed()
+	if f.task(1).Column != "user-check" || f.changeRequests(n) != 0 {
+		t.Fatalf("after a failed move: task %+v, %d comments; want it in User Check with none", f.task(1), f.changeRequests(n))
+	}
+	f.requestChanges(bob, "Fix it.").Expect(http.StatusOK, "")
 }
 
 func TestRequestChangesWhenTheDraftFails(t *testing.T) {

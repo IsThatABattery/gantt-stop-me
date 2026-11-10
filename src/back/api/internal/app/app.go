@@ -35,12 +35,13 @@ type Config struct {
 	MaxConcurrentWorkflows   int            // workflow executions running at once across the install
 }
 
-// App is the API's handler, the automation whose poller and queue worker main runs beside it, and the planning
-// whose planner worker it runs too.
+// App is the API's handler, the automation whose poller and queue worker main runs beside it, the planning
+// whose planner worker it runs too, and the users' GitHub credentials they all read.
 type App struct {
 	http.Handler
-	Automation *automation.Automation
-	Planning   *planning.Planning
+	Automation  *automation.Automation
+	Planning    *planning.Planning
+	Credentials *github.Credentials
 }
 
 // New returns the API.
@@ -49,38 +50,38 @@ func New(db *pgxpool.Pool, cfg Config) *App {
 	mux.HandleFunc("GET /api/health", health)
 	acc := accounts.New(db, cfg.PublicURL)
 	acc.Register(mux)
-	links := &github.Links{
+	creds := &github.Credentials{
 		DB:           db,
-		Accounts:     acc,
 		Secrets:      cfg.Secrets,
 		Client:       cfg.GitHub,
 		ClientID:     cfg.GitHubClientID,
 		ClientSecret: cfg.GitHubClientSecret,
-		PublicURL:    cfg.PublicURL,
 	}
+	links := &github.Links{Credentials: creds, Accounts: acc, PublicURL: cfg.PublicURL}
 	links.Register(mux)
-	prj := &projects.Projects{DB: db, Accounts: acc, Secrets: cfg.Secrets, GitHub: cfg.GitHub}
+	prj := &projects.Projects{DB: db, Accounts: acc, Credentials: creds, GitHub: cfg.GitHub}
 	prj.Register(mux)
 	brd := &board.Board{DB: db, Accounts: acc, Projects: prj, GitHub: cfg.GitHub}
 	brd.Register(mux)
 	settings.New(db, cfg.Secrets, acc, cfg.AllowPrivateProviderURLs).Register(mux)
 	auto := &automation.Automation{
-		DB:        db,
-		Accounts:  acc,
-		Projects:  prj,
-		Secrets:   cfg.Secrets,
-		GitHub:    cfg.GitHub,
-		Board:     brd,
-		PublicURL: cfg.PublicURL,
-		RunnerURL: cfg.RunnerURL,
-		Runner:    cfg.Runner,
-		LLM:       llm.HTTPClient(cfg.AllowPrivateProviderURLs, llm.CallTimeout),
+		DB:          db,
+		Accounts:    acc,
+		Projects:    prj,
+		Secrets:     cfg.Secrets,
+		Credentials: creds,
+		GitHub:      cfg.GitHub,
+		Board:       brd,
+		PublicURL:   cfg.PublicURL,
+		RunnerURL:   cfg.RunnerURL,
+		Runner:      cfg.Runner,
+		LLM:         llm.HTTPClient(cfg.AllowPrivateProviderURLs, llm.CallTimeout),
 
 		MaxConcurrentWorkflows: cfg.MaxConcurrentWorkflows,
 	}
 	auto.Register(mux)
 	brd.Rules = auto
-	pln := &planning.Planning{DB: db, Accounts: acc, Projects: prj, Secrets: cfg.Secrets,
+	pln := &planning.Planning{DB: db, Accounts: acc, Projects: prj, Secrets: cfg.Secrets, Credentials: creds,
 		LLM: llm.HTTPClient(cfg.AllowPrivateProviderURLs, llm.CallTimeout), Board: brd}
 	pln.Register(mux)
 	routes := jsonErrors(mux)
@@ -94,8 +95,9 @@ func New(db *pgxpool.Pool, cfg Config) *App {
 			}
 			checked.ServeHTTP(w, r)
 		}),
-		Automation: auto,
-		Planning:   pln,
+		Automation:  auto,
+		Planning:    pln,
+		Credentials: creds,
 	}
 }
 

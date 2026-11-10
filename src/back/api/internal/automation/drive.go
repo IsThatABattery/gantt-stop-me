@@ -27,7 +27,7 @@ type execution struct {
 	timeout   time.Duration // the workflow's, from the claim on
 	claimed   time.Time
 	attempts  int           // claims so far, this one included
-	token     string        // the automation owner's GitHub credential
+	token     string        // the automation owner's GitHub credential, from the claim and read again before the first LLM check
 	log       string        // the log tail: build and start output, then each script's, the last 64 KB of it
 	issue     *github.Issue // the task's issue, read before the first LLM check
 	browser   *browser      // the browser's MCP session, opened before the first LLM check when the app runs

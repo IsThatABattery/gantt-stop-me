@@ -83,10 +83,10 @@ Configuration comes from `.env`, documented in [.env.example](../.env.example):
 
 | Variable | Purpose |
 | --- | --- |
-| `PUBLIC_URL` | Base URL users open. The only `Origin` allowed to write, and the base of the GitHub link callback, the webhook payload URL and the links the API posts on GitHub. |
+| `PUBLIC_URL` | Base URL users open. The only `Origin` allowed to write, and the base of the GitHub OAuth callback, the webhook payload URL and the links the API posts on GitHub. |
 | `DATABASE_URL` | Postgres connection string for `api`. |
 | `ENCRYPTION_KEY` | 32-byte key, base64, that encrypts stored GitHub credentials, provider keys and webhook secrets. |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | The GitHub OAuth App used to link accounts. Linking with OAuth is off while either is empty, and personal access tokens still work. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | The GitHub OAuth App used to link accounts, to sign in with them and to refresh the tokens it issued, registered with the callback URL `{PUBLIC_URL}/api/github/callback`. Linking and signing in with OAuth are off while either is empty, and personal access tokens still work. |
 | `ALLOW_PRIVATE_PROVIDER_URLS` | Set to `true` to let provider base URLs reach loopback and private addresses, such as a local Ollama. Off by default. |
 | `RUNNER_URL` | The runner's base URL, for `api`. Compose defaults it to the `runner` service. While the API has none, automation is off and its routes answer `404`. |
 | `RUNNER_TOKEN` | The bearer token `api` and `runner` share. |
@@ -106,7 +106,7 @@ React with TypeScript, built by Vite.
 
 Pages:
 
-1. **Sign up and sign in.** Email and password. No two-factor authentication.
+1. **Sign up and sign in.** Email and password, or Continue with GitHub while the server has an OAuth App, which signs in, or makes an account, and links GitHub at once. When GitHub does not sign the user in, the sign-in page says why. No two-factor authentication.
 2. **Home.** The six projects the user opened last. Before they have opened one, or while GitHub is not linked, it shows Add project instead.
 3. **Projects.** Every project the user has added or opened that their GitHub account still sees.
 4. **Add project.** One field for a GitHub repository URL. Submitting it adds the project and opens its board. A repository added before opens its existing board. If the user has not linked GitHub yet, the page points them to Settings first.
@@ -116,9 +116,9 @@ Pages:
 8. **Plan a feature.** A dialog over the board that starts a plan and lists the project's plans. One plan's view answers the interviewer, then reviews the plan doc and the proposed tasks.
 9. **Automation.** Turns automation on or off, picks its two agents, the decision agent and the check agent, and shows and edits the repository's workflows file. Saving the file opens a pull request.
 10. **Settings.** Five sections.
-    - **Account.** Changes the user's password.
+    - **Account.** Changes the user's password, or sets the first one for an account made by signing in with GitHub.
     - **Appearance.** Picks the color theme. It applies at once and is saved in the browser, not the account.
-    - **GitHub.** Links a GitHub account with OAuth, or with a personal access token instead. Shows which GitHub login is linked, and allows unlinking.
+    - **GitHub.** Links a GitHub account with OAuth, offered only while the server has an OAuth App, or with a personal access token instead. It lists the token's permissions and links to GitHub's token page with them filled in. Back from GitHub, it says whether the link worked. Shows which GitHub login is linked, and allows unlinking once the user has a password.
     - **LLM providers.** See [Provider settings](#provider-settings).
     - **Agents.** The user's planning agents, and whether their plans' docs and tasks are reviewed. See [Planning](#planning).
 
@@ -142,7 +142,8 @@ Each package under `src/back/api/internal` owns one feature: its routes, its rul
 | --- | --- |
 | `app` | Wires every package's routes into one handler, behind the `Origin` check. |
 | `accounts` | Users, passwords and sessions, and the guard every signed-in route uses. |
-| `github` | Linking GitHub accounts, and the client for GitHub's REST and GraphQL APIs. |
+| `github` | Linking GitHub accounts and signing in with them, and the client for GitHub's REST and GraphQL APIs. |
+| `oauth` | What OAuth needs with any provider: the state cookie a flow carries to its callback, the token endpoint client, and the per-user gate, backoff and margin of refreshing expiring tokens. |
 | `projects` | Adding repositories as projects, listing them, and the access check every project route starts with. |
 | `board` | Columns, tasks, task edits, moves, and the sync with GitHub. |
 | `tasktests` | A task's tests and the Tests section of its issue body: parsing, rendering, checking. |
@@ -158,20 +159,48 @@ Each package under `src/back/api/internal` owns one feature: its routes, its rul
 
 ### Accounts and sessions
 
-Users sign up with an email and a password. Passwords are hashed with argon2id. Signing up or in creates a session and sets an `HttpOnly`, `SameSite=Lax` session cookie for 30 days, also `Secure` when `PUBLIC_URL` is https. The cookie holds a random token, and the database stores only its SHA-256. Changing the password ends the user's other sessions. A user may also set a display name.
+Users sign up with an email and a password, or [sign in with GitHub](#signing-in-with-github). Passwords are hashed with argon2id. Signing up or in creates a session and sets an `HttpOnly`, `SameSite=Lax` session cookie for 30 days, also `Secure` when `PUBLIC_URL` is https. The cookie holds a random token, and the database stores only its SHA-256, with when the session started. Changing or setting the password ends the user's other sessions. A user may also set a display name.
+
+Signing in with GitHub finds the user by the GitHub account they linked with OAuth, never by email. A personal access token link does not count: any token of the account makes one, such as one a third-party app was given, so it proves no one can sign in to that GitHub account. A GitHub account one user has linked with OAuth signs in as them, so no other user can link it with OAuth. One that more than one user linked so before that rule, and still is, signs in no one, since nothing tells which of them it is. One that no user has linked so makes a new user with its verified primary email, unless a user has that email already, ignoring case. That user is not signed in: joining the two by email would let whoever holds a GitHub account with that email into their account. They sign in with their password and link GitHub in Settings instead.
+
+An account made by signing in with GitHub has no password. Logging in to it with any password fails as a wrong password does, and takes as long. Its user sets a first password without a current one, but only from a session started in the last 10 minutes: the account signs in only with GitHub, so a session that new shows they hold the GitHub account, and an older one may be stolen. Settings sends them to sign in with GitHub again, and back, for one. Setting it ends their other sessions, as changing a password does. Until then GitHub is their only way to sign in, so they cannot unlink it, replace it with a token link, or link another GitHub account with OAuth; linking the same one again, as when its token expired, works.
 
 ### Linking GitHub
 
-A signed-in user links one GitHub account in one of two ways.
+A signed-in user links one GitHub account in one of two ways, and [signing in with GitHub](#signing-in-with-github) links one too.
 
 - **OAuth.** `GET /api/github/link` redirects to GitHub with a `state` value tied to the session. GitHub redirects to `/api/github/callback`, where the API checks `state`, exchanges the code for a token, and loads the GitHub user with `GET /user`.
 - **Personal access token.** `POST /api/github/token` takes a token and checks it with `GET /user`.
 
 Either way the API stores the credential encrypted, along with the GitHub login and id. Linking again replaces the old credential, and the user's access to each project is checked again with the new one. The credential never reaches the browser.
 
-The OAuth App asks for the `repo` scope, because private repositories need it. The API reads and writes issues, labels, comments, branches, pull requests and file contents, so a personal access token needs the same access to the repositories in use.
+An OAuth link is how [signing in with GitHub](#signing-in-with-github) finds its user, so a GitHub account is linked with OAuth to one user at most. The callback saves a link in a transaction under the same advisory lock, keyed by the GitHub account's id, that its sign-ins take, so a link and a sign-in, or two links, cannot both find it free. It refuses one another user is linked to with OAuth; a token link does not count, since it signs no one in. It also refuses a user with no password a GitHub account other than the one they are linked to, holding their row while it checks, since that link is how they sign in.
+
+The browser navigates to link and the callback, so both answer only with redirects, never JSON. The callback sends the browser back to Settings, at its GitHub section (`#github`), with `?github=linked`, `denied` when the user cancelled on GitHub, `taken` or `password_required` for the two refusals above, or `error`, and logs why a link failed. `GET /api/github/oauth`, which needs no session, tells Settings and the sign-in page whether the server has an OAuth App. Without one, Settings offers only the token, and link sends the browser back with `?github=unavailable`.
+
+The OAuth App asks for the `repo` and `workflow` scopes. `repo` reaches private repositories. `workflow` is there because automation merges pull requests, and GitHub refuses to merge one that changes `.github/workflows` for an OAuth token without it. Signing in with GitHub also asks for `user:email`, and comes back to the same callback.
+
+GitHub can issue OAuth tokens that expire, after 8 hours by default for a new OAuth App, with a refresh token that works once. The API stores the refresh token, encrypted, and the expiry. When it reads a token that expires within 5 minutes, it trades the refresh token for new ones first. One refresh runs at a time per user: in each API instance, reads of the user's token queue in memory before they take a database connection, and each finds what the one before it saved; across instances, the refresh holds a lock on the user's link, which a read waits on for 5 seconds at most. Once GitHub is asked, the refresh runs to the end even when the request that asked is cancelled, and saves GitHub's answer within 10 seconds however long it waited, because GitHub retires the old tokens as it answers.
+
+When GitHub refuses the refresh token, the API forgets it and keeps the link, so later reads use the stored token without asking and GitHub's `401` for it asks the user to link again. When GitHub refuses the refresh another way, such as for the OAuth App's credentials, which linking again does not mend, or cannot be reached, answers `5xx` or `429`, or another instance holds the link past those 5 seconds, the stored token is used until it expires, and after that the read fails as a temporary error. After a refresh GitHub refused another way or did not answer, the instance tries no refresh for that user for 30 seconds, and their reads meanwhile use the stored token until it expires, then fail as a temporary error; linking again ends that wait. Personal access tokens are never refreshed.
+
+GitHub retires a token as it refreshes it, so a token read just before another request's refresh can stop working mid-operation. A `401` for the token checked against GitHub when automation or planning starts work, or by the access check a project route starts with, is checked again with the token read anew, and counts as a refused credential only when it is the same token; the work or the route goes on with the new one. A `401` for a token since replaced in a project route's later GitHub calls answers `502 github_error`, for the user to try again, not `403 github_not_linked`, and in a sync it is an ordinary failed sync. Approving answers `502` for a `401` for the automation owner's token that pauses nothing, since that one is never the approver's credential. Work that outlasts a token, an LLM turn or a build, reads it again before its next GitHub call: the task agent before each task it creates, and a workflow execution before it reads the issue for its first LLM check.
+
+The API reads and writes issues, labels, comments, branches, pull requests and file contents, and merges pull requests. A fine-grained personal access token needs these repository permissions on the repositories in use: Contents, Issues and Pull requests read and write, Workflows read and write, and Metadata read-only, which GitHub adds on its own. A classic token needs the `repo` and `workflow` scopes.
 
 A user with no linked GitHub account can use Settings and nothing else.
+
+### Signing in with GitHub
+
+Continue with GitHub, on the sign-in and sign-up pages, opens `GET /api/auth/github`. It redirects to GitHub with the `repo`, `workflow` and `user:email` scopes, and a `state` value that the `github_state` cookie alone ties to the browser, since there is no session yet. An optional `next`, a path on the app such as `/settings`, goes in a `github_next` cookie set as `github_state` is; anything with another host, a query or a fragment is ignored. Settings uses it to bring a user with no password back, signed in afresh, to set one. GitHub redirects to the same callback as linking, so the OAuth App registers nothing more. The state says which flow it is for, and the callback finishes that one: a link needs the session that started it, a sign-in does not.
+
+The callback checks `state`, exchanges the code and loads the GitHub user as linking does, then:
+
+- **One user is linked to the GitHub account with OAuth.** It signs in as them and replaces their link with the new credential, as linking again does.
+- **More than one is.** Linking now refuses that, but links from before it may remain, and sign-in cannot tell which user is signing in. It sends the browser back with `?github=ambiguous`, and they sign in with their email.
+- **None is.** It reads the account's primary email with `GET /user/emails`, which GitHub must have verified, else it sends the browser back with `?github=no_email`. A user who has that email already, ignoring case, is not signed in, for the reason in [Accounts and sessions](#accounts-and-sessions): the browser goes back with `?github=account_exists`, and they sign in with their password, then link GitHub in Settings. Otherwise it makes a user with that email and no password, linked to the account, in one transaction. One GitHub account's sign-ins and links take turns under an advisory lock, so two at once make or link one user.
+
+A sign-in that works starts a session, as logging in does, and sends the browser to `next`, checked again, or else home; a browser signed in already gets the new session. Every callback deletes `github_next`. Every other outcome goes back to the sign-in page, `/login?github=...`, which says what happened: `denied`, `error`, `unavailable` while the server has no OAuth App, or the three above. The API logs why one ended in `error`.
 
 ### Access control
 
@@ -180,7 +209,7 @@ A user can open a project only if their linked GitHub account can access its rep
 - **Read** permission or above can view the board, its tasks, plans, automation settings and test runs.
 - **Write** permission or above can move cards, create and edit tasks, plan features, turn automation on and off, and approve.
 
-The cache means a user who loses access on GitHub loses it here within minutes. Unlinking GitHub removes the user's access to every project at once. When GitHub stops accepting a linked credential, for example an expired token, project routes answer `403 github_not_linked` so the user knows to link again. A rate-limited GitHub answer is a temporary error, never lost access.
+The cache means a user who loses access on GitHub loses it here within minutes. Unlinking GitHub removes the user's access to every project at once. When GitHub stops accepting a linked credential, for example an expired personal access token or an OAuth token whose refresh token GitHub refused, project routes answer `403 github_not_linked` so the user knows to link again. A rate-limited GitHub answer is a temporary error, never lost access. So is an expired OAuth token that could not be refreshed, as while GitHub is unreachable or refuses the OAuth App's credentials, which project routes, and approving with the automation owner's token, answer with `502 github_error`.
 
 ### Adding a project
 
@@ -255,7 +284,7 @@ Issues change on GitHub too, so the API refreshes a project's issues whenever it
 - An open issue never moves into Closed by label. `board:closed` on an open issue is ignored, and closing the issue is what moves it there.
 - A task changed through the API after the sync began reading is left for the next sync.
 
-The cached title, state, body, labels, board labels and assignees in `tasks` are overwritten on every sync, and by the API's own writes to the issue, and the task takes its tests from the body. A task's detail view reads the cache, refreshed by the sync when its throttle allows. The sync also reads the repository's labels, so a label renamed, recolored or deleted in its settings updates every task that carries it. A failed sync is logged and the cached board is served. Only a credential GitHub no longer accepts fails the request.
+The cached title, state, body, labels, board labels and assignees in `tasks` are overwritten on every sync, and by the API's own writes to the issue, and the task takes its tests from the body. A task's detail view reads the cache, refreshed by the sync when its throttle allows. The sync also reads the repository's labels, so a label renamed, recolored or deleted in its settings updates every task that carries it. A failed sync is logged and the cached board is served. Only a credential GitHub no longer accepts fails the request: a `401` for a token another request refreshed meanwhile is an ordinary failed sync.
 
 ### Tests on a task
 
@@ -288,8 +317,8 @@ Every endpoint is documented in [docs/api](api/README.md), one file per feature:
 | Feature | Routes | Reference |
 | --- | --- | --- |
 | Health | `GET /api/health` | [API](api/README.md#health) |
-| Accounts | `/api/auth/*`, `/api/me`, `/api/me/password` | [Accounts](api/accounts.md) |
-| GitHub | `/api/github/link`, `/api/github/callback`, `/api/github/token`, `DELETE /api/github` | [GitHub](api/github.md) |
+| Accounts | `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`, `/api/me`, `/api/me/password` | [Accounts](api/accounts.md) |
+| GitHub | `/api/github/oauth`, `/api/github/link`, `/api/auth/github`, `/api/github/callback`, `/api/github/token`, `DELETE /api/github` | [GitHub](api/github.md) |
 | LLM providers | `/api/providers` | [LLM providers](api/providers.md) |
 | Board | `/api/projects`, `/api/projects/{id}/board`, `/api/projects/{id}/tasks`, `/api/projects/{id}/assignees`, `/api/me/tasks` | [Board](api/board.md) |
 | Planning | `/api/me/planning`, `/api/projects/{id}/plans` | [Planning](api/planning.md) |
@@ -363,7 +392,7 @@ Postgres 18. Migrations are plain SQL files, run in name order at API startup. `
 users (
   id              bigserial primary key,
   email           citext unique not null,
-  password_hash   text not null,      -- argon2id, PHC string
+  password_hash   text,               -- argon2id, PHC string; null for an account made by signing in with GitHub, until its user sets one
   name            text,               -- display name, null until set
   created_at      timestamptz not null default now()
 )
@@ -371,7 +400,8 @@ users (
 sessions (
   id              text primary key,   -- sha256 of the cookie value, hex
   user_id         bigint not null references users on delete cascade,
-  expires_at      timestamptz not null
+  expires_at      timestamptz not null,
+  created_at      timestamptz not null default now() -- a first password needs one from the last 10 minutes
 )
 
 github_links (
@@ -379,6 +409,8 @@ github_links (
   github_id       bigint not null,
   login           text not null,
   credential_enc  bytea not null,     -- encrypted OAuth token or personal access token
+  refresh_enc     bytea,              -- encrypted OAuth refresh token; null when credential_enc does not expire, or once GitHub refused it
+  expires_at      timestamptz,        -- when credential_enc expires; null when it does not
   kind            text not null,      -- 'oauth' or 'pat'
   linked_at       timestamptz not null default now()
 )
@@ -583,7 +615,7 @@ test_results (
 )
 ```
 
-Indexes beyond the keys: `sessions (user_id)`, `feature_plans (project_id)`, `plan_messages (plan_id)`, `test_runs (task_id, id)`, and `workflow_executions (id)` where `status = 'queued'`.
+Indexes beyond the keys: `sessions (user_id)`, `github_links (github_id)`, `feature_plans (project_id)`, `plan_messages (plan_id)`, `test_runs (task_id, id)`, and `workflow_executions (id)` where `status = 'queued'`.
 
 ## Security
 
@@ -591,6 +623,7 @@ Indexes beyond the keys: `sessions (user_id)`, `feature_plans (project_id)`, `pl
 - Sessions are random tokens stored hashed, in `HttpOnly` cookies. Every request but `GET`, `HEAD` and `OPTIONS` must carry an `Origin` equal to `PUBLIC_URL`'s, except GitHub's webhook deliveries, whose HMAC signature is checked instead.
 - Every project route checks the user's GitHub permission on that repository first.
 - Anyone can sign up, but a user only ever sees boards for repositories their linked GitHub account can access.
+- Signing in with GitHub signs in only as a user linked to that GitHub account. It never joins an existing account by its email, even one GitHub has verified, and the state of a sign-in lives in an `HttpOnly` cookie sent only to the callback, so a callback another browser started fails.
 - Provider calls never dial link-local addresses, and private ones only when allowed. They never follow redirects.
 - Only pull requests from a branch of the repository, by an author with write access, are tested. Their workflows can share caches between runs, which is within the trust write access already gives.
 - The API has no Docker access, so a bug in the web-facing API does not give root on the host. The runner holds the socket, which is root on its daemon's host, but no app secret and no database access.
@@ -612,7 +645,7 @@ Features not built yet, and what each needs, are in [gaps.md](gaps.md). Left out
 
 ## Open questions
 
-1. **OAuth App or GitHub App** for linking. An OAuth App is simpler to set up. A GitHub App gives finer permissions and per-repository installs, but needs more setup.
+1. **OAuth App or GitHub App** for linking and signing in. An OAuth App is simpler to set up. A GitHub App gives finer permissions and per-repository installs, but needs more setup.
 2. **Provider scope.** Providers are per user, because they live on the Settings page, and automation uses its owner's. Should a project share one set across its members instead?
 3. **Closed issues on import.** Initialization imports open issues only. Should recently closed issues land in Closed?
 4. **Open sign-up.** Anyone who reaches the URL can create an account. Should sign-up be limited, for example by an invite code, for a hosted demo?

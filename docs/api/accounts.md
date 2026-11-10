@@ -31,7 +31,7 @@ Creates an account and signs it in.
 
 ## Log in
 
-Signs in with email and password.
+Signs in with email and password. An account with no password, as one made by [signing in with GitHub](github.md#sign-in-with-github) until its user sets one, answers as a wrong password does, and takes as long.
 
 `POST /api/auth/login`
 
@@ -78,7 +78,7 @@ Ends the current session.
 
 ## Current user
 
-Returns the signed-in user, their display name and their linked GitHub account.
+Returns the signed-in user, their display name, their linked GitHub account and whether they have a password.
 
 `GET /api/me`
 
@@ -92,15 +92,19 @@ Returns the signed-in user, their display name and their linked GitHub account.
 
 | Status | Body |
 | --- | --- |
-| `200` | user, with `name` their display name, `null` until set, and `github` the linked login and its `kind` (`oauth` or `pat`), or `null` when none is linked |
+| `200` | user, with `name` their display name, `null` until set, `github` the linked login and its `kind` (`oauth` or `pat`), or `null` when none is linked, and `hasPassword`, `false` for an account made by signing in with GitHub until its user sets one |
 | `401` | `unauthorized` |
 
 ```json
-{ "id": 1, "email": "ada@example.com", "name": "Ada Lovelace", "github": { "login": "ada", "kind": "oauth" } }
+{ "id": 1, "email": "ada@example.com", "name": "Ada Lovelace", "github": { "login": "ada", "kind": "oauth" }, "hasPassword": true }
 ```
 
 ```json
-{ "id": 1, "email": "ada@example.com", "name": null, "github": null }
+{ "id": 1, "email": "ada@example.com", "name": null, "github": null, "hasPassword": true }
+```
+
+```json
+{ "id": 2, "email": "octo@example.com", "name": null, "github": { "login": "octocat", "kind": "oauth" }, "hasPassword": false }
 ```
 
 ## Edit profile
@@ -129,12 +133,12 @@ Sets or clears the signed-in user's display name.
 | `401` | `unauthorized` |
 
 ```json
-{ "id": 1, "email": "ada@example.com", "name": "Ada Lovelace", "github": { "login": "ada", "kind": "oauth" } }
+{ "id": 1, "email": "ada@example.com", "name": "Ada Lovelace", "github": { "login": "ada", "kind": "oauth" }, "hasPassword": true }
 ```
 
 ## Change password
 
-Replaces the password and signs out every other session.
+Replaces the password and signs out every other session. For an account with no password, as one made by signing in with GitHub, it sets the first one instead, which needs no current password but a session started in the last 10 minutes, and signs out every other session too. Such an account signs in only with GitHub, so a session that new shows its user holds the GitHub account, and an older one, perhaps stolen, cannot set a password and then unlink GitHub. Its user starts one with [Sign in with GitHub](github.md#sign-in-with-github), with `next=/settings` to come back to Settings.
 
 `PATCH /api/me/password`
 
@@ -142,12 +146,16 @@ Replaces the password and signs out every other session.
 
 | Name | In | Type | Rules |
 | --- | --- | --- | --- |
-| `session` | cookie | string | required |
-| `currentPassword` | body | string | the password in use |
+| `session` | cookie | string | required; while the account has no password, started in the last 10 minutes |
+| `currentPassword` | body | string | the password in use; ignored, and may be left out, while the account has none |
 | `newPassword` | body | string | at least 8 bytes |
 
 ```json
 { "currentPassword": "correct horse", "newPassword": "battery staple" }
+```
+
+```json
+{ "newPassword": "battery staple" }
 ```
 
 **Output**
@@ -157,4 +165,4 @@ Replaces the password and signs out every other session.
 | `204` | empty |
 | `400` | `weak_password`, `bad_request` |
 | `401` | `unauthorized` |
-| `403` | `wrong_password` |
+| `403` | `wrong_password`; or `reauth_required`, "Sign in with GitHub again, then set your password.", when the account has no password and the session started over 10 minutes ago; nothing changes |

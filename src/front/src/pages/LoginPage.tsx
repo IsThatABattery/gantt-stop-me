@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useId, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { buttonClass } from '../components/buttonClass'
 import { Icon } from '../components/Icon'
 import { LogoMark } from '../components/Logo'
 import { PageTitle } from '../components/PageTitle'
@@ -8,20 +9,39 @@ import { InkTab } from '../components/Tile'
 import { tileStep } from '../components/tileStep'
 import { Button, ButtonMark, Checkbox, Field, TextInput } from '../components/controls'
 import { keys } from '../data/keys'
-import { signIn, useMe } from '../data/session'
+import { GITHUB_SIGN_IN_URL, signIn, useMe } from '../data/session'
 import { COLUMN_ORDER } from '../data/types'
+import { useGitHubOAuth } from '../data/views/settings'
 import { columnLabels, columnPurposeLabels, labels } from '../labels/labels'
 
-// Email and password sign in against the API. Continue with GitHub, Continue
+/** What the OAuth callback says in `?github=` when Continue with GitHub sends the person back here, not signed in (docs/api/github.md). */
+const githubNotes = {
+  denied: "You cancelled on GitHub. You're not signed in.",
+  error: "GitHub sign-in didn't work. Try again, or sign in with your email.",
+  unavailable: "GitHub sign-in isn't set up on this server. Sign in with your email.",
+  account_exists: 'An account already uses your GitHub email. Sign in with its password, then link GitHub in Settings.',
+  no_email: 'Your GitHub account has no verified email. Verify one on GitHub, or sign up with your email.',
+  ambiguous: 'More than one account here is linked to that GitHub account. Sign in with your email.',
+} as const
+
+// Email and password sign in against the API, or Continue with GitHub. Continue
 // with SSO, Forgot password and Keep me signed in do nothing yet.
 export function LoginPage() {
   const { data: me } = useMe()
+  const oauth = useGitHubOAuth()
   const client = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const [params] = useSearchParams()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const returned = params.get('github')
+  // Unavailable only while the server hasn't since said OAuth is set up.
+  const note =
+    returned && Object.hasOwn(githubNotes, returned) && !(returned === 'unavailable' && oauth.data?.enabled)
+      ? githubNotes[returned as keyof typeof githubNotes]
+      : null
 
   const mutation = useMutation({
     mutationFn: signIn,
@@ -47,22 +67,22 @@ export function LoginPage() {
         </>
       }
     >
+      {note && (
+        <p role="status" className="m-0 flex items-start gap-2 rounded-[2px] bg-signal-wash px-3 py-2.5 text-[13px] leading-snug font-semibold text-signal-ink">
+          <Icon name="alert" size={16} className="mt-px flex-none" />
+          {note}
+        </p>
+      )}
+
       <div className="flex flex-col gap-2">
-        <Button className="w-full">
-          <Icon name="github" />
-          Continue with GitHub
-        </Button>
+        <GitHubSignIn />
         <Button className="w-full">
           <Icon name="lock" />
           Continue with SSO
         </Button>
       </div>
 
-      <div className="flex items-center gap-3 text-[13px] text-ink-2">
-        <span className="h-px flex-1 bg-rule" />
-        or with email
-        <span className="h-px flex-1 bg-rule" />
-      </div>
+      <OrWithEmail />
 
       <form onSubmit={onSubmit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-4">
@@ -138,6 +158,38 @@ function StageStrip() {
         )
       })}
     </ol>
+  )
+}
+
+/**
+ * Continue with GitHub, which signs in, or signs up, and leaves GitHub linked: a full-page visit to the API. Until
+ * the server says whether its OAuth app is set up, its space (and `children`'s) is held, empty: no button that may
+ * not work, and no jump when it comes. When it isn't set up, there is none. Shown too when asking failed: if OAuth
+ * really is off, the API sends the person back with ?github=unavailable.
+ */
+export function GitHubSignIn({ className = '', children }: { className?: string; children?: ReactNode }) {
+  const oauth = useGitHubOAuth()
+  if (oauth.data?.enabled === false) return null
+  const held = oauth.isPending
+  return (
+    <div className={`flex flex-col ${held ? 'invisible' : ''} ${className}`} aria-hidden={held || undefined} inert={held}>
+      <a href={GITHUB_SIGN_IN_URL} className={buttonClass('secondary', 'w-full')}>
+        <Icon name="github" />
+        Continue with GitHub
+      </a>
+      {children}
+    </div>
+  )
+}
+
+/** The rule between signing in another way and the email form. */
+export function OrWithEmail({ className = '' }: { className?: string }) {
+  return (
+    <div className={`flex items-center gap-3 text-[13px] text-ink-2 ${className}`}>
+      <span className="h-px flex-1 bg-rule" />
+      or with email
+      <span className="h-px flex-1 bg-rule" />
+    </div>
   )
 }
 

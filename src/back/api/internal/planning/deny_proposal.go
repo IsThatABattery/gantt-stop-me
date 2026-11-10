@@ -14,7 +14,7 @@ import (
 // agent to rewrite it with the feedback, and drop drops it. Once no proposal waits, the plan is done. A proposal sent
 // back whose revision failed can be denied again, so a revision that keeps failing is not a dead end.
 func (p *Planning) denyProposal(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
@@ -35,7 +35,7 @@ func (p *Planning) denyProposal(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "invalid_outcome", "The outcome needs to be revise or drop.")
 		return
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		pp, err := reviewing(ctx, tx, r, pl, "needs_review", "sent_back")
 		if err != nil {
 			return err

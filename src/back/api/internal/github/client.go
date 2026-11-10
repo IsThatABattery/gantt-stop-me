@@ -15,10 +15,10 @@ import (
 	"gantt-stop-me/api/internal/httpx"
 )
 
-// Client calls GitHub's REST API and its OAuth endpoints.
+// Client calls GitHub's REST API, and knows where its OAuth endpoints are.
 type Client struct {
 	API  string // REST API base URL, https://api.github.com
-	Web  string // site base URL for OAuth, https://github.com
+	Web  string // site base URL, https://github.com, for the OAuth endpoints
 	HTTP *http.Client
 }
 
@@ -62,32 +62,29 @@ func (c *Client) User(ctx context.Context, token string) (User, error) {
 	return u, err
 }
 
-// ExchangeCode trades an OAuth authorization code for an access token.
-func (c *Client) ExchangeCode(ctx context.Context, clientID, clientSecret, code, redirectURI string) (string, error) {
-	in := map[string]string{"client_id": clientID, "client_secret": clientSecret, "code": code, "redirect_uri": redirectURI}
-	var out struct {
-		AccessToken string `json:"access_token"`
-		Error       string `json:"error"`
-	}
-	// This endpoint answers JSON only when asked for application/json, and reports a bad code with 200.
-	_, err := c.do(ctx, http.MethodPost, c.Web+"/login/oauth/access_token", "", http.Header{"Accept": {"application/json"}}, in, &out)
-	if err != nil {
-		return "", err
-	}
-	if out.AccessToken == "" {
-		return "", fmt.Errorf("github: code exchange failed: %q", out.Error)
-	}
-	return out.AccessToken, nil
+// Email is one of a GitHub account's email addresses.
+type Email struct {
+	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
+	Verified bool   `json:"verified"`
 }
 
-// do sends one request to the absolute url and returns the response headers, for ETag and Link.
+// Emails lists the email addresses of the account token belongs to, which needs the user:email scope.
+// shortcut: the first 100 only, where an account's primary one is unless it has over 100.
+func (c *Client) Emails(ctx context.Context, token string) ([]Email, error) {
+	var emails []Email
+	_, err := c.do(ctx, http.MethodGet, c.API+"/user/emails?per_page=100", token, nil, nil, &emails)
+	return emails, err
+}
+
+// do sends one request to the absolute URL target and returns the response headers, for ETag and Link.
 // token, if set, is sent as a bearer token; header adds or overrides request headers, such as If-None-Match;
 // in, if not nil, is sent as JSON; out, if not nil, receives the JSON answer.
 // A non-2xx answer returns *Error.
-func (c *Client) do(ctx context.Context, method, url, token string, header http.Header, in, out any) (http.Header, error) {
+func (c *Client) do(ctx context.Context, method, target, token string, header http.Header, in, out any) (http.Header, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	res, err := c.open(ctx, method, url, token, header, in)
+	res, err := c.open(ctx, method, target, token, header, in)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +102,7 @@ const timeout = 15 * time.Second
 
 // open sends one request as do does, with no time limit of its own, and returns the 2xx answer, whose body the
 // caller closes. A non-2xx answer returns *Error.
-func (c *Client) open(ctx context.Context, method, url, token string, header http.Header, in any) (*http.Response, error) {
+func (c *Client) open(ctx context.Context, method, target, token string, header http.Header, in any) (*http.Response, error) {
 	var body io.Reader
 	if in != nil {
 		data, err := json.Marshal(in)
@@ -114,7 +111,7 @@ func (c *Client) open(ctx context.Context, method, url, token string, header htt
 		}
 		body = bytes.NewReader(data)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, err
 	}

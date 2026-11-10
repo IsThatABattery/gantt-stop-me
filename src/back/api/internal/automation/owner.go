@@ -22,9 +22,10 @@ var (
 
 // OwnerToken returns the automation owner's GitHub credential, for a workflow execution about to start. It first
 // checks they can still push to the repository, from the same 5-minute cache as project routes, and pauses the
-// project when they cannot, have unlinked GitHub, or GitHub no longer accepts their credential. It returns ErrPaused
-// then and while already paused, and ErrOff while automation is off. Any other error, such as GitHub's 429 or 5xx,
-// or a takeover during the check, is temporary and pauses nothing.
+// project when they cannot, have unlinked GitHub, or GitHub no longer accepts their credential: a credential GitHub
+// refuses is read again, and checked again when another caller refreshed it meanwhile. It returns ErrPaused then and
+// while already paused, and ErrOff while automation is off. Any other error, such as GitHub's 429 or 5xx, an OAuth
+// token that could not be refreshed for now, or a takeover during the check, is temporary and pauses nothing.
 func (a *Automation) OwnerToken(ctx context.Context, projectID int64) (string, error) {
 	var pr projects.Project
 	var ownerID int64
@@ -44,7 +45,7 @@ func (a *Automation) OwnerToken(ctx context.Context, projectID int64) (string, e
 	if paused {
 		return "", ErrPaused
 	}
-	token, err := github.Token(ctx, a.DB, a.Secrets, ownerID)
+	token, err := a.Credentials.Token(ctx, ownerID)
 	if errors.Is(err, github.ErrNotLinked) {
 		return "", a.pause(ctx, projectID, ownerID, "The automation owner unlinked their GitHub account.", errTakenOver)
 	}
@@ -53,7 +54,20 @@ func (a *Automation) OwnerToken(ctx context.Context, projectID int64) (string, e
 	}
 	perm, err := a.Projects.Permission(ctx, &pr, ownerID, token)
 	if rejected(err) {
-		return "", a.pause(ctx, projectID, ownerID, rejectedReason(login), errTakenOver)
+		// GitHub retires a token as it refreshes it, so another caller's refresh since the read may be what it refused.
+		current, tErr := a.Credentials.Token(ctx, ownerID)
+		switch {
+		case errors.Is(tErr, github.ErrNotLinked):
+			return "", a.pause(ctx, projectID, ownerID, "The automation owner unlinked their GitHub account.", errTakenOver)
+		case tErr != nil:
+			return "", tErr
+		case current == token:
+			return "", a.pause(ctx, projectID, ownerID, rejectedReason(login), errTakenOver)
+		}
+		token = current
+		if perm, err = a.Projects.Permission(ctx, &pr, ownerID, token); rejected(err) {
+			return "", a.pause(ctx, projectID, ownerID, rejectedReason(login), errTakenOver)
+		}
 	}
 	if err != nil {
 		return "", err
@@ -62,6 +76,22 @@ func (a *Automation) OwnerToken(ctx context.Context, projectID int64) (string, e
 		return "", a.pause(ctx, projectID, ownerID, login+" lost write access to the repository.", errTakenOver)
 	}
 	return token, nil
+}
+
+// freshToken reads the automation owner's GitHub credential again, without checking them as OwnerToken does, for a
+// GitHub call that follows long work, such as a build, done since OwnerToken: GitHub retires a token as another
+// caller refreshes it. The owner is the one now, whom a takeover may have changed. It returns ErrOff while
+// automation is off.
+func (a *Automation) freshToken(ctx context.Context, projectID int64) (string, error) {
+	var ownerID int64
+	err := a.DB.QueryRow(ctx, `select owner_id from project_automation where project_id = $1`, projectID).Scan(&ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrOff
+	}
+	if err != nil {
+		return "", err
+	}
+	return a.Credentials.Token(ctx, ownerID)
 }
 
 // PauseIfRejected pauses the project when err is GitHub refusing token, the credential OwnerToken returned, with 401,
@@ -83,8 +113,9 @@ func (a *Automation) PauseIfRejected(ctx context.Context, projectID int64, token
 	if qErr != nil {
 		return err // the database failed: the next OwnerToken judges the credential
 	}
-	if current, tErr := github.Token(ctx, a.DB, a.Secrets, ownerID); tErr != nil || current != token {
-		return err // unlinked, relinked or a new owner: the next OwnerToken judges the credential in use now
+	// Token refreshes an expiring OAuth token, so one GitHub refused for expiring is replaced here.
+	if current, tErr := a.Credentials.Token(ctx, ownerID); tErr != nil || current != token {
+		return err // unlinked, relinked, refreshed or a new owner: the next OwnerToken judges the credential in use now
 	}
 	return a.pause(ctx, projectID, ownerID, rejectedReason(login), err)
 }

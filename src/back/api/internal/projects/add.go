@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"gantt-stop-me/api/internal/accounts"
-	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/httpx"
 )
 
@@ -40,7 +39,7 @@ func (p *Projects) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		github.Fail(w, r, err)
+		p.Credentials.Fail(w, r, userID, token, err)
 		return
 	}
 

@@ -58,9 +58,9 @@ func (p *Projects) Opened(w http.ResponseWriter, r *http.Request) ([]Project, bo
 	out := []Project{}
 	for _, pr := range opened {
 		stored := pr.Permission
-		pr.Permission, err = p.Permission(ctx, &pr, userID, token)
+		pr.Permission, token, err = p.recheck(ctx, &pr, userID, token)
 		if errors.As(err, new(gitHubError)) {
-			if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
+			if unauthorized(err) {
 				github.Fail(w, r, err)
 				return nil, false
 			}

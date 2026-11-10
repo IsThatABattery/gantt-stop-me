@@ -152,8 +152,7 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 		if *pl.Pending == "generate" {
 			need = projects.Write
 		}
-		var token string
-		if token, failure, err = p.access(ctx, &pr, pl.createdBy, need); err != nil {
+		if failure, err = p.access(ctx, &pr, pl.createdBy, need); err != nil {
 			return err
 		}
 		if failure != "" {
@@ -161,7 +160,7 @@ func (p *Planning) turn(ctx context.Context, tx pgx.Tx, pl plan) error {
 		}
 		c := &llm.Client{BaseURL: baseURL, Key: string(key), HTTP: p.LLM}
 		if tasks {
-			return p.tasks(ctx, tx, c, model, instructions, token, pr, pl, review)
+			return p.tasks(ctx, tx, c, model, instructions, pr, pl, review)
 		}
 		tctx, cancel := context.WithTimeout(ctx, turnTimeout)
 		doc, question, err = interview(tctx, c, model, instructions, pr.Owner+"/"+pr.Name, pl, msgs)
@@ -208,30 +207,52 @@ func fail(ctx context.Context, tx pgx.Tx, id int64, failure string) error {
 	return tx.Commit(ctx)
 }
 
-// access returns the plan's creator's GitHub token while their GitHub account still has need, Read or Write, on the
-// project's repository, checked as project routes check people, and else why the job cannot run as them. Other
-// errors are temporary.
-func (p *Planning) access(ctx context.Context, pr *projects.Project, creator int64, need string) (token, failure string, err error) {
-	lost := "The plan's creator can no longer see the repository on GitHub. Once they can, someone retries."
-	if need == projects.Write {
-		lost = "The plan's creator can no longer push to the repository on GitHub, which creating its tasks needs. Once they can, someone retries."
-	}
-	token, err = github.Token(ctx, p.DB, p.Secrets, creator)
+// access returns why the job cannot run as the plan's creator once their GitHub account no longer has need, Read
+// or Write, on the project's repository, checked as project routes check people, and else "". Other errors are
+// temporary.
+func (p *Planning) access(ctx context.Context, pr *projects.Project, creator int64, need string) (failure string, err error) {
+	token, err := p.Credentials.Token(ctx, creator)
 	if errors.Is(err, github.ErrNotLinked) {
-		return "", lost, nil
+		return lost(need), nil
 	}
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	perm, err := p.Projects.Permission(ctx, pr, creator, token)
-	if ghErr := (*github.Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
-		return "", lost, nil
+	if unauthorized(err) {
+		// GitHub retires a token as it refreshes it, so another caller's refresh since the read may be what it refused.
+		current, tErr := p.Credentials.Token(ctx, creator)
+		switch {
+		case errors.Is(tErr, github.ErrNotLinked):
+			return lost(need), nil
+		case tErr != nil:
+			return "", tErr
+		case current == token:
+			return lost(need), nil
+		}
+		if perm, err = p.Projects.Permission(ctx, pr, creator, current); unauthorized(err) {
+			return lost(need), nil
+		}
 	}
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	if !projects.Allows(perm, need) {
-		return "", lost, nil
+		return lost(need), nil
 	}
-	return token, "", nil
+	return "", nil
+}
+
+// lost is why a job that needs need, Read or Write, cannot run as the plan's creator without it.
+func lost(need string) string {
+	if need == projects.Write {
+		return "The plan's creator can no longer push to the repository on GitHub, which creating its tasks needs. Once they can, someone retries."
+	}
+	return "The plan's creator can no longer see the repository on GitHub. Once they can, someone retries."
+}
+
+// unauthorized reports whether err is GitHub refusing the credential itself with 401.
+func unauthorized(err error) bool {
+	var ghErr *github.Error
+	return errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized
 }

@@ -8,14 +8,21 @@ export interface GitHubLink {
   kind: 'oauth' | 'pat'
 }
 
+/** GET /api/github/oauth, public: whether this server can link and sign in with OAuth (its GitHub OAuth app is set up) */
+export interface GitHubOAuth {
+  enabled: boolean
+}
+
 /** GET /api/me */
 export interface Me {
   id: number
   email: string
   github: GitHubLink | null
+  /** False for an account made by signing in with GitHub until it sets one */
+  hasPassword: boolean
 }
 
-/** Signup and login answer the user without `github`. */
+/** Signup and login answer the user without `github` or `hasPassword`. */
 export type SignedInUser = Pick<Me, 'id' | 'email'>
 
 export type Permission = 'read' | 'write' | 'admin'

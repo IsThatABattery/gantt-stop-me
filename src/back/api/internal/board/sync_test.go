@@ -571,6 +571,28 @@ func TestSyncLabelsWithRevokedCredential(t *testing.T) {
 	f.Do("GET", f.path("/board"), nil, f.ada).Expect(http.StatusForbidden, "github_not_linked")
 }
 
+// GitHub retires a token as it refreshes it, so another request's refresh can beat the sync's read: an ordinary
+// failed sync, not a credential to link again.
+func TestSyncAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	f := setup(t, "One")
+	f.oauth()
+	f.board() // the access check asks GitHub after relinking, before the sync is due
+	f.repo.AddIssue("Two")
+	f.dueSync()
+	before, _ := f.synced()
+	refreshed := f.RefreshDuring("GET /repositories/{id}/labels", f.ada)
+	if n := len(f.board().Tasks); n != 1 {
+		t.Fatalf("board during the failed sync has %d tasks, want the cached 1", n)
+	}
+	refreshed()
+	if after, _ := f.synced(); !after.Equal(before) {
+		t.Fatalf("synced_at = %v after a failed sync, want it put back to %v", after, before)
+	}
+	if n := len(f.board().Tasks); n != 2 {
+		t.Fatalf("the next load has %d tasks, want it to sync with the new token and find 2", n)
+	}
+}
+
 // Labels stored before migration 006 have no id. 006 makes the next sync read every issue, which stores them with ids,
 // so a later label edit reaches them.
 func TestSyncBackfillsLabelIDs(t *testing.T) {

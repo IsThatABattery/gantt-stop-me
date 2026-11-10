@@ -69,6 +69,7 @@ export const settingsLabels = {
   providersHelp: 'OpenAI-compatible endpoints your agents and test runs can use. Keys are stored encrypted and never shown again.',
   apiKey: 'API key',
   changePassword: 'Change password',
+  setPassword: 'Set a password',
   agents: 'Agents',
   agentsHelp: 'The LLM agents that plan your features. Each uses one of your providers.',
   review: 'Review plan docs before tasks are made',

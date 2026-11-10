@@ -144,6 +144,6 @@ func (a *Automation) target(ctx context.Context, projectID int64) (p projects.Pr
 	if paused == rejectedReason(login) {
 		return p, "", "", enabled, ErrPaused
 	}
-	token, err = github.Token(ctx, a.DB, a.Secrets, ownerID)
+	token, err = a.Credentials.Token(ctx, ownerID)
 	return p, token, etag, enabled, err
 }

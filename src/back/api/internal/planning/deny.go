@@ -13,7 +13,7 @@ import (
 // deny sends a plan's doc back to briefing with the reviewer's feedback, for the agent to ask about: the sections
 // it points at go back to not_yet.
 func (p *Planning) deny(w http.ResponseWriter, r *http.Request) {
-	pr, _, ok := p.Projects.Check(w, r, projects.Write)
+	pr, token, ok := p.Projects.Check(w, r, projects.Write)
 	if !ok {
 		return
 	}
@@ -37,7 +37,7 @@ func (p *Planning) deny(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "invalid_sections", "In sections, "+err.Error()+".")
 		return
 	}
-	if !p.change(w, r, pr.ID, func(ctx context.Context, tx pgx.Tx, pl plan) error {
+	if !p.change(w, r, pr.ID, token, func(ctx context.Context, tx pgx.Tx, pl plan) error {
 		if err := waiting(pl, "needs_review"); err != nil {
 			return err
 		}

@@ -100,11 +100,12 @@ func (f *fixture) pausedReason() *string {
 // automation is the API's Automation over the fixture's database and fake GitHub, for calls no endpoint makes.
 func (f *fixture) automation() *automation.Automation {
 	return &automation.Automation{
-		DB:        f.DB,
-		Projects:  &projects.Projects{DB: f.DB, Secrets: f.Config.Secrets, GitHub: f.Config.GitHub},
-		Secrets:   f.Config.Secrets,
-		PublicURL: f.Config.PublicURL,
-		RunnerURL: f.Config.RunnerURL,
+		DB:          f.DB,
+		Projects:    &projects.Projects{DB: f.DB, Credentials: f.Credentials, GitHub: f.Config.GitHub},
+		Secrets:     f.Config.Secrets,
+		Credentials: f.Credentials,
+		PublicURL:   f.Config.PublicURL,
+		RunnerURL:   f.Config.RunnerURL,
 	}
 }
 

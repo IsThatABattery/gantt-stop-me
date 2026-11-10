@@ -1,7 +1,7 @@
 // Who is signed in. The API keeps the session in an HttpOnly cookie that
 // scripts can't read, so GET /api/me is the only way to know (docs/api/accounts.md).
 
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { hashKey, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from './api/client'
 import type { Me, SignedInUser } from './api/types'
@@ -41,12 +41,20 @@ export const signIn = (c: Credentials) => api<SignedInUser>('POST', '/auth/login
 export const signUp = (c: Credentials) => api<SignedInUser>('POST', '/auth/signup', c)
 
 /**
+ * Continue with GitHub is a full-page navigation, not a fetch: the API redirects to GitHub, and GitHub back to
+ * `?next=` (default /), signed in with GitHub linked, or to /login with `?github=` saying why not.
+ */
+export const GITHUB_SIGN_IN_URL = '/api/auth/github'
+
+/**
  * Forget everything cached for the signed-in user, so the next one starts
  * clean. The user is set to null first, so RequireSession doesn't refetch.
  */
 export function forgetSession(client: QueryClient) {
   client.setQueryData(keys.me, null)
-  client.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.me[0] })
+  // Whether GitHub sign-in is set up is the server's, not the user's, and /login may be asking it already: removing
+  // it would leave that page waiting on a query no one runs.
+  client.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.me[0] && q.queryHash !== hashKey(keys.githubOAuth) })
 }
 
 /** End the session, then forget everything cached for this user. */

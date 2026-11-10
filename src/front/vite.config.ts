@@ -6,6 +6,12 @@ import { defineConfig } from 'vite'
 // localhost:8080 is the API in the dev container, or nginx when the compose stack runs on the host.
 const API = 'http://localhost:8080'
 
+// The origin the API is told the browser uses: its PUBLIC_URL. In the dev container the API and Web entries
+// (.vscode/launch.json) both set PUBLIC_URL=http://localhost:5173, so OAuth's callback and the redirect after linking
+// land here on Vite. On the host, `npm run dev` against the compose stack leaves it unset, and the stack's PUBLIC_URL
+// is http://localhost:8080.
+const PUBLIC_ORIGIN = process.env.PUBLIC_URL?.replace(/\/+$/, '') || API
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -15,12 +21,11 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: API,
-        // The API refuses writes whose Origin isn't PUBLIC_URL (localhost:8080
-        // by default). Vite serves the page from :5173, so present the API's own
-        // origin instead. Production is one origin behind nginx and needs nothing.
+        // The API refuses writes whose Origin isn't its PUBLIC_URL. The page is on :5173, which is PUBLIC_URL only in
+        // the dev container, so present PUBLIC_ORIGIN instead. Production is one origin behind nginx and needs nothing.
         configure: (proxy) => {
           proxy.on('proxyReq', (req) => {
-            if (req.getHeader('origin')) req.setHeader('origin', API)
+            if (req.getHeader('origin')) req.setHeader('origin', PUBLIC_ORIGIN)
           })
         },
       },

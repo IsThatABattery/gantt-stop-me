@@ -102,7 +102,7 @@ export function SettingsPage() {
               }
             >
               <Card>
-                <PasswordForm />
+                <PasswordForm hasPassword={me.hasPassword} />
               </Card>
             </Section>
             <AppearanceSection />

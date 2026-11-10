@@ -9,6 +9,7 @@ import (
 
 	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
+	"gantt-stop-me/api/internal/oauth"
 )
 
 // token links the GitHub account a personal access token belongs to.
@@ -29,6 +30,10 @@ func (l *Links) token(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "invalid_token", "GitHub did not accept this token.")
 		return
 	}
+	// A token link would replace the OAuth link a user without a password signs in with.
+	if !l.passwordSet(w, r, "Set a password before linking a token, so you can still sign in.") {
+		return
+	}
 	u, err := l.Client.User(r.Context(), token)
 	if ghErr := (*Error)(nil); errors.As(err, &ghErr) && ghErr.Status == http.StatusUnauthorized {
 		httpx.Error(w, http.StatusBadRequest, "invalid_token", "GitHub did not accept this token.")
@@ -39,7 +44,7 @@ func (l *Links) token(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadGateway, "github_unavailable", "GitHub could not be reached. Try again.")
 		return
 	}
-	if err := l.save(r.Context(), accounts.UserID(r.Context()), u, token, "pat"); err != nil {
+	if err := l.save(r.Context(), l.DB, accounts.UserID(r.Context()), u, oauth.Token{AccessToken: token}, "pat"); err != nil {
 		httpx.Internal(w, r, err)
 		return
 	}

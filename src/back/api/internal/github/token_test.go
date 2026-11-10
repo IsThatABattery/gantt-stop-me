@@ -3,8 +3,10 @@ package github_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"net/http"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 )
@@ -58,6 +60,18 @@ func TestLinkTokenReplacesOldLink(t *testing.T) {
 	}
 }
 
+func TestLinkTokenReplacesAnExpiringLink(t *testing.T) {
+	env := apptest.New(t)
+	session := env.SignUp("ada@example.com", "correct horse")
+	env.GitHub.ExpireTokens(8 * time.Hour)
+	env.LinkGitHubOAuth(session, "ada-gh")
+	token := env.LinkGitHub(session, "ada-gh")
+
+	if links := stored(t, env); len(links) != 1 || links[0] != (storedLink{GitHubID: links[0].GitHubID, Login: "ada-gh", Kind: "pat", Token: token}) {
+		t.Fatalf("github_links = %+v, want the pat link, with no refresh token or expiry", links)
+	}
+}
+
 func TestLinkTokenRejectsBadTokens(t *testing.T) {
 	env := apptest.New(t)
 	session := env.SignUp("ada@example.com", "correct horse")
@@ -88,6 +102,20 @@ func TestLinkTokenWhenGitHubIsDown(t *testing.T) {
 		Expect(http.StatusBadGateway, "github_unavailable")
 	if links := stored(t, env); len(links) != 0 {
 		t.Fatalf("github_links = %+v, want none", links)
+	}
+}
+
+// A user made by signing in with GitHub has no password and signs in only with that OAuth link, which a token link
+// would replace.
+func TestLinkTokenNeedsAPassword(t *testing.T) {
+	env := apptest.New(t)
+	session, token := env.SignInWithGitHub("octocat", "octo@example.com")
+	pat := "ghp_" + rand.Text()
+	env.GitHub.AddUser(pat, apptest.GitHubID("octocat"), "octocat")
+
+	env.Do("POST", "/api/github/token", map[string]string{"token": pat}, session).Expect(http.StatusConflict, "password_required")
+	if links := stored(t, env); len(links) != 1 || links[0].Kind != "oauth" || links[0].Token != token {
+		t.Fatalf("github_links = %+v, want the OAuth link untouched", links)
 	}
 }
 

@@ -28,12 +28,13 @@ import (
 
 // Planning serves /api/me/planning and the plan routes under /api/projects/{id}, and runs the planner worker.
 type Planning struct {
-	DB       *pgxpool.Pool
-	Accounts *accounts.Accounts // guards every route
-	Projects *projects.Projects // checks access to the project first
-	Secrets  *secret.Box        // opens the plan creators' provider keys
-	LLM      *http.Client       // calls the plan creators' providers, from llm.HTTPClient
-	Board    *board.Board       // creates the tasks of approved proposals
+	DB          *pgxpool.Pool
+	Accounts    *accounts.Accounts  // guards every route
+	Projects    *projects.Projects  // checks access to the project first
+	Secrets     *secret.Box         // opens the plan creators' provider keys
+	Credentials *github.Credentials // reads the plan creators' GitHub tokens
+	LLM         *http.Client        // calls the plan creators' providers, from llm.HTTPClient
+	Board       *board.Board        // creates the tasks of approved proposals
 
 	mu      sync.Mutex
 	running map[int64]bool // the creators whose plans have a turn running
@@ -271,8 +272,11 @@ func waiting(pl plan, statuses ...string) error {
 // change runs edit on the project's plan in the {planID} path value, in a transaction holding the plan's row, then
 // bumps its version. The agent's turn holds that row, so a plan it is working on answers 409 agent_busy at once
 // instead of waiting for the turn. It answers a *refusal from edit, a conflict with the plan as it is, a
-// board.GitHubError as GitHub's, or any other error, and returns false; on true the caller answers.
-func (p *Planning) change(w http.ResponseWriter, r *http.Request, projectID int64, edit func(context.Context, pgx.Tx, plan) error) bool {
+// board.GitHubError as GitHub's, for a call made with token, the caller's credential from Check, or any other error,
+// and returns false; on true the caller answers.
+func (p *Planning) change(w http.ResponseWriter, r *http.Request, projectID int64, token string,
+	edit func(context.Context, pgx.Tx, plan) error,
+) bool {
 	ctx, id := r.Context(), planID(r)
 	err := pgx.BeginFunc(ctx, p.DB, func(tx pgx.Tx) error {
 		pl, err := scanPlan(tx.QueryRow(ctx, `select `+planColumns+` from feature_plans fp
@@ -308,7 +312,7 @@ func (p *Planning) change(w http.ResponseWriter, r *http.Request, projectID int6
 	case errors.As(err, &ref):
 		httpx.Error(w, ref.status, ref.code, ref.message)
 	case errors.As(err, new(board.GitHubError)):
-		github.Fail(w, r, err)
+		p.Credentials.Fail(w, r, accounts.UserID(ctx), token, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
 	}

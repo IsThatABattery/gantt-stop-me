@@ -170,6 +170,19 @@ func TestMoveWhenGitHubFails(t *testing.T) {
 	}
 }
 
+func TestMoveAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	f := setup(t, "One")
+	f.oauth()
+	_, before := f.task(1)
+	refreshed := f.RefreshDuring("POST /repositories/{id}/issues/{number}/labels", f.ada)
+	f.move(f.ada, 1, "in-progress", 0).Expect(http.StatusBadGateway, "github_error")
+	refreshed()
+	if _, after := f.task(1); after != before {
+		t.Fatalf("task = %+v, want it unchanged from %+v", after, before)
+	}
+	f.move(f.ada, 1, "in-progress", 0).Expect(http.StatusOK, "")
+}
+
 func TestMoveUndoesLabelsWhenStateChangeFails(t *testing.T) {
 	for _, c := range []struct{ from, to, label, state string }{
 		{"testing", "closed", "board:testing", "open"},

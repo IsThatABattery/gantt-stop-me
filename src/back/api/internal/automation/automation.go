@@ -25,15 +25,16 @@ import (
 // Automation serves the automation routes under /api/projects/{id} and the webhook, polls automated projects'
 // pull requests, checks the automation owner before work starts, and runs the queue of test runs.
 type Automation struct {
-	DB        *pgxpool.Pool
-	Accounts  *accounts.Accounts // guards every route
-	Projects  *projects.Projects // checks access to the project first
-	Secrets   *secret.Box        // opens owners' GitHub credentials and seals webhook secrets
-	GitHub    *github.Client
-	Board     *board.Board   // moves tasks the way the move endpoint does
-	PublicURL string         // base URL users open, without a trailing slash
-	RunnerURL string         // the runner's base URL; automation is off while it is empty
-	Runner    *runner.Client // the runner at RunnerURL, which builds and runs workflow executions
+	DB          *pgxpool.Pool
+	Accounts    *accounts.Accounts  // guards every route
+	Projects    *projects.Projects  // checks access to the project first
+	Secrets     *secret.Box         // opens owners' provider keys, and seals and opens webhook secrets
+	Credentials *github.Credentials // reads owners' GitHub tokens
+	GitHub      *github.Client
+	Board       *board.Board   // moves tasks the way the move endpoint does
+	PublicURL   string         // base URL users open, without a trailing slash
+	RunnerURL   string         // the runner's base URL; automation is off while it is empty
+	Runner      *runner.Client // the runner at RunnerURL, which builds and runs workflow executions
 	// MaxConcurrentWorkflows is how many workflow executions run at once across the install.
 	MaxConcurrentWorkflows int
 	LLM                    *http.Client // calls the owners' providers, from llm.HTTPClient

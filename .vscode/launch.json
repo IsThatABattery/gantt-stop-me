@@ -15,6 +15,15 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/src/back/api/cmd/api",
+      // Set here, not in the dev container's environment, so a docker compose up from its shell never hands them to the
+      // host stack. PUBLIC_URL is Vite's origin, so writes through its proxy pass the Origin check and GitHub OAuth
+      // comes back to Vite: keep it equal to the Web entries'. RUNNER_URL is the Runner entry.
+      "env": {
+        "PUBLIC_URL": "http://localhost:5173",
+        "RUNNER_URL": "http://localhost:8081",
+        "GITHUB_CLIENT_ID": "${env:DEV_GITHUB_CLIENT_ID}",
+        "GITHUB_CLIENT_SECRET": "${env:DEV_GITHUB_CLIENT_SECRET}"
+      },
       "preLaunchTask": "db: start"
     },
     {
@@ -23,7 +32,7 @@
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/src/back/api/cmd/runner",
-      // RUNNER_TOKEN comes from the dev container's environment, which the API entry shares.
+      // RUNNER_TOKEN comes from the dev container's environment, which the API entry shares. It listens on :8081.
       "env": { "RUN_PREFIX": "gantt-dev" }
     },
     {
@@ -32,6 +41,8 @@
       "request": "launch",
       "command": "npm run dev -- --strictPort",
       "cwd": "${workspaceFolder}/src/front",
+      // The Origin Vite's proxy sends on /api writes (src/front/vite.config.ts): the API entry's PUBLIC_URL.
+      "env": { "PUBLIC_URL": "http://localhost:5173" },
       "serverReadyAction": {
         "pattern": "Local:",
         "uriFormat": "http://localhost:5173",
@@ -44,6 +55,8 @@
       "request": "launch",
       "command": "npm run dev -- --strictPort",
       "cwd": "${workspaceFolder}/src/front",
+      // As Web.
+      "env": { "PUBLIC_URL": "http://localhost:5173" },
       "serverReadyAction": {
         "pattern": "Local:",
         "uriFormat": "http://localhost:5173",

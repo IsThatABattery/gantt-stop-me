@@ -10,7 +10,8 @@ import { trimSpace } from '../data/views/agentSettings'
 interface Account {
   id: number
   email: string
-  password: string
+  /** null for an account made by signing in with GitHub, until it sets one */
+  password: string | null
 }
 
 interface SentRequest {
@@ -57,7 +58,11 @@ function fresh() {
     accounts: [{ id: 1, email: 'ada@example.com', password: 'correct horse' }] as Account[],
     /** The account the session cookie belongs to; null when signed out */
     signedInId: null as number | null,
+    /** Whether that session was made in the last 10 minutes, as setting a first password needs. Signing in makes a fresh one. */
+    sessionFresh: true,
     github: { login: 'ada', kind: 'pat' } as GitHubLink | null,
+    /** GET /api/github/oauth: whether the server's GitHub OAuth app is set up */
+    githubOAuth: true,
     /** GET /api/projects/{id}/workflows */
     workflows: { content: '', sha: null as string | null, workflows: [{ name: 'default', description: '' }], error: null as string | null },
     /** GET /api/projects/{id}/assignees */
@@ -172,7 +177,7 @@ function route(method: 'get' | 'post' | 'put' | 'patch' | 'delete', path: string
   })
 }
 
-const meBody = (a: Account) => ({ id: a.id, email: a.email, github: fake.github })
+const meBody = (a: Account) => ({ id: a.id, email: a.email, github: fake.github, hasPassword: a.password !== null })
 
 function checkProvider(body: Record<string, unknown>, creating: boolean) {
   if (creating && !String(body.name ?? '').trim()) throw new Refused(fail(400, 'invalid_name', 'Give the provider a name.'))
@@ -235,13 +240,16 @@ export const handlers = [
     const account = { id: fake.accounts.length + 1, email, password }
     fake.accounts.push(account)
     fake.signedInId = account.id
+    fake.sessionFresh = true
     fake.github = null
     return HttpResponse.json({ id: account.id, email }, { status: 201 })
   }),
   route('post', '/auth/login', ({ body }) => {
-    const account = fake.accounts.find((a) => a.email === body.email && a.password === body.password)
+    // An account without a password answers as a wrong one does.
+    const account = fake.accounts.find((a) => a.email === body.email && a.password !== null && a.password === body.password)
     if (!account) return fail(401, 'invalid_credentials', 'Wrong email or password.')
     fake.signedInId = account.id
+    fake.sessionFresh = true
     return HttpResponse.json({ id: account.id, email: account.email })
   }),
   route('post', '/auth/logout', () => {
@@ -251,21 +259,32 @@ export const handlers = [
   route('get', '/me', () => HttpResponse.json(meBody(signedIn()))),
   route('patch', '/me/password', ({ body }) => {
     const me = signedIn()
-    if (body.currentPassword !== me.password) return fail(403, 'wrong_password', 'Your current password is wrong.')
+    // As the API: the new one is checked first. Setting the first one needs no current password, and ignores one sent.
     if (String(body.newPassword ?? '').length < 8) return fail(400, 'weak_password', 'Use at least 8 characters.')
+    if (me.password !== null && body.currentPassword !== me.password) return fail(403, 'wrong_password', 'Your current password is wrong.')
+    // Such an account signs in only with GitHub, so a session made in the last 10 minutes proves it.
+    if (me.password === null && !fake.sessionFresh) return fail(403, 'reauth_required', 'Sign in with GitHub again, then set your password.')
+    // Either way the API ends the user's other sessions; the fake has only this one.
     me.password = String(body.newPassword)
     return noContent()
   }),
 
   // ---- GitHub ----
+  // OAuth is a full-page visit, so it has no handler here: tests start on /settings?github=<outcome> or
+  // /login?github=<outcome>, as the callback redirects.
+
+  // Public: sign in asks it too.
+  route('get', '/github/oauth', () => HttpResponse.json({ enabled: fake.githubOAuth })),
   route('post', '/github/token', ({ body }) => {
-    signedIn()
+    const me = signedIn()
+    if (me.password === null) return fail(409, 'password_required', 'Set a password before linking a token, so you can still sign in.')
     if (body.token === 'bad-token') return fail(400, 'invalid_token', 'GitHub did not accept that token.')
     fake.github = { login: 'octo', kind: 'pat' }
     return HttpResponse.json(fake.github)
   }),
   route('delete', '/github', () => {
-    signedIn()
+    const me = signedIn()
+    if (me.password === null) return fail(409, 'password_required', 'Set a password before unlinking GitHub, so you can still sign in.')
     fake.github = null
     return noContent()
   }),

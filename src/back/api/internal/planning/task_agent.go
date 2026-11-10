@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"gantt-stop-me/api/internal/github"
 	"gantt-stop-me/api/internal/llm"
 	"gantt-stop-me/api/internal/projects"
 	"gantt-stop-me/api/internal/tasktests"
@@ -52,12 +53,12 @@ var (
 
 // tasks runs the task agent's job on plan pl, whose row tx holds, with the creator's model and own instructions
 // through c, and saves what it did: on generate, the plan's proposals, then the task of each approved one, which they
-// are with review off, created with token, the creator's, in dependency order; on revise, the first proposal sent
-// back, rewritten and waiting for review again. A generate job whose proposals the agent made already only creates
-// their tasks. The proposals are committed before any task is made, and each task with its proposal's record, one
-// transaction and connection at a time, so an API that dies meanwhile only creates the missing tasks on its next
-// start. A failed turn records why and drops the job, keeping the tasks it created.
-func (p *Planning) tasks(ctx context.Context, tx pgx.Tx, c *llm.Client, model, instructions, token string, pr projects.Project, pl plan, review bool) error {
+// are with review off, created with the creator's GitHub token, read again for each, in dependency order; on revise,
+// the first proposal sent back, rewritten and waiting for review again. A generate job whose proposals the agent made
+// already only creates their tasks. The proposals are committed before any task is made, and each task with its
+// proposal's record, one transaction and connection at a time, so an API that dies meanwhile only creates the
+// missing tasks on its next start. A failed turn records why and drops the job, keeping the tasks it created.
+func (p *Planning) tasks(ctx context.Context, tx pgx.Tx, c *llm.Client, model, instructions string, pr projects.Project, pl plan, review bool) error {
 	all, err := proposals(ctx, tx, pl.ID)
 	if err != nil {
 		return err
@@ -95,6 +96,16 @@ func (p *Planning) tasks(ctx context.Context, tx pgx.Tx, c *llm.Client, model, i
 		}
 		if ctx.Err() != nil { // shutting down: the job stays, and the next start creates the rest
 			return ctx.Err()
+		}
+		// Read for each task: the agent's turn, or the tasks before, may outlast a token, which GitHub retires as
+		// another caller refreshes it.
+		token, err := p.Credentials.Token(ctx, pl.createdBy)
+		if errors.Is(err, github.ErrNotLinked) {
+			failure = lost(projects.Write)
+			break
+		}
+		if err != nil {
+			return err // for now, such as GitHub out of reach to refresh it: the job stays for the next pass
 		}
 		unlock, err := projects.Serialize(ctx, pr.ID)
 		if err != nil {

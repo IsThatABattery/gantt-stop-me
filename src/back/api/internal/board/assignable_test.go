@@ -27,6 +27,15 @@ func TestAssignable(t *testing.T) {
 	}
 }
 
+func TestAssignableAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	f := setup(t)
+	f.oauth()
+	refreshed := f.RefreshDuring("GET /repositories/{id}/assignees", f.ada)
+	f.Do("GET", f.path("/assignees"), nil, f.ada).Expect(http.StatusBadGateway, "github_error")
+	refreshed()
+	f.Do("GET", f.path("/assignees"), nil, f.ada).Expect(http.StatusOK, "")
+}
+
 func TestEditTaskAssignees(t *testing.T) {
 	f := setup(t, "One")
 	f.reader()

@@ -40,3 +40,23 @@ func TestLoginRejectsBadCredentialsAlike(t *testing.T) {
 func TestLoginRejectsBadJSON(t *testing.T) {
 	apptest.New(t).Do("POST", "/api/auth/login", "nope").Expect(http.StatusBadRequest, "bad_request")
 }
+
+// An account made by signing in with GitHub has no password until its user sets one, and no password logs in to it.
+func TestLoginRefusesAnAccountWithNoPassword(t *testing.T) {
+	env := apptest.New(t)
+	env.SignUp("bob@example.com", "correct horse")
+	env.SignInWithGitHub("octocat", "ada@example.com")
+
+	wrong := env.Do("POST", "/api/auth/login", map[string]string{"email": "bob@example.com", "password": "wrong horse"})
+	wrong.Expect(http.StatusUnauthorized, "invalid_credentials")
+	for _, password := range []string{"", "correct horse"} {
+		res := env.Do("POST", "/api/auth/login", map[string]string{"email": "ada@example.com", "password": password})
+		res.Expect(http.StatusUnauthorized, "invalid_credentials")
+		if string(res.Body) != string(wrong.Body) {
+			t.Fatalf("no password %s and wrong password %s answer differently", res.Body, wrong.Body)
+		}
+		if res.Cookie("session") != nil {
+			t.Fatal("failed login set a session cookie")
+		}
+	}
+}

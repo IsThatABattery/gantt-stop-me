@@ -38,7 +38,8 @@ Each needs an API design, endpoints with tests and docs, then the UI.
 
 ## Smaller gaps
 
-- **Sign-in page:** Continue with GitHub, Continue with SSO, Forgot password and Keep me signed in do nothing. The API signs in with email and password only, has no password reset, and keeps every session for 30 days.
+- **Sign-in page:** Continue with SSO, Forgot password and Keep me signed in do nothing. The API signs in with email and password or with GitHub, has no password reset, and keeps every session for 30 days.
+- **Session ended:** the dialog that asks a user to sign in again over the page takes only a password. An account with none, as one made with Continue with GitHub, has to choose Use another account and sign in from the sign-in page, which loses what was typed on the page.
 - **Markdown:** task descriptions show as plain text. Issue bodies are Markdown, so they need a renderer.
 - **Live updates:** the board loads when it opens and after your own changes, so other people's moves, and the moves automation makes when a run ends, show on the next load. It needs polling or a push channel. The API syncs from GitHub when a board or task loads, at most every 30 seconds.
 - **Project list:** no search or sort.

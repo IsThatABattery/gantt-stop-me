@@ -4,7 +4,7 @@ Every doc in the repository, and what it covers.
 
 ## Start here
 
-- [README.md](../README.md): running the app, the dev container, tests, configuration, the repository layout and troubleshooting.
+- [README.md](../README.md): running the app, the dev container, tests, configuration, linking GitHub, the repository layout and troubleshooting.
 - [AGENTS.md](../AGENTS.md): working notes for AI coding agents: starting the stack, the dev container, branch names, tests, the API-docs rule and where design files go.
 
 ## System
@@ -19,7 +19,7 @@ One file per feature, each endpoint with its name, one sentence, method and path
 
 - [api/README.md](api/README.md): conventions every endpoint shares (session, origin, errors), health, and an index of the files below.
 - [api/accounts.md](api/accounts.md): sign up, log in and out, the current user, display name and password.
-- [api/github.md](api/github.md): link a GitHub account with OAuth or a personal access token, and unlink it.
+- [api/github.md](api/github.md): whether OAuth is available, link a GitHub account with OAuth or a personal access token, sign in with GitHub, and unlink it.
 - [api/providers.md](api/providers.md): the user's LLM providers, their keys and chosen models.
 - [api/board.md](api/board.md): projects, the board, tasks, their tests, assignees and moves.
 - [api/planning.md](api/planning.md): planning settings, and plans from interview to proposed tasks.

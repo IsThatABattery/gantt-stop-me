@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestApproveProposal(t *testing.T) {
@@ -46,6 +47,22 @@ func TestApproveProposalWhenGitHubFails(t *testing.T) {
 	if n := f.tasks(); n != 0 {
 		t.Fatalf("%d tasks", n)
 	}
+}
+
+// GitHub retires a token as it refreshes it, so another request's refresh can beat the issue's creation: that is no
+// reason to link again.
+func TestApproveProposalAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	f := setup(t)
+	pl := f.generate(f.approved(), task("Export", nil, script("make")))
+	f.GitHub.ExpireTokens(8 * time.Hour)
+	f.repo.Grant(f.LinkGitHubOAuth(f.ada, "ada"), "push")
+	refreshed := f.RefreshDuring("POST /repositories/{id}/issues", f.ada)
+	f.review(f.ada, pl, 1, "approve", nil).Expect(http.StatusBadGateway, "github_error")
+	refreshed()
+	if got := f.plan(pl.ID); got.Version != pl.Version || got.Proposals[0].Status != "needs_review" || got.Proposals[0].TaskID != nil {
+		t.Fatalf("plan %+v, want it unchanged", got)
+	}
+	f.review(f.ada, pl, 1, "approve", nil).Expect(http.StatusOK, "")
 }
 
 // An approval creates its task in the plan's transaction, so it never holds a connection while it waits for another:

@@ -3,7 +3,7 @@ package board
 import (
 	"net/http"
 
-	"gantt-stop-me/api/internal/github"
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -16,7 +16,7 @@ func (b *Board) assignable(w http.ResponseWriter, r *http.Request) {
 	}
 	users, err := b.GitHub.Assignable(r.Context(), token, p.RepoID)
 	if err != nil {
-		github.Fail(w, r, err)
+		b.Projects.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 		return
 	}
 	out := make([]projects.Assignee, len(users))

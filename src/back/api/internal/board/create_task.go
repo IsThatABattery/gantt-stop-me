@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"gantt-stop-me/api/internal/github"
+	"gantt-stop-me/api/internal/accounts"
 	"gantt-stop-me/api/internal/httpx"
 	"gantt-stop-me/api/internal/projects"
 )
@@ -49,7 +49,7 @@ func (b *Board) createTask(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case errors.As(err, new(GitHubError)):
-		github.Fail(w, r, err)
+		b.Projects.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
 	default:

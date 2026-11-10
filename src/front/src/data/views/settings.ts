@@ -3,8 +3,9 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { api, useApiMutation } from '../api/client'
-import type { GitHubLink, Provider, ProviderWithModels } from '../api/types'
+import type { GitHubLink, GitHubOAuth, Provider, ProviderWithModels } from '../api/types'
 import { keys } from '../keys'
+import { GITHUB_SIGN_IN_URL } from '../session'
 
 // ---- Password ----
 
@@ -14,28 +15,49 @@ export interface PasswordInput {
   confirm: string
 }
 
-/** Field → message for each problem with a password change. Empty when it's fine. */
-export function passwordProblems({ current, next, confirm }: PasswordInput): Partial<Record<keyof PasswordInput, string>> {
+/**
+ * Field → message for each problem with a password change, or with setting the first one (`setting`), which has no
+ * current password. Empty when it's fine.
+ */
+export function passwordProblems({ current, next, confirm }: PasswordInput, setting = false): Partial<Record<keyof PasswordInput, string>> {
   const out: Partial<Record<keyof PasswordInput, string>> = {}
-  if (!current) out.current = 'Enter your current password.'
+  if (!setting && !current) out.current = 'Enter your current password.'
   if (next.length < 8) out.next = 'Use 8 or more characters.'
   if (next !== confirm) out.confirm = "The new passwords don't match."
   return out
 }
 
-/** Changing it signs out every other session of the user. */
-const changePassword = ({ current, next }: PasswordInput) =>
-  api<void>('PATCH', '/me/password', { currentPassword: current, newPassword: next })
+/**
+ * Changing or setting it signs out every other session of the user. An account made by signing in with GitHub has
+ * none: setting it sends only the new one, from a session made in the last 10 minutes, else 403 reauth_required.
+ */
+const changePassword = ({ current, next }: PasswordInput, setting: boolean) =>
+  api<void>('PATCH', '/me/password', setting ? { newPassword: next } : { currentPassword: current, newPassword: next })
 
-export const useChangePassword = () => useApiMutation(changePassword, [])
+/** Signing in with GitHub again makes the fresh session setting a first password needs, then comes back to Settings. */
+export const GITHUB_REAUTH_URL = `${GITHUB_SIGN_IN_URL}?next=/settings`
+
+// The user refetches: setting one turns hasPassword on. It refetches when refused too: 403 wrong_password to a set
+// means another session set one first, and the refetch turns the form into the change form, the message on Current.
+export const useChangePassword = (setting: boolean) =>
+  useApiMutation((input: PasswordInput) => changePassword(input, setting), [keys.me], { settled: true })
 
 // ---- GitHub ----
 
 /** OAuth is a full-page navigation to GitHub and back, not a fetch. */
 export const GITHUB_OAUTH_URL = '/api/github/link'
 
+/**
+ * Whether the server's GitHub OAuth app is set up, for linking here and Continue with GitHub on sign in and sign up.
+ * It needs no session, so asking never ends one. It changes when the server restarts with it set or unset, so it is
+ * asked again when the tab regains focus: a server just set up shows Link with GitHub without a reload.
+ */
+export const useGitHubOAuth = () =>
+  useQuery({ queryKey: keys.githubOAuth, queryFn: () => api<GitHubOAuth>('GET', '/github/oauth'), refetchOnWindowFocus: true })
+
 const linkToken = (token: string) => api<GitHubLink>('POST', '/github/token', { token })
 
+/** Refused with 409 password_required while the account has no password: GitHub is then its only way in. */
 const unlinkGitHub = () => api<void>('DELETE', '/github')
 
 // Linking changes what every project route answers, so everything refetches.

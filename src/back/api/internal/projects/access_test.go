@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
+	"time"
 
 	"gantt-stop-me/api/internal/apptest"
 	"gantt-stop-me/api/internal/github/githubtest"
@@ -26,6 +28,46 @@ func expire(t *testing.T, env *apptest.Env) {
 	t.Helper()
 	if _, err := env.DB.Exec(context.Background(), `update project_members set checked_at = now() - interval '5 minutes 1 second'`); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// relinkExpiring relinks ada with OAuth to a token that expires in 8 hours, as GitHub's do, and can push to repo.
+// Relinking has the next access check ask GitHub.
+func relinkExpiring(env *apptest.Env, ada *http.Cookie, repo *githubtest.Repo) {
+	env.GitHub.ExpireTokens(8 * time.Hour)
+	repo.Grant(env.LinkGitHubOAuth(ada, "ada-gh"), "push")
+}
+
+// GitHub retires a token as it refreshes it, so another request's refresh can beat the access check's read: the check
+// asks again with the new token, and the route goes on with it.
+func TestAccessAfterAnotherRequestRefreshedTheToken(t *testing.T) {
+	env, ada, repo, _ := shared(t)
+	relinkExpiring(env, ada, repo)
+	refreshed := env.RefreshDuring("GET /repositories/{id}", ada)
+	before := len(env.GitHub.Requests())
+	// Through assignees, which asks GitHub with the token the check returns: only the new one works.
+	env.Do("GET", "/api/projects/1/assignees", nil, ada).Expect(http.StatusOK, "")
+	refreshed()
+	want := []string{"POST /login/oauth/access_token", "GET /repositories/1", "GET /repositories/1"}
+	if got := env.GitHub.Requests()[before:]; len(got) < len(want) || !slices.Equal(got[:len(want)], want) {
+		t.Fatalf("GitHub requests = %v, want the other request's refresh, the read it beat, and the read again", got)
+	}
+	if perm := member(t, env, 1, "ada@example.com"); perm != "write" {
+		t.Fatalf("cached permission %q, want write from the check with the new token", perm)
+	}
+}
+
+func TestAccessWhenGitHubRefusesTheRefreshedTokenToo(t *testing.T) {
+	env, ada, repo, board := shared(t)
+	relinkExpiring(env, ada, repo)
+	refreshed := env.RefreshDuring("GET /repositories/{id}", ada)
+	env.GitHub.Fail("GET /repositories/{id}", http.StatusUnauthorized)
+	before := len(env.GitHub.Requests())
+	env.Do("GET", board, nil, ada).Expect(http.StatusForbidden, "github_not_linked")
+	refreshed()
+	want := []string{"POST /login/oauth/access_token", "GET /repositories/1", "GET /repositories/1"}
+	if got := env.GitHub.Requests()[before:]; !slices.Equal(got, want) {
+		t.Fatalf("GitHub requests = %v, want the other request's refresh, the read it beat, and the read again", got)
 	}
 }
 

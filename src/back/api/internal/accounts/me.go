@@ -14,18 +14,20 @@ type githubLink struct {
 	Kind  string `json:"kind"`
 }
 
-// me returns the signed-in user, their display name or null, and their linked GitHub login, or null for github.
+// me returns the signed-in user, their display name or null, their linked GitHub login, or null for github, and
+// whether they have a password, which an account made by signing in with GitHub has not until they set one.
 func (a *Accounts) me(w http.ResponseWriter, r *http.Request) {
 	var out struct {
 		user
-		Name   *string     `json:"name"`
-		GitHub *githubLink `json:"github"`
+		Name        *string     `json:"name"`
+		GitHub      *githubLink `json:"github"`
+		HasPassword bool        `json:"hasPassword"`
 	}
 	var login, kind *string
 	err := a.db.QueryRow(r.Context(), `
-		select u.id, u.email, u.name, g.login, g.kind
+		select u.id, u.email, u.name, u.password_hash is not null, g.login, g.kind
 		from users u left join github_links g on g.user_id = u.id
-		where u.id = $1`, UserID(r.Context())).Scan(&out.ID, &out.Email, &out.Name, &login, &kind)
+		where u.id = $1`, UserID(r.Context())).Scan(&out.ID, &out.Email, &out.Name, &out.HasPassword, &login, &kind)
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return

@@ -126,14 +126,15 @@ func (a *Automation) sendBack(ctx context.Context, p projects.Project, token str
 	return pulls, i, login, err
 }
 
-// answerTask answers err, or task taskID as Get task does when err is nil.
+// answerTask answers err, or task taskID as Get task does when err is nil. token is the caller's credential, which
+// made the GitHub calls err may come from.
 func (a *Automation) answerTask(w http.ResponseWriter, r *http.Request, p projects.Project, token string, taskID int64, err error) {
 	var no *refused
 	switch {
 	case errors.As(err, &no):
 		httpx.Error(w, no.status, no.code, no.message)
 	case errors.As(err, new(gitHubError)), errors.As(err, new(board.GitHubError)), errors.As(err, new(*github.Error)):
-		github.Fail(w, r, err)
+		a.Credentials.Fail(w, r, accounts.UserID(r.Context()), token, err)
 	case err != nil:
 		httpx.Internal(w, r, err)
 	default:

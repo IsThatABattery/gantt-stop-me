@@ -10,8 +10,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -46,6 +48,8 @@ type Env struct {
 	Automation *automation.Automation
 	// Planning is the API's planning. Its planner worker never ticks in tests: Planning.Work runs one pass.
 	Planning *planning.Planning
+	// Credentials reads users' GitHub tokens as the API does, refreshing expiring OAuth tokens.
+	Credentials *github.Credentials
 }
 
 // New starts the API on a new, migrated schema, with OAuth linking enabled against a fake GitHub.
@@ -81,7 +85,7 @@ func New(t testing.TB, configure ...func(*app.Config)) *Env {
 	t.Cleanup(api.Automation.Wait)
 	t.Cleanup(srv.Close)
 	return &Env{t: t, DB: db, Server: srv, Config: cfg, GitHub: gh, Runner: run, Automation: api.Automation,
-		Planning: api.Planning}
+		Planning: api.Planning, Credentials: api.Credentials}
 }
 
 // DB returns a pool on a new schema with every migration applied, dropped when the test ends.
@@ -234,10 +238,84 @@ func (e *Env) SignUp(email, password string) *http.Cookie {
 func (e *Env) LinkGitHub(session *http.Cookie, login string) string {
 	e.t.Helper()
 	token := "ghp_" + rand.Text()
-	// Derived from login, so one login is one GitHub account across users.
-	e.GitHub.AddUser(token, int64(crc32.ChecksumIEEE([]byte(login))), login)
+	e.GitHub.AddUser(token, GitHubID(login), login)
 	e.Do("POST", "/api/github/token", map[string]string{"token": token}, session).Expect(http.StatusOK, "")
 	return token
+}
+
+// LinkGitHubOAuth adds a fake GitHub account with this login and links it to the session's user with OAuth, as
+// Settings does, and returns the access token GitHub issued.
+func (e *Env) LinkGitHubOAuth(session *http.Cookie, login string) string {
+	e.t.Helper()
+	token, code := "gho_"+rand.Text(), rand.Text()
+	e.GitHub.AddUser(token, GitHubID(login), login)
+	e.GitHub.AddCode(code, token)
+	state := e.Do("GET", "/api/github/link", nil, session).Cookie("github_state")
+	if state == nil {
+		e.t.Fatal("link set no state cookie")
+	}
+	res := e.Do("GET", "/api/github/callback?code="+code+"&state="+url.QueryEscape(state.Value), nil, session, state)
+	if loc := res.Header.Get("Location"); res.Status != http.StatusFound || loc != PublicURL+"/settings?github=linked#github" {
+		e.t.Fatalf("callback: got %d to %q, want a redirect to Settings with github=linked", res.Status, loc)
+	}
+	return token
+}
+
+// GitHubID is the fake GitHub account id LinkGitHub, LinkGitHubOAuth and SignInWithGitHub give login, so one login
+// is one GitHub account across users.
+func GitHubID(login string) int64 { return int64(crc32.ChecksumIEEE([]byte(login))) }
+
+// SignInWithGitHub signs in with the fake GitHub account login, whose verified primary email it makes email, as the
+// login page's Continue with GitHub does, and returns the session cookie and the access token GitHub issued. The
+// first sign-in of an account no user is linked to makes one with that email and no password.
+func (e *Env) SignInWithGitHub(login, email string) (*http.Cookie, string) {
+	e.t.Helper()
+	token, code := "gho_"+rand.Text(), rand.Text()
+	e.GitHub.AddUser(token, GitHubID(login), login)
+	e.GitHub.SetEmails(GitHubID(login), githubtest.Email{Email: email, Primary: true, Verified: true})
+	e.GitHub.AddCode(code, token)
+	state := e.Do("GET", "/api/auth/github", nil).Cookie("github_state")
+	if state == nil {
+		e.t.Fatal("sign-in set no state cookie")
+	}
+	res := e.Do("GET", "/api/github/callback?code="+code+"&state="+url.QueryEscape(state.Value), nil, state)
+	if loc := res.Header.Get("Location"); res.Status != http.StatusFound || loc != PublicURL+"/" {
+		e.t.Fatalf("callback: got %d to %q, want a redirect home", res.Status, loc)
+	}
+	session := res.Cookie(accounts.SessionCookie)
+	if session == nil {
+		e.t.Fatal("sign-in set no session cookie")
+	}
+	return session, token
+}
+
+// RefreshDuring has another request refresh the session user's OAuth token the first time GitHub is asked route
+// pattern, as the fake registers it, before GitHub serves it, so GitHub refuses the token that request was made with:
+// GitHub retires a token as it refreshes it. The user must be linked with OAuth while GitHub.ExpireTokens has set an
+// expiry. It returns a function that returns the new token, failing the test unless the refresh worked.
+func (e *Env) RefreshDuring(pattern string, session *http.Cookie) (refreshed func() string) {
+	e.t.Helper()
+	var me struct{ ID int64 }
+	e.Do("GET", "/api/me", nil, session).JSON(&me)
+	var once sync.Once
+	var token string
+	var err error
+	e.GitHub.Before(pattern, func() {
+		once.Do(func() {
+			ctx := context.Background()
+			_, err = e.DB.Exec(ctx, `update github_links set expires_at = now() + interval '1 minute' where user_id = $1`, me.ID)
+			if err == nil {
+				token, err = e.Credentials.Token(ctx, me.ID)
+			}
+		})
+	})
+	return func() string {
+		e.t.Helper()
+		if err != nil || token == "" {
+			e.t.Fatalf("the other request's refresh: Token = %q, %v; want a new token", token, err)
+		}
+		return token
+	}
 }
 
 // AddProject adds the fake repository owner/name, which the session's GitHub account must be able to write to

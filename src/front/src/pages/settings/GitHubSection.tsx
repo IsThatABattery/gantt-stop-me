@@ -1,24 +1,62 @@
 import { useId, useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Button, Field, TextInput } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
 import { Icon } from '../../components/Icon'
 import type { Me } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
 import { useMe } from '../../data/session'
-import { GITHUB_OAUTH_URL, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
+import { GITHUB_OAUTH_URL, useGitHubOAuth, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
 import { labels, settingsLabels } from '../../labels/labels'
 import { Card, Confirm, Problem, Section } from './Section'
 import { sectionIds } from './sections'
 
 const kindLabel = { oauth: 'GitHub sign-in', pat: 'personal access token' } as const
 
-/** What the OAuth callback says in `?github=` when it sends the user back here. */
+const failedLook = 'bg-signal-wash text-signal-ink'
+
+/** What the API says in `?github=` when it sends the user back here from linking with OAuth (docs/api/github.md). */
 const returnNotes = {
   linked: { look: 'border border-line bg-paper text-ink [&>svg]:text-good', icon: 'check', text: 'GitHub is linked.' },
-  error: { look: 'bg-signal-wash text-signal-ink', icon: 'alert', text: "GitHub didn't link. Nothing was saved; try again." },
+  error: { look: failedLook, icon: 'alert', text: "GitHub didn't link. Nothing was saved; try again." },
+  denied: { look: failedLook, icon: 'alert', text: 'You cancelled on GitHub. Nothing was linked.' },
+  // Refused, so the link is as it was: another user here signs in with that GitHub account, or this one has no
+  // password and signs in only with the GitHub account linked now.
+  taken: { look: failedLook, icon: 'alert', text: 'That GitHub account is linked to another account here. Nothing changed.' },
+  password_required: { look: failedLook, icon: 'alert', text: 'Set a password before linking another GitHub account, so you can still sign in.' },
+  unavailable: { look: failedLook, icon: 'alert', text: "GitHub sign-in isn't set up on this server. Use a personal access token instead." },
 } as const
+
+type Outcome = keyof typeof returnNotes
+
+/** Which GitHub account is linked, and how: a change means the link changed. */
+const linkKey = (me: Me) => (me.github ? `${me.github.kind}:${me.github.login}` : '')
+
+/**
+ * GitHub's new fine-grained token page, filled in with the repository permissions the API uses: it writes branches,
+ * file contents (.gantt/workflows.yml), issues and pull requests, and merges, workflow files included. Metadata
+ * (read) is added on its own. The page can't pick the repositories, so the person does.
+ */
+const NEW_TOKEN_URL = `https://github.com/settings/personal-access-tokens/new?${Object.entries({
+  name: labels.appName,
+  description: `${labels.appName} reads and writes your repositories' issues, branches and pull requests, and merges them.`,
+  contents: 'write',
+  issues: 'write',
+  pull_requests: 'write',
+  workflows: 'write',
+})
+  .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+  .join('&')}`
+
+/** The repository permissions NEW_TOKEN_URL asks for, as GitHub's token page names them */
+const tokenPermissions = [
+  { name: 'Contents', access: 'Read and write' },
+  { name: 'Issues', access: 'Read and write' },
+  { name: 'Pull requests', access: 'Read and write' },
+  { name: 'Workflows', access: 'Read and write', note: 'to merge changes to workflow files' },
+  { name: 'Metadata', access: 'Read-only', note: 'added automatically' },
+]
 
 // Link one GitHub account, with OAuth or a personal access token, or unlink
 // it (docs/api/github.md). Every project needs it: the board reads and writes the
@@ -26,10 +64,17 @@ const returnNotes = {
 export function GitHubSection({ me }: { me: Me }) {
   // Linking and unlinking refetch the user; if that fails, what shows here is out of date.
   const refresh = useMe()
+  const oauth = useGitHubOAuth()
   const [params] = useSearchParams()
   const returned = params.get('github')
-  // Only while it still holds: linking with a token or unlinking afterwards outdates it.
-  const note = returned === 'linked' && me.github ? returnNotes.linked : returned === 'error' && !me.github ? returnNotes.error : null
+  const outcome = returned && Object.hasOwn(returnNotes, returned) ? (returned as Outcome) : null
+  // Only while it still holds: linked while an account is linked; unavailable while none is and the server hasn't
+  // since said OAuth is set up; a failed, refused or cancelled link, relinking included, while the link is as it was
+  // when the user came back. Linking with a token or unlinking afterwards outdates it.
+  const [linkOnReturn] = useState(() => linkKey(me))
+  const holds =
+    outcome === 'linked' ? Boolean(me.github) : outcome === 'unavailable' ? !me.github && !oauth.data?.enabled : linkKey(me) === linkOnReturn
+  const note = outcome && holds ? returnNotes[outcome] : null
 
   return (
     <Section
@@ -51,13 +96,22 @@ export function GitHubSection({ me }: { me: Me }) {
           Couldn't refresh your account: {refresh.error.message}
         </Problem>
       )}
-      <Card>{me.github ? <Linked login={me.github.login} kind={me.github.kind} /> : <NotLinked />}</Card>
+      <Card>
+        {me.github ? (
+          <Linked login={me.github.login} kind={me.github.kind} hasPassword={me.hasPassword} />
+        ) : (
+          <NotLinked oauthNoted={note === returnNotes.unavailable} />
+        )}
+      </Card>
     </Section>
   )
 }
 
-function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }) {
+/** `hasPassword` false: GitHub is the account's only way in, so it can't be unlinked until the account has a password. */
+function Linked({ login, kind, hasPassword }: { login: string; kind: keyof typeof kindLabel; hasPassword: boolean }) {
+  const oauth = useGitHubOAuth()
   const unlink = useUnlinkGitHub()
+  const refetchMe = useMe().refetch
   const [confirming, setConfirming] = useState(false)
   const id = useId()
   // Focus goes into the confirm when it opens, and back to Unlink when it closes.
@@ -78,13 +132,29 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
           </span>
           <span className="text-[13px] text-ink-2">with a {kindLabel[kind]}</span>
         </p>
-        {!confirming && (
+        {!confirming && oauth.data?.enabled && (
+          // When GitHub stops taking the link, such as a sign-in idle for six months, linking again replaces it and
+          // keeps the projects; unlinking first would drop them.
+          <a href={GITHUB_OAUTH_URL} className={buttonClass('secondary')}>
+            <Icon name="github" />
+            Link again with GitHub
+          </a>
+        )}
+        {!confirming && hasPassword && (
           <Button id={`${id}-open`} onClick={() => confirm(true)}>
             Unlink
           </Button>
         )}
       </div>
-      {confirming && (
+      {!hasPassword && (
+        <p className="m-0 text-[13px] leading-normal text-ink-2">
+          <Link to={{ hash: sectionIds.account }} className="font-semibold">
+            Set a password
+          </Link>{' '}
+          before unlinking, so you can still sign in.
+        </p>
+      )}
+      {confirming && hasPassword && (
         <Confirm
           id={id}
           question={`Unlinking removes your access to every ${labels.project.toLowerCase()} until you link again.`}
@@ -93,7 +163,20 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
           <Button id={`${id}-keep`} onClick={() => confirm(false)}>
             Keep it linked
           </Button>
-          <Button variant="danger" onClick={() => unlink.mutate()} busy={unlink.isPending}>
+          <Button
+            variant="danger"
+            onClick={() =>
+              unlink.mutate(undefined, {
+                // The account has no password after all: the user here is out of date, so it refetches.
+                onError: (e) => {
+                  if (errorCode(e) !== 'password_required') return
+                  confirm(false)
+                  void refetchMe()
+                },
+              })
+            }
+            busy={unlink.isPending}
+          >
             Unlink GitHub
           </Button>
         </Confirm>
@@ -108,7 +191,9 @@ function Linked({ login, kind }: { login: string; kind: keyof typeof kindLabel }
   )
 }
 
-function NotLinked() {
+/** `oauthNoted`: the note above already says OAuth isn't set up, so the card needn't say it again. */
+function NotLinked({ oauthNoted }: { oauthNoted: boolean }) {
+  const oauth = useGitHubOAuth()
   const link = useLinkToken()
   const [token, setToken] = useState('')
   const tokenError = errorCode(link.error) === 'invalid_token'
@@ -122,14 +207,20 @@ function NotLinked() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
         <h3 className="m-0 text-base font-bold">Link your GitHub account</h3>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/* A full-page visit: the API redirects to GitHub, and GitHub back to /settings. */}
-          <a href={GITHUB_OAUTH_URL} className={buttonClass('primary')}>
+        {oauth.isPending ? (
+          // Until the server says, nothing: neither a button that may not work nor a note that may be wrong. The
+          // space stays, so the token form doesn't jump when the button comes.
+          <div className="min-h-11" />
+        ) : oauth.data?.enabled === false ? (
+          !oauthNoted && <p className="m-0 text-[13px] leading-normal text-ink-2">GitHub sign-in isn't set up on this server.</p>
+        ) : (
+          // Also when asking failed: if OAuth really is off, the API sends the user back with ?github=unavailable.
+          // A full-page visit: the API redirects to GitHub, and GitHub back to /settings.
+          <a href={GITHUB_OAUTH_URL} className={buttonClass('primary', 'self-start')}>
             <Icon name="github" />
             Link with GitHub
           </a>
-          <p className="m-0 max-w-[46ch] text-xs leading-normal text-ink-2">Needs the server's GitHub OAuth app. If it isn't set up, use a token instead.</p>
-        </div>
+        )}
       </div>
 
       <form onSubmit={submit} noValidate className="flex flex-col gap-3 border-t border-rule pt-5">
@@ -139,16 +230,16 @@ function NotLinked() {
             type="password"
             autoComplete="off"
             spellCheck={false}
-            placeholder="ghp_…"
+            placeholder="github_pat_…"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             aria-invalid={tokenError}
+            // Only the opening sentence, which ends where the list starts, right after the field: the whole list would
+            // be read as one run-on description every time the field takes focus.
             aria-describedby="github-token-help"
             className="max-w-[440px]"
           />
-          <span id="github-token-help" className="text-xs text-ink-2">
-            It needs read and write access to issues and repository metadata.
-          </span>
+          <TokenHelp id="github-token-help" />
         </Field>
         {link.error && (
           <p role="alert" className="m-0 flex items-center gap-1.5 text-[13px] font-semibold text-signal-ink">
@@ -162,6 +253,41 @@ function NotLinked() {
           </Button>
         </div>
       </form>
+    </div>
+  )
+}
+
+/** Which token to make and how, with a link to GitHub's token page filled in. `id` names the opening sentence. */
+function TokenHelp({ id }: { id: string }) {
+  return (
+    <div className="flex max-w-[64ch] flex-col gap-2 pt-1 text-[13px] leading-normal text-ink-2">
+      <p id={id} className="m-0">
+        Use a fine-grained token. Set <span className="font-semibold text-ink">Resource owner</span> to whoever owns your repositories, give it access
+        to them, and these repository permissions:
+      </p>
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
+        {tokenPermissions.map((p) => (
+          <li key={p.name} className="flex items-baseline gap-2">
+            <span className="w-[6.5rem] flex-none font-semibold text-ink">
+              {p.name}
+              <span className="sr-only">: </span>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="text-ink">{p.access}</span>
+              {p.note && ` (${p.note})`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className={buttonClass('link', 'self-start px-0')}>
+        <Icon name="github" size={16} className="flex-none" />
+        Create a token with these permissions{' '}
+        <span className="sr-only">(opens GitHub in a new tab)</span>
+      </a>
+      <p className="m-0 text-xs">
+        A classic token needs the <span className="font-semibold text-ink">repo</span> and{' '}
+        <span className="font-semibold text-ink">workflow</span> scopes.
+      </p>
     </div>
   )
 }
