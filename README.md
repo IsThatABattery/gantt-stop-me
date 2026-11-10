@@ -164,6 +164,8 @@ openssl rand -base64 32
 
 Every project needs a linked GitHub account. Link one in the app under **Settings → GitHub**, with GitHub sign-in or a personal access token. Or use **Continue with GitHub** on the sign-in or sign-up page: it signs you in, or makes your account, and links GitHub at once.
 
+Linking with GitHub sign-in in Settings asks for your password first when you signed in, or last entered it there, over 10 minutes ago: a linked GitHub account signs you in, so someone holding a stolen session can't add theirs as a way into your account. An account with no password isn't asked.
+
 ### GitHub sign-in
 
 **Link with GitHub** in Settings and **Continue with GitHub** need an OAuth App, registered once per install. Without one, Settings offers only the token, and the sign-in page only email and password. Both come back to the one callback URL below, so signing in needs no other.

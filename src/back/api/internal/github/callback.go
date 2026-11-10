@@ -21,6 +21,9 @@ var (
 	// errPasswordRequired means a user with no password tried to link another GitHub account than the one they sign
 	// in with.
 	errPasswordRequired = errors.New("github: a user with no password tried to link another GitHub account")
+	// errConfirm means a user with a password tried to link from a session that neither started nor confirmed their
+	// password recently enough.
+	errConfirm = errors.New("github: a session that is not recent tried to link")
 )
 
 // callback finishes the flow the state is for: signing in, which has no session yet, or else linking, which needs
@@ -45,6 +48,8 @@ func (l *Links) linkCallback(w http.ResponseWriter, r *http.Request) {
 		outcome = "taken"
 	case errors.Is(err, errPasswordRequired):
 		outcome = "password_required"
+	case errors.Is(err, errConfirm):
+		outcome = "confirm"
 	case err != nil:
 		// Never with the code, the tokens or the client secret.
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
@@ -88,6 +93,18 @@ func (l *Links) finishLink(r *http.Request) error {
 		}
 		if !hasPassword && current != nil && *current != u.ID {
 			return errPasswordRequired
+		}
+		// Link checks the session is recent, but its state is only HMAC(session, nonce), which whoever holds the
+		// session can mint without asking link, so the rule holds here, where the link saves. A link started while
+		// recent has the state's lifetime to finish.
+		if hasPassword {
+			recent, err := accounts.RecentSessionWithin(tx, r, accounts.FreshSession+oauth.StateTTL)
+			if err != nil {
+				return err
+			}
+			if !recent {
+				return errConfirm
+			}
 		}
 		return l.save(ctx, tx, userID, u, tok, "oauth")
 	})

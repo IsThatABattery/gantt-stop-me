@@ -30,7 +30,7 @@ Starts linking with OAuth by sending the browser to GitHub. The browser navigate
 
 | Name | In | Type | Rules |
 | --- | --- | --- | --- |
-| `session` | cookie | string | required |
+| `session` | cookie | string | required; for a user with a password, started or [confirmed with it](accounts.md#confirm-password) in the last 10 minutes |
 
 **Output**
 
@@ -38,7 +38,10 @@ Starts linking with OAuth by sending the browser to GitHub. The browser navigate
 | --- | --- |
 | `302` | Location `https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&redirect_uri={PUBLIC_URL}/api/github/callback&scope=repo+workflow&state={state}` with each value URL-encoded, and sets the `github_state` cookie, sent only to the callback, to `state` for 10 minutes. The `workflow` scope lets automation merge pull requests that change `.github/workflows` |
 | `302` | Location `{PUBLIC_URL}/settings?github=unavailable#github` while OAuth is not set up (see OAuth availability), setting no cookie |
+| `302` | Location `{PUBLIC_URL}/settings?github=confirm#github` when the user has a password and the session neither started nor confirmed it in the last 10 minutes, setting no cookie and starting nothing. Settings asks for the password, [confirms it](accounts.md#confirm-password), and comes back here |
 | `302` | Location `{PUBLIC_URL}/settings?github=error#github` without a valid `session`, deleting the `github_state` cookie |
+
+An OAuth link signs in, so a stolen session must not add one: the thief's GitHub account would go on signing in as the user after they changed their password, which ends every other session. A user with no password is not asked, since they have none to confirm and the callback lets them link only the GitHub account they sign in with.
 
 A GitHub account is linked with OAuth to one user at most: [Sign in with GitHub](#sign-in-with-github) signs in as the user linked to it, so the callback refuses one another user is linked to with OAuth. A link made with a personal access token signs no one in, so it does not count, and the callback does not refuse a GitHub account linked so. A user with no password signs in only with the GitHub account they are linked to, so until they set one the callback links that one again, as when its token expired, and refuses another.
 
@@ -91,6 +94,7 @@ A link saves nothing unless the outcome is `linked`. It takes turns with the Git
 | `302` | Location `{PUBLIC_URL}/settings?github=denied#github` when `state` checks out and `error` is `access_denied` |
 | `302` | Location `{PUBLIC_URL}/settings?github=taken#github` when another user is linked to the GitHub account with OAuth |
 | `302` | Location `{PUBLIC_URL}/settings?github=password_required#github` when the user has no password and is linked to another GitHub account, which is how they sign in |
+| `302` | Location `{PUBLIC_URL}/settings?github=confirm#github` when the user has a password and the session neither started nor confirmed it in the last 20 minutes: Link with OAuth's 10, plus the state's 10 to finish. Whoever holds a session can mint its link state without Link with OAuth, so the rule holds here too |
 | `302` | Location `{PUBLIC_URL}/settings?github=error#github` without a valid `session`, for a missing or mismatched `state` whatever `error` says, for any other `error`, or when GitHub refuses the code or cannot be reached |
 
 A sign-in loads the GitHub account with `GET /user`, then signs in as the one user linked to it with OAuth, saving the new credential as linking again does. A link made with a personal access token signs no one in: any token of the account, such as one a third-party app was given, makes one. When no user is linked to it with OAuth, it reads the account's emails with `GET /user/emails` and makes a user with its primary email, which GitHub must have verified, and no password, linked to the account. One GitHub account's sign-ins and links take turns, so two at once make or link one user. Only a sign-in that works saves anything, except when starting the session fails after the save: the browser then gets `error`, and signing in again works.

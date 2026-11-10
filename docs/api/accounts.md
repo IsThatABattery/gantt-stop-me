@@ -76,6 +76,33 @@ Ends the current session.
 | --- | --- |
 | `204` | empty, and deletes the `session` cookie |
 
+## Confirm password
+
+Checks the signed-in user's password and, when it is right, makes the current session recent again for 10 minutes, as a new session is for its first 10, so it can [link GitHub with OAuth](github.md#link-with-oauth). An OAuth link signs in, so a user with a password adds one only from a recent session: an older one may be stolen, and the thief's GitHub account would go on signing in as the user after they change their password. It marks only the current session, and a wrong password takes as long to refuse as a right one to accept, as at [Log in](#log-in).
+
+`POST /api/auth/confirm`
+
+**Input**
+
+| Name | In | Type | Rules |
+| --- | --- | --- | --- |
+| `session` | cookie | string | required |
+| `password` | body | string | the password in use |
+
+```json
+{ "password": "correct horse" }
+```
+
+**Output**
+
+| Status | Body |
+| --- | --- |
+| `204` | empty |
+| `400` | `bad_request` |
+| `401` | `unauthorized` |
+| `403` | `wrong_password`, "Your password is wrong."; nothing changes |
+| `409` | `password_required`, "This account has no password. Sign in with GitHub again instead.", for an account with none, as one made by signing in with GitHub, whose only recent session is one it just started; nothing changes |
+
 ## Current user
 
 Returns the signed-in user, their display name, their linked GitHub account and whether they have a password.
@@ -138,7 +165,7 @@ Sets or clears the signed-in user's display name.
 
 ## Change password
 
-Replaces the password and signs out every other session. For an account with no password, as one made by signing in with GitHub, it sets the first one instead, which needs no current password but a session started in the last 10 minutes, and signs out every other session too. Such an account signs in only with GitHub, so a session that new shows its user holds the GitHub account, and an older one, perhaps stolen, cannot set a password and then unlink GitHub. Its user starts one with [Sign in with GitHub](github.md#sign-in-with-github), with `next=/settings` to come back to Settings.
+Replaces the password and signs out every other session. For an account with no password, as one made by signing in with GitHub, it sets the first one instead, which needs no current password but a session started in the last 10 minutes, and signs out every other session too. Such an account signs in only with GitHub, so a session that new shows its user holds the GitHub account, and an older one, perhaps stolen, cannot set a password and then unlink GitHub. It has no password to [confirm](#confirm-password), so its user starts one with [Sign in with GitHub](github.md#sign-in-with-github), with `next=/settings` to come back to Settings.
 
 `PATCH /api/me/password`
 

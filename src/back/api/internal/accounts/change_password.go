@@ -3,7 +3,6 @@ package accounts
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -12,16 +11,13 @@ import (
 
 var (
 	errWrongPassword  = errors.New("wrong password")
-	errReauthRequired = errors.New("no password, and the session is not fresh")
+	errReauthRequired = errors.New("no password, and the session is not recent")
 )
 
-// freshSession is how old a session may be to set a first password. An account with no password signs in only with
-// GitHub, so a session that new is fresh proof its user holds the GitHub account, which an older, perhaps stolen,
-// one is not.
-const freshSession = 10 * time.Minute
-
 // changePassword replaces the password and signs out every other session. For an account with none, as one made by
-// signing in with GitHub, it sets the first one, which needs no current password but a fresh session.
+// signing in with GitHub, it sets the first one, which needs no current password but a recent session. Such an
+// account signs in only with GitHub and has no password to confirm, so only a session it started moments ago is
+// recent: proof its user holds the GitHub account, which an older, perhaps stolen, one is not.
 func (a *Accounts) changePassword(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		CurrentPassword string `json:"currentPassword"`
@@ -45,18 +41,17 @@ func (a *Accounts) changePassword(w http.ResponseWriter, r *http.Request) {
 		if hash != nil && !checkPassword(*hash, in.CurrentPassword) {
 			return errWrongPassword
 		}
-		var fresh bool
-		if err := tx.QueryRow(ctx, `select created_at > now() - make_interval(secs => $3) from sessions where id = $1 and user_id = $2`,
-			hashToken(c.Value), userID, freshSession.Seconds()).Scan(&fresh); err != nil {
-			return err // ErrNoRows: a concurrent change signed this session out
+		recent, err := RecentSession(tx, r)
+		if err != nil {
+			return err // ErrSignedOut: a concurrent change signed this session out
 		}
-		if hash == nil && !fresh {
+		if hash == nil && !recent {
 			return errReauthRequired
 		}
 		if _, err := tx.Exec(ctx, `update users set password_hash = $2 where id = $1`, userID, hashPassword(in.NewPassword)); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `delete from sessions where user_id = $1 and id <> $2`, userID, hashToken(c.Value))
+		_, err = tx.Exec(ctx, `delete from sessions where user_id = $1 and id <> $2`, userID, hashToken(c.Value))
 		return err
 	})
 	switch {
@@ -64,7 +59,7 @@ func (a *Accounts) changePassword(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusForbidden, "wrong_password", "Current password is incorrect.")
 	case errors.Is(err, errReauthRequired):
 		httpx.Error(w, http.StatusForbidden, "reauth_required", "Sign in with GitHub again, then set your password.")
-	case errors.Is(err, pgx.ErrNoRows):
+	case errors.Is(err, ErrSignedOut), errors.Is(err, pgx.ErrNoRows):
 		httpx.Error(w, http.StatusUnauthorized, "unauthorized", "Sign in first.")
 	case err != nil:
 		httpx.Internal(w, r, err)

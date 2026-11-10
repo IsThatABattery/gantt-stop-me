@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"slices"
@@ -44,22 +42,11 @@ func send(env *apptest.Env, method, path string, body any, cookie *http.Cookie) 
 	return res.StatusCode, session
 }
 
-// age makes session as old as d, as though it started d ago.
-func age(t *testing.T, env *apptest.Env, session *http.Cookie, d time.Duration) {
-	t.Helper()
-	sum := sha256.Sum256([]byte(session.Value))
-	tag, err := env.DB.Exec(context.Background(), `update sessions set created_at = now() - make_interval(secs => $2) where id = $1`,
-		hex.EncodeToString(sum[:]), d.Seconds())
-	if err != nil || tag.RowsAffected() != 1 {
-		t.Fatalf("age the session: %v, %d rows", err, tag.RowsAffected())
-	}
-}
-
 func TestChangePassword(t *testing.T) {
 	env := apptest.New(t)
 	current := env.SignUp("ada@example.com", "correct horse")
 	other := login(env, "correct horse").Cookie("session")
-	age(t, env, current, 24*time.Hour) // the current password is the proof, so a session of any age changes it
+	env.AgeSession(current, 24*time.Hour) // the current password is the proof, so a session of any age changes it
 
 	env.Do("PATCH", "/api/me/password", map[string]string{"currentPassword": "correct horse", "newPassword": "battery staple"}, current).
 		Expect(http.StatusNoContent, "")
@@ -188,7 +175,7 @@ func TestSetFirstPassword(t *testing.T) {
 		name := strings.ToLower(rand.Text()) // a new GitHub account, and user, each time
 		other, _ := env.SignInWithGitHub(name, name+"@example.com")
 		current, _ := env.SignInWithGitHub(name, name+"@example.com")
-		age(t, env, current, freshFor-time.Minute)
+		env.AgeSession(current, freshFor-time.Minute)
 
 		env.Do("PATCH", "/api/me/password", map[string]string{"newPassword": "short"}, current).Expect(http.StatusBadRequest, "weak_password")
 		env.Do("PATCH", "/api/me/password", body, current).Expect(http.StatusNoContent, "")
@@ -198,7 +185,7 @@ func TestSetFirstPassword(t *testing.T) {
 			Expect(http.StatusOK, "")
 
 		// Now there is one, so changing it is as for any account: it needs the current one, from a session of any age.
-		age(t, env, current, 24*time.Hour)
+		env.AgeSession(current, 24*time.Hour)
 		env.Do("PATCH", "/api/me/password", map[string]string{"newPassword": "stolen password"}, current).
 			Expect(http.StatusForbidden, "wrong_password")
 		env.Do("PATCH", "/api/me/password", map[string]string{"currentPassword": "battery staple", "newPassword": "correct horse"}, current).
@@ -208,7 +195,8 @@ func TestSetFirstPassword(t *testing.T) {
 	}
 }
 
-// freshFor is how new a session must be to set a first password.
+// freshFor is how long a session stays recent after it starts or confirms the password; a first password needs a
+// recent one.
 const freshFor = 10 * time.Minute
 
 // An account with no password signs in only with GitHub, so only a session it started moments ago shows its user
@@ -217,7 +205,7 @@ const freshFor = 10 * time.Minute
 func TestSetFirstPasswordNeedsAFreshSession(t *testing.T) {
 	env := apptest.New(t)
 	stale, _ := env.SignInWithGitHub("octocat", "octo@example.com")
-	age(t, env, stale, freshFor+time.Minute)
+	env.AgeSession(stale, freshFor+time.Minute)
 	other, _ := env.SignInWithGitHub("octocat", "octo@example.com")
 
 	res := env.Do("PATCH", "/api/me/password", map[string]string{"newPassword": "battery staple"}, stale)

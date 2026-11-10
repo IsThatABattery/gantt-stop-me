@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"hash/crc32"
 	"io"
@@ -15,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -231,6 +234,19 @@ func (e *Env) SignUp(email, password string) *http.Cookie {
 		e.t.Fatal("signup set no session cookie")
 	}
 	return c
+}
+
+// AgeSession makes the session as old as d: as though it started, and confirmed its user's password if it did, d ago.
+func (e *Env) AgeSession(session *http.Cookie, d time.Duration) {
+	e.t.Helper()
+	sum := sha256.Sum256([]byte(session.Value))
+	tag, err := e.DB.Exec(context.Background(), `
+		update sessions set created_at = now() - make_interval(secs => $2),
+			confirmed_at = case when confirmed_at is not null then now() - make_interval(secs => $2) end
+		where id = $1`, hex.EncodeToString(sum[:]), d.Seconds())
+	if err != nil || tag.RowsAffected() != 1 {
+		e.t.Fatalf("age the session: %v, %d rows", err, tag.RowsAffected())
+	}
 }
 
 // LinkGitHub adds a fake GitHub account with this login and links it to the session's user

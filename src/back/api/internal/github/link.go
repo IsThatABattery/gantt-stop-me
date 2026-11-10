@@ -18,14 +18,38 @@ const (
 	scope = "repo workflow"
 )
 
-// link starts linking with OAuth: it sends the browser to GitHub with a state tied to the session, which the callback checks.
+// link starts linking with OAuth: it sends the browser to GitHub with a state tied to the session, which the callback
+// checks. A user with a password links only from a recent session, else Settings asks them to confirm it first.
 func (l *Links) link(w http.ResponseWriter, r *http.Request) {
 	if !l.oauthConfigured() {
 		l.settings(w, r, "unavailable")
 		return
 	}
+	confirm, err := l.mustConfirm(r)
+	if err != nil {
+		l.signedOut(w, r, err)
+		return
+	}
+	if confirm {
+		l.settings(w, r, "confirm")
+		return
+	}
 	session, _ := r.Cookie(accounts.SessionCookie) // RequireOr guarantees it
 	l.authorize(w, r, oauth.Link, session.Value, scope)
+}
+
+// mustConfirm reports whether the signed-in user has a password and their session is not recent. An OAuth link signs
+// in, so an older, perhaps stolen, session could link the thief's GitHub account, which would go on signing in as the
+// user after they changed their password. A user without one is not asked: the callback lets them link only the
+// GitHub account they sign in with, and they have no password to confirm.
+func (l *Links) mustConfirm(r *http.Request) (bool, error) {
+	var hasPassword bool
+	if err := l.DB.QueryRow(r.Context(), `select password_hash is not null from users where id = $1`,
+		accounts.UserID(r.Context())).Scan(&hasPassword); err != nil || !hasPassword {
+		return false, err
+	}
+	recent, err := accounts.RecentSession(l.DB, r)
+	return !recent, err
 }
 
 // authorize sends the browser to GitHub to grant scope, with a new state for a flow of kind, bound to session or,

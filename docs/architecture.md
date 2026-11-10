@@ -118,7 +118,7 @@ Pages:
 10. **Settings.** Five sections.
     - **Account.** Changes the user's password, or sets the first one for an account made by signing in with GitHub.
     - **Appearance.** Picks the color theme. It applies at once and is saved in the browser, not the account.
-    - **GitHub.** Links a GitHub account with OAuth, offered only while the server has an OAuth App, or with a personal access token instead. It lists the token's permissions and links to GitHub's token page with them filled in. Back from GitHub, it says whether the link worked. Shows which GitHub login is linked, and allows unlinking once the user has a password.
+    - **GitHub.** Links a GitHub account with OAuth, offered only while the server has an OAuth App, or with a personal access token instead. Linking with OAuth from a session that is not [recent](#accounts-and-sessions) asks for the password first. It lists the token's permissions and links to GitHub's token page with them filled in. Back from GitHub, it says whether the link worked. Shows which GitHub login is linked, and allows unlinking once the user has a password.
     - **LLM providers.** See [Provider settings](#provider-settings).
     - **Agents.** The user's planning agents, and whether their plans' docs and tasks are reviewed. See [Planning](#planning).
 
@@ -159,24 +159,26 @@ Each package under `src/back/api/internal` owns one feature: its routes, its rul
 
 ### Accounts and sessions
 
-Users sign up with an email and a password, or [sign in with GitHub](#signing-in-with-github). Passwords are hashed with argon2id. Signing up or in creates a session and sets an `HttpOnly`, `SameSite=Lax` session cookie for 30 days, also `Secure` when `PUBLIC_URL` is https. The cookie holds a random token, and the database stores only its SHA-256, with when the session started. Changing or setting the password ends the user's other sessions. A user may also set a display name.
+Users sign up with an email and a password, or [sign in with GitHub](#signing-in-with-github). Passwords are hashed with argon2id. Signing up or in creates a session and sets an `HttpOnly`, `SameSite=Lax` session cookie for 30 days, also `Secure` when `PUBLIC_URL` is https. The cookie holds a random token, and the database stores only its SHA-256, with when the session started and when it last confirmed the password. Changing or setting the password ends the user's other sessions. A user may also set a display name.
+
+A session is recent for 10 minutes after it starts, and again for 10 minutes after it confirms its user's password with `POST /api/auth/confirm`, by the database's clock. Only a recent session adds a way to sign in: it sets a first password, or links GitHub with OAuth, which [signs in](#signing-in-with-github). A session cookie may be stolen. Changing the password ends every other session, the thief's too, but not a way to sign in the thief added with it: their GitHub account would go on signing in as the user. Confirming marks only the session it came from.
 
 Signing in with GitHub finds the user by the GitHub account they linked with OAuth, never by email. A personal access token link does not count: any token of the account makes one, such as one a third-party app was given, so it proves no one can sign in to that GitHub account. A GitHub account one user has linked with OAuth signs in as them, so no other user can link it with OAuth. One that more than one user linked so before that rule, and still is, signs in no one, since nothing tells which of them it is. One that no user has linked so makes a new user with its verified primary email, unless a user has that email already, ignoring case. That user is not signed in: joining the two by email would let whoever holds a GitHub account with that email into their account. They sign in with their password and link GitHub in Settings instead.
 
-An account made by signing in with GitHub has no password. Logging in to it with any password fails as a wrong password does, and takes as long. Its user sets a first password without a current one, but only from a session started in the last 10 minutes: the account signs in only with GitHub, so a session that new shows they hold the GitHub account, and an older one may be stolen. Settings sends them to sign in with GitHub again, and back, for one. Setting it ends their other sessions, as changing a password does. Until then GitHub is their only way to sign in, so they cannot unlink it, replace it with a token link, or link another GitHub account with OAuth; linking the same one again, as when its token expired, works.
+An account made by signing in with GitHub has no password. Logging in to it with any password fails as a wrong password does, and takes as long. Its user sets a first password without a current one, but only from a recent session, which for an account with no password to confirm is one started in the last 10 minutes: the account signs in only with GitHub, so a session that new shows they hold the GitHub account, and an older one may be stolen. Settings sends them to sign in with GitHub again, and back, for one. Setting it ends their other sessions, as changing a password does. Until then GitHub is their only way to sign in, so they cannot unlink it, replace it with a token link, or link another GitHub account with OAuth; linking the same one again, as when its token expired, works.
 
 ### Linking GitHub
 
 A signed-in user links one GitHub account in one of two ways, and [signing in with GitHub](#signing-in-with-github) links one too.
 
-- **OAuth.** `GET /api/github/link` redirects to GitHub with a `state` value tied to the session. GitHub redirects to `/api/github/callback`, where the API checks `state`, exchanges the code for a token, and loads the GitHub user with `GET /user`.
+- **OAuth.** `GET /api/github/link` redirects to GitHub with a `state` value tied to the session. For a user with a password, it does so only from a [recent](#accounts-and-sessions) session; from another it sends the browser back to Settings with `?github=confirm`, where they confirm their password and Settings starts the link again. A user with no password is not asked: they have none, and can link only the GitHub account they sign in with. GitHub redirects to `/api/github/callback`, where the API checks `state`, exchanges the code for a token, and loads the GitHub user with `GET /user`. The callback checks the session is recent again, allowing the state's 10 minutes to finish, since whoever holds a session can mint its state without asking link.
 - **Personal access token.** `POST /api/github/token` takes a token and checks it with `GET /user`.
 
 Either way the API stores the credential encrypted, along with the GitHub login and id. Linking again replaces the old credential, and the user's access to each project is checked again with the new one. The credential never reaches the browser.
 
 An OAuth link is how [signing in with GitHub](#signing-in-with-github) finds its user, so a GitHub account is linked with OAuth to one user at most. The callback saves a link in a transaction under the same advisory lock, keyed by the GitHub account's id, that its sign-ins take, so a link and a sign-in, or two links, cannot both find it free. It refuses one another user is linked to with OAuth; a token link does not count, since it signs no one in. It also refuses a user with no password a GitHub account other than the one they are linked to, holding their row while it checks, since that link is how they sign in.
 
-The browser navigates to link and the callback, so both answer only with redirects, never JSON. The callback sends the browser back to Settings, at its GitHub section (`#github`), with `?github=linked`, `denied` when the user cancelled on GitHub, `taken` or `password_required` for the two refusals above, or `error`, and logs why a link failed. `GET /api/github/oauth`, which needs no session, tells Settings and the sign-in page whether the server has an OAuth App. Without one, Settings offers only the token, and link sends the browser back with `?github=unavailable`.
+The browser navigates to link and the callback, so both answer only with redirects, never JSON. The callback sends the browser back to Settings, at its GitHub section (`#github`), with `?github=linked`, `denied` when the user cancelled on GitHub, `taken` or `password_required` for the two refusals above, or `error`, and logs why a link failed. Link itself sends it back with `?github=confirm` for a session that must confirm the password first. `GET /api/github/oauth`, which needs no session, tells Settings and the sign-in page whether the server has an OAuth App. Without one, Settings offers only the token, and link sends the browser back with `?github=unavailable`.
 
 The OAuth App asks for the `repo` and `workflow` scopes. `repo` reaches private repositories. `workflow` is there because automation merges pull requests, and GitHub refuses to merge one that changes `.github/workflows` for an OAuth token without it. Signing in with GitHub also asks for `user:email`, and comes back to the same callback.
 
@@ -317,7 +319,7 @@ Every endpoint is documented in [docs/api](api/README.md), one file per feature:
 | Feature | Routes | Reference |
 | --- | --- | --- |
 | Health | `GET /api/health` | [API](api/README.md#health) |
-| Accounts | `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`, `/api/me`, `/api/me/password` | [Accounts](api/accounts.md) |
+| Accounts | `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/confirm`, `/api/me`, `/api/me/password` | [Accounts](api/accounts.md) |
 | GitHub | `/api/github/oauth`, `/api/github/link`, `/api/auth/github`, `/api/github/callback`, `/api/github/token`, `DELETE /api/github` | [GitHub](api/github.md) |
 | LLM providers | `/api/providers` | [LLM providers](api/providers.md) |
 | Board | `/api/projects`, `/api/projects/{id}/board`, `/api/projects/{id}/tasks`, `/api/projects/{id}/assignees`, `/api/me/tasks` | [Board](api/board.md) |
@@ -401,7 +403,8 @@ sessions (
   id              text primary key,   -- sha256 of the cookie value, hex
   user_id         bigint not null references users on delete cascade,
   expires_at      timestamptz not null,
-  created_at      timestamptz not null default now() -- a first password needs one from the last 10 minutes
+  created_at      timestamptz not null default now(), -- recent while this or confirmed_at is in the last 10 minutes
+  confirmed_at    timestamptz         -- when the session last confirmed the password; null until it does
 )
 
 github_links (
@@ -621,6 +624,7 @@ Indexes beyond the keys: `sessions (user_id)`, `github_links (github_id)`, `feat
 
 - Passwords are hashed with argon2id. GitHub credentials, provider keys and webhook secrets are encrypted with AES-256-GCM using `ENCRYPTION_KEY`, and never sent to the browser.
 - Sessions are random tokens stored hashed, in `HttpOnly` cookies. Every request but `GET`, `HEAD` and `OPTIONS` must carry an `Origin` equal to `PUBLIC_URL`'s, except GitHub's webhook deliveries, whose HMAC signature is checked instead.
+- Adding a way to sign in, a first password or an OAuth link, needs a recent session, one started or that confirmed the password in the last 10 minutes, so a stolen session cannot add one that outlasts a password change.
 - Every project route checks the user's GitHub permission on that repository first.
 - Anyone can sign up, but a user only ever sees boards for repositories their linked GitHub account can access.
 - Signing in with GitHub signs in only as a user linked to that GitHub account. It never joins an existing account by its email, even one GitHub has verified, and the state of a sign-in lives in an `HttpOnly` cookie sent only to the callback, so a callback another browser started fails.
