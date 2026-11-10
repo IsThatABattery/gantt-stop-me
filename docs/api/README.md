@@ -2,7 +2,7 @@
 
 Every endpoint is under `/api` and speaks JSON, unless its doc says otherwise. One file per feature documents its endpoints:
 
-- [Accounts](accounts.md): sign up, log in and out, the current user, display name, and setting or changing the password.
+- [Accounts](accounts.md): sign up, log in and out, confirming the password, the current user, display name, and setting or changing the password.
 - [GitHub](github.md): whether OAuth is available, link a GitHub account with OAuth or a personal access token, sign in with GitHub, and unlink it.
 - [LLM providers](providers.md): the user's OpenAI-compatible endpoints, their keys and chosen models.
 - [Board](board.md): projects, the board, tasks, their tests, assignees and moves, and the tasks assigned to the user.

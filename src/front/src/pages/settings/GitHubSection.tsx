@@ -1,14 +1,15 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Button, Field, TextInput } from '../../components/controls'
 import { buttonClass } from '../../components/buttonClass'
 import { Icon } from '../../components/Icon'
 import type { Me } from '../../data/api/types'
 import { errorCode } from '../../data/errors'
 import { useMe } from '../../data/session'
-import { GITHUB_OAUTH_URL, useGitHubOAuth, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
+import { GITHUB_OAUTH_URL, useConfirmPassword, useGitHubOAuth, useLinkToken, useUnlinkGitHub } from '../../data/views/settings'
 import { labels, settingsLabels } from '../../labels/labels'
+import { page } from '../../lib/page'
 import { Card, Confirm, Problem, Section } from './Section'
 import { sectionIds } from './sections'
 
@@ -29,6 +30,9 @@ const returnNotes = {
 } as const
 
 type Outcome = keyof typeof returnNotes
+
+/** The Link with GitHub link, or Link again while linked: only one shows. Not now on the confirm puts focus back on it. */
+const oauthLinkId = 'github-oauth-link'
 
 /** Which GitHub account is linked, and how: a change means the link changed. */
 const linkKey = (me: Me) => (me.github ? `${me.github.kind}:${me.github.login}` : '')
@@ -91,6 +95,7 @@ export function GitHubSection({ me }: { me: Me }) {
           {note.text}
         </p>
       )}
+      {returned === 'confirm' && <ConfirmToLink />}
       {refresh.error && (
         <Problem alert action={<Button onClick={() => refresh.refetch()}>Try again</Button>}>
           Couldn't refresh your account: {refresh.error.message}
@@ -135,7 +140,7 @@ function Linked({ login, kind, hasPassword }: { login: string; kind: keyof typeo
         {!confirming && oauth.data?.enabled && (
           // When GitHub stops taking the link, such as a sign-in idle for six months, linking again replaces it and
           // keeps the projects; unlinking first would drop them.
-          <a href={GITHUB_OAUTH_URL} className={buttonClass('secondary')}>
+          <a id={oauthLinkId} href={GITHUB_OAUTH_URL} className={buttonClass('secondary')}>
             <Icon name="github" />
             Link again with GitHub
           </a>
@@ -191,6 +196,111 @@ function Linked({ login, kind, hasPassword }: { login: string; kind: keyof typeo
   )
 }
 
+/**
+ * Linking with OAuth sends a user with a password back with ?github=confirm when their session wasn't made or confirmed
+ * in the last 10 minutes: a GitHub account linked with OAuth signs in, so a stolen session cookie mustn't be enough to
+ * add one. Confirming the password makes the session recent, then the link starts again.
+ */
+function ConfirmToLink() {
+  const confirm = useConfirmPassword()
+  const [password, setPassword] = useState('')
+  const [empty, setEmpty] = useState(false)
+  // Confirmed: it stays busy until the visit to GitHub replaces the page.
+  const [leaving, setLeaving] = useState(false)
+  const navigate = useNavigate()
+  const { search, hash } = useLocation()
+  const id = useId()
+  const fieldId = `${id}-password`
+  const focusField = () => document.getElementById(fieldId)?.focus()
+  const wrong = errorCode(confirm.error) === 'wrong_password'
+  const fieldError = empty ? 'Enter your password.' : wrong ? confirm.error?.message : null
+  const busy = confirm.isPending || leaving
+
+  // Into the field when the form appears, and back to it, marked, after each wrong password.
+  useEffect(() => {
+    document.getElementById(fieldId)?.focus()
+  }, [fieldId])
+  useEffect(() => {
+    if (wrong) document.getElementById(fieldId)?.focus()
+  }, [wrong, confirm.error, fieldId])
+  // Back from GitHub can restore this page as it was left (bfcache), so it stops waiting to leave.
+  useEffect(() => {
+    const back = (e: PageTransitionEvent) => e.persisted && setLeaving(false)
+    window.addEventListener('pageshow', back)
+    return () => window.removeEventListener('pageshow', back)
+  }, [])
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    confirm.reset()
+    setEmpty(!password)
+    if (!password) {
+      focusField()
+      return
+    }
+    confirm.mutate(password, {
+      onSuccess: () => {
+        setLeaving(true)
+        page.visit(GITHUB_OAUTH_URL)
+      },
+    })
+  }
+
+  const notNow = () => {
+    const rest = new URLSearchParams(search)
+    rest.delete('github')
+    document.getElementById(oauthLinkId)?.focus()
+    navigate({ search: rest.size ? `?${rest}` : '', hash }, { replace: true })
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      aria-labelledby={`${id}-title`}
+      className="flex flex-col gap-3 rounded-[2px] border border-line bg-paper px-3 py-3"
+    >
+      <p id={`${id}-title`} className="m-0 flex items-center gap-2 text-[13px] font-semibold text-ink">
+        <Icon name="lock" size={16} className="flex-none" />
+        Confirm your password to link GitHub.
+      </p>
+      <Field id={fieldId} label="Password">
+        <TextInput
+          id={fieldId}
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          aria-invalid={!!fieldError}
+          aria-describedby={fieldError ? `${fieldId}-error` : undefined}
+          className="max-w-[320px]"
+        />
+        {fieldError && (
+          <span id={`${fieldId}-error`} className="text-xs font-semibold text-signal-ink">
+            {fieldError}
+          </span>
+        )}
+      </Field>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2.5">
+          <Button variant="primary" type="submit" busy={busy}>
+            {busy ? 'Confirming…' : 'Confirm and continue'}
+          </Button>
+          <Button onClick={notNow}>Not now</Button>
+        </div>
+        <div role="status" className="flex min-w-0 items-center text-[13px] font-semibold">
+          {confirm.error && !wrong && (
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-signal-ink">
+              <Icon name="alert" size={16} className="flex-none" />
+              <span className="min-w-0 wrap-anywhere">{confirm.error.message}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </form>
+  )
+}
+
 /** `oauthNoted`: the note above already says OAuth isn't set up, so the card needn't say it again. */
 function NotLinked({ oauthNoted }: { oauthNoted: boolean }) {
   const oauth = useGitHubOAuth()
@@ -216,7 +326,7 @@ function NotLinked({ oauthNoted }: { oauthNoted: boolean }) {
         ) : (
           // Also when asking failed: if OAuth really is off, the API sends the user back with ?github=unavailable.
           // A full-page visit: the API redirects to GitHub, and GitHub back to /settings.
-          <a href={GITHUB_OAUTH_URL} className={buttonClass('primary', 'self-start')}>
+          <a id={oauthLinkId} href={GITHUB_OAUTH_URL} className={buttonClass('primary', 'self-start')}>
             <Icon name="github" />
             Link with GitHub
           </a>

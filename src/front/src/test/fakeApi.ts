@@ -58,7 +58,10 @@ function fresh() {
     accounts: [{ id: 1, email: 'ada@example.com', password: 'correct horse' }] as Account[],
     /** The account the session cookie belongs to; null when signed out */
     signedInId: null as number | null,
-    /** Whether that session was made in the last 10 minutes, as setting a first password needs. Signing in makes a fresh one. */
+    /**
+     * Whether that session is recent: made, or its password confirmed, in the last 10 minutes, as setting a first password
+     * and linking with OAuth need. Signing in makes a fresh one.
+     */
     sessionFresh: true,
     github: { login: 'ada', kind: 'pat' } as GitHubLink | null,
     /** GET /api/github/oauth: whether the server's GitHub OAuth app is set up */
@@ -254,6 +257,14 @@ export const handlers = [
   }),
   route('post', '/auth/logout', () => {
     fake.signedInId = null
+    return noContent()
+  }),
+  route('post', '/auth/confirm', ({ body }) => {
+    const me = signedIn()
+    if (me.password === null) return fail(409, 'password_required', 'This account has no password. Sign in with GitHub again instead.')
+    if (body.password !== me.password) return fail(403, 'wrong_password', 'Your password is wrong.')
+    // Confirms this session only: it's recent again.
+    fake.sessionFresh = true
     return noContent()
   }),
   route('get', '/me', () => HttpResponse.json(meBody(signedIn()))),

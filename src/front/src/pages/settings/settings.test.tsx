@@ -2,8 +2,9 @@ import { focusManager } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { keys } from '../../data/keys'
+import { page } from '../../lib/page'
 import { fake, failNext } from '../../test/fakeApi'
 import { renderApp } from '../../test/render'
 import { server } from '../../test/server'
@@ -447,6 +448,123 @@ describe('GitHub', () => {
     expect(description.length).toBeGreaterThan(0)
     expect(description.length).toBeLessThanOrEqual(1024)
     expect(s.getByText(/^A classic token needs the/)).toHaveTextContent('A classic token needs the repo and workflow scopes.')
+  })
+})
+
+describe('confirming the password to link with OAuth', () => {
+  // The API sends a user with a password here when their session is too old to start a link.
+  const path = '/settings?github=confirm#github'
+  const confirmForm = () => within(section('GitHub')).getByRole('form', { name: 'Confirm your password to link GitHub.' })
+
+  /** Stubs the full-page visit, which jsdom can't make. */
+  function stubVisit() {
+    const visit = vi.spyOn(page, 'visit').mockImplementation(() => {})
+    onTestFinished(() => visit.mockRestore())
+    return visit
+  }
+
+  it.each([
+    ['linked', { login: 'ada', kind: 'pat' } as const],
+    ['not linked', null],
+  ])('asks for it on ?github=confirm, %s', async (_, github) => {
+    fake.github = github
+    await openSettings(path)
+    const form = within(confirmForm())
+    expect(form.getByLabelText('Password')).toHaveAttribute('type', 'password')
+    expect(form.getByLabelText('Password')).toHaveAttribute('autocomplete', 'current-password')
+    expect(form.getByRole('button', { name: 'Confirm and continue' })).toBeInTheDocument()
+    expect(form.getByRole('button', { name: 'Not now' })).toBeInTheDocument()
+    const s = within(section('GitHub'))
+    expect(await s.findByRole('link', { name: github ? 'Link again with GitHub' : 'Link with GitHub' })).toBeInTheDocument()
+  })
+
+  it('puts focus in the password field when it appears', async () => {
+    await openSettings(path)
+    expect(within(confirmForm()).getByLabelText('Password')).toHaveFocus()
+  })
+
+  it('stops waiting when Back from GitHub restores the page', async () => {
+    const visit = stubVisit()
+    await openSettings(path)
+    const form = within(confirmForm())
+    await userEvent.type(form.getByLabelText('Password'), 'correct horse')
+    await userEvent.click(form.getByRole('button', { name: 'Confirm and continue' }))
+    await waitFor(() => expect(visit).toHaveBeenCalledWith('/api/github/link'))
+    expect(form.getByRole('button', { name: 'Confirming…' })).toBeDisabled()
+
+    // The browser restores the page from its back-forward cache, as it was left.
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    expect(form.getByRole('button', { name: 'Confirm and continue' })).toBeEnabled()
+  })
+
+  it('asks nothing without ?github=confirm', async () => {
+    await openSettings('/settings?github=linked#github')
+    expect(within(section('GitHub')).queryByRole('form', { name: 'Confirm your password to link GitHub.' })).not.toBeInTheDocument()
+  })
+
+  it('confirms a right password, then starts linking again', async () => {
+    const visit = stubVisit()
+    fake.sessionFresh = false
+    await openSettings(path)
+    const form = within(confirmForm())
+    await userEvent.type(form.getByLabelText('Password'), 'correct horse')
+    await userEvent.click(form.getByRole('button', { name: 'Confirm and continue' }))
+
+    await waitFor(() => expect(visit).toHaveBeenCalledWith('/api/github/link'))
+    expect(visit).toHaveBeenCalledTimes(1)
+    expect(fake.requests.filter((r) => r.path === '/api/auth/confirm')).toEqual([
+      { method: 'POST', path: '/api/auth/confirm', body: { password: 'correct horse' } },
+    ])
+    expect(fake.sessionFresh).toBe(true)
+    // Busy until the visit replaces the page.
+    expect(form.getByRole('button', { name: 'Confirming…' })).toBeDisabled()
+  })
+
+  it('marks the field when the password is wrong, and starts nothing', async () => {
+    const visit = stubVisit()
+    await openSettings(path)
+    const form = within(confirmForm())
+    const field = form.getByLabelText('Password')
+    await userEvent.click(form.getByRole('button', { name: 'Confirm and continue' }))
+    expect(field).toHaveAccessibleDescription('Enter your password.')
+    expect(fake.requests.some((r) => r.path === '/api/auth/confirm')).toBe(false)
+
+    await userEvent.type(field, 'wrong one')
+    await userEvent.click(form.getByRole('button', { name: 'Confirm and continue' }))
+    await waitFor(() => expect(field).toHaveAccessibleDescription('Your password is wrong.'))
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+    expect(field).toHaveFocus()
+    expect(form.getByRole('status')).toBeEmptyDOMElement()
+    expect(visit).not.toHaveBeenCalled()
+  })
+
+  it("says why in the status line when it's refused otherwise", async () => {
+    const visit = stubVisit()
+    fake.accounts[0].password = null
+    fake.github = { login: 'ada', kind: 'oauth' }
+    await openSettings(path)
+    const form = within(confirmForm())
+    await userEvent.type(form.getByLabelText('Password'), 'any password')
+    await userEvent.click(form.getByRole('button', { name: 'Confirm and continue' }))
+    expect(await form.findByRole('status')).toHaveTextContent('This account has no password. Sign in with GitHub again instead.')
+    expect(form.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'false')
+    expect(visit).not.toHaveBeenCalled()
+  })
+
+  it('goes away with Not now, dropping ?github=confirm, and focus goes back to the link', async () => {
+    const { router } = await openSettings(path)
+    const s = within(section('GitHub'))
+    await s.findByRole('link', { name: 'Link again with GitHub' })
+    await userEvent.click(within(confirmForm()).getByRole('button', { name: 'Not now' }))
+
+    expect(s.queryByRole('form', { name: 'Confirm your password to link GitHub.' })).not.toBeInTheDocument()
+    expect(router.state.location).toMatchObject({ pathname: '/settings', search: '', hash: '#github' })
+    // Replaced, so Back doesn't ask again.
+    expect(router.state.historyAction).toBe('REPLACE')
+    expect(s.getByRole('link', { name: 'Link again with GitHub' })).toHaveFocus()
+    expect(fake.requests.some((r) => r.path === '/api/auth/confirm')).toBe(false)
   })
 })
 

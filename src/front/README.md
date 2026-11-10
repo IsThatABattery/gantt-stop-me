@@ -23,7 +23,7 @@ From the repo root, `docker compose run --rm web-test` runs the tests in Docker,
 
 In Docker, `docker compose up --build web` serves the production build at http://localhost:8080, with nginx proxying `/api`.
 
-To use the board you need an account (sign up at `/signup`) and a linked GitHub account (Settings → GitHub, with OAuth or a personal access token). Continue with GitHub, on sign in and sign up, does both at once: the account it makes has no password until Settings → Account sets one, and GitHub can't be unlinked until then. OAuth needs the server's OAuth App: [Link GitHub](../../README.md#link-github) in the root README sets one up.
+To use the board you need an account (sign up at `/signup`) and a linked GitHub account (Settings → GitHub, with OAuth or a personal access token). Continue with GitHub, on sign in and sign up, does both at once: the account it makes has no password until Settings → Account sets one, and GitHub can't be unlinked until then. Linking with OAuth from a session over 10 minutes old asks for the password first, in Settings → GitHub. OAuth needs the server's OAuth App: [Link GitHub](../../README.md#link-github) in the root README sets one up.
 
 ## Data
 
@@ -43,14 +43,14 @@ To use the board you need an account (sign up at `/signup`) and a linked GitHub 
 | `src/data/views/runs.ts` | A task's test runs, approve and merge, retest, request changes |
 | `src/data/views/workflows.ts` | A project's workflows file, `.gantt/workflows.yml` |
 | `src/data/views/plans.ts` | Planning a feature: plans, the interview, the doc and the proposed tasks |
-| `src/data/views/settings.ts` | Password, GitHub link and whether the server has GitHub OAuth, LLM providers |
+| `src/data/views/settings.ts` | Password, GitHub link (and confirming the password before one) and whether the server has GitHub OAuth, LLM providers |
 | `src/data/views/agentSettings.ts` | Planning agents (`/api/me/planning`) and a project's automation agents |
 
 Pages call hooks from these modules, never `api()` directly. API errors arrive as `ApiError` with the API's `code`, so a form can put each refusal on its field.
 
 ## Tests
 
-Most tests render the real routes against a fake API served by MSW: `src/test/fakeApi.ts` holds its data and handlers, which follow the docs' status and error codes. `renderApp(path)` signs in as `ada@example.com` with GitHub linked. Tests read `fake` to check what was saved, `fake.requests` to check what was sent, and `failNext(route, error)` to make one request fail. An `/api` request without a handler errors rather than reaching the network. Every test starts signed out, on fresh fake data.
+Most tests render the real routes against a fake API served by MSW: `src/test/fakeApi.ts` holds its data and handlers, which follow the docs' status and error codes. `renderApp(path)` signs in as `ada@example.com` with GitHub linked. Tests read `fake` to check what was saved, `fake.requests` to check what was sent, and `failNext(route, error)` to make one request fail. An `/api` request without a handler errors rather than reaching the network. A full-page visit goes through `page.visit` (`src/lib/page.ts`), which jsdom can't make, so a test stubs it with `vi.spyOn`. Every test starts signed out, on fresh fake data.
 
 The rest test one module on its own: the board's shape and optimistic moves (`src/data/views/board.test.ts`), the model picker (`src/components/ModelCombobox.test.tsx`) and the themes (`src/theme/`).
 
@@ -75,6 +75,7 @@ The rest test one module on its own: the board's shape and optimistic moves (`sr
 | `src/styles/themes/` | One stylesheet per color theme (see [Themes](#themes)) |
 | `src/theme/` | The list of themes, and `useTheme()` to read and set the one in use |
 | `src/lib/cx.ts` | Joins a component's classes with the caller's overrides |
+| `src/lib/page.ts` | Full-page visits, such as starting a link with OAuth; tests stub `page.visit` |
 | `src/test/` | Test setup, the fake API and its MSW server, `renderApp`, and the board page's tests |
 
 ## Themes

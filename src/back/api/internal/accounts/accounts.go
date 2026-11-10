@@ -24,7 +24,14 @@ const SessionCookie = "session"
 const (
 	sessionTTL     = 30 * 24 * time.Hour
 	minPasswordLen = 8
+	// freshSession is how long a session stays recent after it starts or confirms its user's password. Only a recent
+	// one adds a way to sign in, a first password or an OAuth link: an older one may be stolen, and the way it added
+	// would outlast a password change.
+	freshSession = 10 * time.Minute
 )
+
+// FreshSession is how long a session stays recent after it starts or confirms its user's password.
+const FreshSession = freshSession
 
 // Accounts serves the auth endpoints, /api/me and /api/me/password, and guards every other signed-in route.
 type Accounts struct {
@@ -42,6 +49,7 @@ func (a *Accounts) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/signup", a.signup)
 	mux.HandleFunc("POST /api/auth/login", a.login)
 	mux.HandleFunc("POST /api/auth/logout", a.logout)
+	mux.HandleFunc("POST /api/auth/confirm", a.Require(a.confirm))
 	mux.HandleFunc("GET /api/me", a.Require(a.me))
 	mux.HandleFunc("PATCH /api/me", a.Require(a.editMe))
 	mux.HandleFunc("PATCH /api/me/password", a.Require(a.changePassword))
@@ -94,6 +102,35 @@ func (a *Accounts) RequireOr(refused func(http.ResponseWriter, *http.Request, er
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, userID)))
 	}
+}
+
+// Querier is a pool or a transaction.
+type Querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// RecentSession reports, reading with q, whether the session of r, which Require let through, started or confirmed
+// its user's password in the last freshSession, 10 minutes, by the database's clock. It returns ErrSignedOut once the
+// session is gone, as when a password change signed it out.
+func RecentSession(q Querier, r *http.Request) (bool, error) {
+	return RecentSessionWithin(q, r, freshSession)
+}
+
+// RecentSessionWithin is RecentSession with another window, for a flow that a recent session started and that may
+// end later, such as an OAuth link finishing at its callback.
+func RecentSessionWithin(q Querier, r *http.Request, within time.Duration) (bool, error) {
+	c, err := r.Cookie(SessionCookie)
+	if err != nil {
+		return false, ErrSignedOut
+	}
+	var recent bool
+	err = q.QueryRow(r.Context(), `
+		select greatest(created_at, confirmed_at) > now() - make_interval(secs => $3) from sessions where id = $1 and user_id = $2`,
+		hashToken(c.Value), UserID(r.Context()), within.Seconds()).Scan(&recent)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrSignedOut
+	}
+	return recent, err
 }
 
 // startSession stores a new session for userID and sets its cookie on w. It reports false, and starts none, if the

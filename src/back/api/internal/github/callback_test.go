@@ -457,3 +457,32 @@ func TestCallbackSignedOut(t *testing.T) {
 		t.Fatalf("github_links = %+v, want none", links)
 	}
 }
+
+// Whoever holds a session can mint its link state without asking link, which is where a stale session is sent to
+// confirm the password, so the callback checks the session is recent too, allowing the state's lifetime to finish.
+func TestCallbackNeedsARecentSession(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		age     time.Duration
+		outcome string
+	}{
+		{"started recent, finished in time", recentFor + 5*time.Minute, "linked"},
+		{"too old by the callback", recentFor + 11*time.Minute, "confirm"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := apptest.New(t)
+			session := env.SignUp("ada@example.com", "correct horse")
+			state := startLink(t, env, session)
+			token, code := "gho_"+rand.Text(), rand.Text()
+			env.GitHub.AddUser(token, apptest.GitHubID("octocat"), "octocat")
+			env.GitHub.AddCode(code, token)
+			env.AgeSession(session, tc.age)
+
+			res := env.Do("GET", "/api/github/callback?code="+code+"&state="+url.QueryEscape(state.Value), nil, session, state)
+			expectSettings(t, res, tc.outcome)
+			if links := stored(t, env); (len(links) == 1) != (tc.outcome == "linked") {
+				t.Fatalf("github_links = %+v after %s", links, tc.outcome)
+			}
+		})
+	}
+}

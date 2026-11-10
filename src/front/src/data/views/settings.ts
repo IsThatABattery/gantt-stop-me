@@ -44,8 +44,19 @@ export const useChangePassword = (setting: boolean) =>
 
 // ---- GitHub ----
 
-/** OAuth is a full-page navigation to GitHub and back, not a fetch. */
+/**
+ * OAuth is a full-page navigation to GitHub and back, not a fetch. A user with a password whose session is over 10
+ * minutes old, and not confirmed since, is sent back first with ?github=confirm.
+ */
 export const GITHUB_OAUTH_URL = '/api/github/link'
+
+/**
+ * Confirms the password on this session, so linking with OAuth from it goes through for the next 10 minutes. 403
+ * wrong_password; 409 password_required for an account with none.
+ */
+const confirmPassword = (password: string) => api<void>('POST', '/auth/confirm', { password })
+
+export const useConfirmPassword = () => useApiMutation(confirmPassword, [])
 
 /**
  * Whether the server's GitHub OAuth app is set up, for linking here and Continue with GitHub on sign in and sign up.
